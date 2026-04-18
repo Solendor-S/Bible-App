@@ -15,6 +15,7 @@ set PS=%TEMP%\bible-setup.ps1
 echo $ErrorActionPreference = 'Stop'
 echo $InstallRoot = Join-Path $env:USERPROFILE 'BibleApp'
 echo $AppDir = Join-Path $InstallRoot 'App'
+echo $UpdaterDir = Join-Path $AppDir 'updater'
 echo.
 echo function Bail^($msg^) {
 echo     Write-Host ''
@@ -83,11 +84,40 @@ echo     Write-Host "  Found existing install at $InstallRoot - skipping downloa
 echo }
 echo.
 echo Write-Host ''
-echo Write-Host 'Installing dependencies...' -ForegroundColor Yellow
+echo Write-Host 'Installing app dependencies...' -ForegroundColor Yellow
 echo Set-Location $AppDir
 echo npm install
 echo if ^($LASTEXITCODE -ne 0^) { Bail 'npm install failed.' }
-echo Write-Host '  Dependencies installed.' -ForegroundColor Green
+echo Write-Host '  App dependencies installed.' -ForegroundColor Green
+echo.
+echo Write-Host ''
+echo Write-Host 'Installing updater dependencies...' -ForegroundColor Yellow
+echo Set-Location $UpdaterDir
+echo npm install
+echo if ^($LASTEXITCODE -ne 0^) { Bail 'Updater npm install failed.' }
+echo Write-Host '  Updater dependencies installed.' -ForegroundColor Green
+echo.
+echo Write-Host ''
+echo Write-Host 'Building updater ^(this may take a minute^)...' -ForegroundColor Yellow
+echo Set-Location $UpdaterDir
+echo npm run package
+echo if ^($LASTEXITCODE -ne 0^) { Bail 'Updater build failed.' }
+echo Write-Host '  Updater built successfully.' -ForegroundColor Green
+echo.
+echo # ── Create Desktop shortcut for updater ─────────────────────────────────
+echo $UpdaterExe = Join-Path $UpdaterDir 'out\BibleAppUpdater-win32-x64\BibleAppUpdater.exe'
+echo $DesktopUpdater = Join-Path ^([Environment]::GetFolderPath^('Desktop'^)^) 'Bible App Updater.lnk'
+echo if ^(Test-Path $UpdaterExe^) {
+echo     $wsh = New-Object -ComObject WScript.Shell
+echo     $sc = $wsh.CreateShortcut^($DesktopUpdater^)
+echo     $sc.TargetPath = $UpdaterExe
+echo     $sc.Description = 'Check for Bible App updates'
+echo     $sc.Save^(^)
+echo     Write-Host "  Shortcut created: $DesktopUpdater" -ForegroundColor Green
+echo } else {
+echo     Write-Host '  Warning: updater exe not found, skipping Desktop shortcut.' -ForegroundColor Yellow
+echo     Write-Host "  Expected at: $UpdaterExe" -ForegroundColor DarkGray
+echo }
 echo.
 echo Write-Host ''
 echo Write-Host '========================================' -ForegroundColor Cyan
@@ -118,7 +148,8 @@ echo Write-Host '   Setup complete!' -ForegroundColor Green
 echo Write-Host '========================================' -ForegroundColor Green
 echo Write-Host ''
 echo Write-Host "App installed to: $InstallRoot" -ForegroundColor White
-echo Write-Host 'To launch: cd into the App folder and run: npm run dev' -ForegroundColor White
+echo Write-Host 'To launch the Bible App: cd into the App folder and run: npm run dev' -ForegroundColor White
+echo Write-Host 'To check for updates:    use the "Bible App Updater" shortcut on your Desktop' -ForegroundColor White
 echo Write-Host ''
 echo $go = Read-Host 'Launch the app now? ^(y/n^)'
 echo if ^($go -eq 'y' -or $go -eq 'Y'^) { Set-Location $AppDir; npm run dev }
