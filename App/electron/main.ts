@@ -1,10 +1,11 @@
 import { app, BrowserWindow, ipcMain, shell } from 'electron'
 
-import { join } from 'path'
+import { join, sep as pathSep } from 'path'
 import { readFileSync, existsSync, mkdirSync, writeFileSync, readdirSync, unlinkSync } from 'fs'
 import { homedir } from 'os'
 import { spawn } from 'child_process'
 import https from 'https'
+import http from 'http'
 import initSqlJs, { Database } from 'sql.js'
 
 let db: Database | null = null
@@ -194,6 +195,62 @@ ipcMain.handle('commentary:searchByFather', async (_e, fatherName: string) => {
     SELECT book, chapter, verse, father_name, father_era, excerpt, full_text, source, '' as source_url
     FROM commentary WHERE father_name LIKE ? LIMIT 1
   `, [fuzzy])
+})
+
+// ── Ollama lifecycle ──────────────────────────
+
+function isOllamaRunning(): Promise<boolean> {
+  return new Promise((resolve) => {
+    const req = http.get('http://localhost:11434/', (res) => {
+      res.resume()
+      resolve(res.statusCode !== undefined)
+    })
+    req.on('error', () => resolve(false))
+    req.setTimeout(1500, () => { req.destroy(); resolve(false) })
+  })
+}
+
+function findOllamaExe(): string | null {
+  const candidates = [
+    'ollama',
+    join(homedir(), 'AppData', 'Local', 'Programs', 'Ollama', 'ollama.exe'),
+    'C:\\Program Files\\Ollama\\ollama.exe'
+  ]
+  for (const c of candidates) {
+    if (!c.includes(pathSep) || existsSync(c)) return c
+  }
+  return null
+}
+
+function waitForOllama(timeoutMs: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const start = Date.now()
+    function poll() {
+      isOllamaRunning().then((up) => {
+        if (up) return resolve(true)
+        if (Date.now() - start >= timeoutMs) return resolve(false)
+        setTimeout(poll, 600)
+      })
+    }
+    poll()
+  })
+}
+
+ipcMain.handle('ollama:ensureRunning', async () => {
+  if (await isOllamaRunning()) return { success: true, alreadyRunning: true }
+
+  const exe = findOllamaExe()
+  if (!exe) return { success: false, error: 'Ollama not found. Install it from https://ollama.com' }
+
+  try {
+    spawn(exe, ['serve'], { detached: true, stdio: 'ignore', shell: exe === 'ollama' }).unref()
+  } catch (e: any) {
+    return { success: false, error: `Failed to start Ollama: ${e.message}` }
+  }
+
+  const ready = await waitForOllama(20000)
+  if (!ready) return { success: false, error: 'Ollama did not start within 20 seconds.' }
+  return { success: true, alreadyRunning: false }
 })
 
 // ── Update check ─────────────────────────────

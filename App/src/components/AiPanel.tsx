@@ -103,12 +103,31 @@ export function AiPanel({ height, activeVerse, onHeightChange, onNavigate, onSho
 
     let fullContent = ''
     try {
+      // Start Ollama if it isn't already running
+      setStreamingContent('Starting AI Scholar…')
+      const ollamaStatus = await window.bibleApi.ensureOllama()
+      setStreamingContent('')
+      if (!ollamaStatus.success) {
+        throw new Error(ollamaStatus.error ?? 'Could not start Ollama.')
+      }
+      if (!ollamaStatus.alreadyRunning) {
+        // Brief pause to let the model server fully settle after cold start
+        await new Promise(r => setTimeout(r, 800))
+      }
+
       for await (const chunk of streamChat(ollamaMessages)) {
         fullContent += chunk
         setStreamingContent(fullContent)
       }
-    } catch {
-      fullContent = '⚠️ Could not connect to Ollama. Make sure it is running at http://localhost:11434 and the gemma4 model is pulled (`ollama pull gemma4`).'
+    } catch (err: any) {
+      const msg = err?.message ?? ''
+      if (msg.includes('not found') || msg.includes('install')) {
+        fullContent = `⚠️ Ollama is not installed. Download it from https://ollama.com, then run: ollama pull gemma4`
+      } else if (msg.includes('20 seconds')) {
+        fullContent = `⚠️ Ollama took too long to start. Try opening Ollama manually and sending your message again.`
+      } else {
+        fullContent = `⚠️ Could not start AI Scholar: ${msg}`
+      }
     }
 
     const assistantMsg: ChatMessage = {

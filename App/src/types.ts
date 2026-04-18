@@ -76,6 +76,7 @@ declare global {
       openExternal(url: string): Promise<void>
       launchUpdater(): Promise<void>
       onUpdateAvailable(cb: (info: { current: string; latest: string }) => void): void
+      ensureOllama(): Promise<{ success: boolean; alreadyRunning?: boolean; error?: string }>
     }
     chatApi: {
       getSessions(): Promise<ChatSession[]>
