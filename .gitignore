@@ -30,3 +30,7 @@ graphify-out/
 .graphify_*.json
 .graphify_*.txt
 .graphify_python
+
+# Claude Code local config
+CLAUDE.md
+.claude/
