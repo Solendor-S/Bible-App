@@ -1,6 +1,6 @@
 # Bible App
 
-A catena-style Bible study desktop app (Electron) built around KJV scripture and Church Fathers commentary. Click any verse to see patristic commentary from across the early church. Optional AI scholar powered by a local Ollama model.
+A catena-style Bible study desktop app (Electron) built around KJV scripture and Church Fathers commentary. Click any verse to see patristic commentary from across the early church. Optional AI scholar powered by Ollama (gemma4).
 
 ## Features
 
@@ -35,7 +35,7 @@ npm run dev
 The AI panel uses Ollama running locally. Install it from [ollama.com](https://ollama.com), then pull the model:
 
 ```bash
-ollama pull gemma3:12b
+ollama pull gemma4
 ```
 
 Make sure Ollama is running before opening the app. If it isn't running, the rest of the app works fine — the AI panel just shows a connection error.
