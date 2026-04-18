@@ -2,6 +2,9 @@ import { app, BrowserWindow, ipcMain, shell } from 'electron'
 
 import { join } from 'path'
 import { readFileSync, existsSync, mkdirSync, writeFileSync, readdirSync, unlinkSync } from 'fs'
+import { homedir } from 'os'
+import { spawn } from 'child_process'
+import https from 'https'
 import initSqlJs, { Database } from 'sql.js'
 
 let db: Database | null = null
@@ -47,7 +50,7 @@ function rows(database: Database, sql: string, params: any[] = []): any[] {
   return results
 }
 
-function createWindow(): void {
+function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
     width: 1400,
     height: 900,
@@ -78,6 +81,8 @@ function createWindow(): void {
     shell.openExternal(url)
     return { action: 'deny' }
   })
+
+  return win
 }
 
 ipcMain.handle('bible:getBooks', async () => {
@@ -191,9 +196,74 @@ ipcMain.handle('commentary:searchByFather', async (_e, fatherName: string) => {
   `, [fuzzy])
 })
 
+// ── Update check ─────────────────────────────
+
+const REPO = 'Solendor-S/Bible-App'
+
+function getCurrentVersion(): string {
+  try {
+    const pkgPath = app.isPackaged
+      ? join(process.resourcesPath, 'package.json')
+      : join(__dirname, '../../package.json')
+    return JSON.parse(readFileSync(pkgPath, 'utf-8')).version ?? '0.0.0'
+  } catch { return '0.0.0' }
+}
+
+function semverGt(a: string, b: string): boolean {
+  const parse = (v: string) => v.replace(/^v/, '').split('.').map(Number)
+  const [aMaj, aMin, aPat] = parse(a)
+  const [bMaj, bMin, bPat] = parse(b)
+  if (aMaj !== bMaj) return aMaj > bMaj
+  if (aMin !== bMin) return aMin > bMin
+  return aPat > bPat
+}
+
+function fetchLatestTag(): Promise<string> {
+  return new Promise((resolve, reject) => {
+    https.get(
+      { hostname: 'api.github.com', path: `/repos/${REPO}/releases/latest`, headers: { 'User-Agent': 'BibleApp/1.0' } },
+      (res) => {
+        let data = ''
+        res.on('data', (c) => { data += c })
+        res.on('end', () => {
+          try { resolve(JSON.parse(data).tag_name ?? '') }
+          catch { reject(new Error('parse error')) }
+        })
+      }
+    ).on('error', reject)
+  })
+}
+
+async function checkForUpdateAndNotify(win: BrowserWindow): Promise<void> {
+  try {
+    const current = getCurrentVersion()
+    const tag = await fetchLatestTag()
+    const latest = tag.replace(/^v/, '')
+    if (semverGt(latest, current)) {
+      win.webContents.send('app:updateAvailable', { current, latest })
+    }
+  } catch {
+    // silent — no network or no releases yet
+  }
+}
+
+ipcMain.handle('app:launchUpdater', () => {
+  const updaterExe = join(homedir(), 'BibleApp', 'App', 'updater', 'out', 'BibleAppUpdater-win32-x64', 'BibleAppUpdater.exe')
+  if (existsSync(updaterExe)) {
+    spawn(updaterExe, [], { detached: true, stdio: 'ignore' }).unref()
+  } else {
+    // Dev fallback: run via npm in the updater directory
+    const updaterDir = join(__dirname, '../../../updater')
+    spawn('npm', ['run', 'start'], { cwd: updaterDir, detached: true, stdio: 'ignore', shell: true }).unref()
+  }
+})
+
 app.whenReady().then(async () => {
   await openDb()
-  createWindow()
+  const win = createWindow()
+  win.webContents.once('did-finish-load', () => {
+    checkForUpdateAndNotify(win)
+  })
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })

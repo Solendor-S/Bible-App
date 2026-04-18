@@ -9,7 +9,10 @@ contextBridge.exposeInMainWorld('bibleApi', {
   getCommentary: (book: string, chapter: number, verse: number) =>
     ipcRenderer.invoke('commentary:getForVerse', book, chapter, verse),
   search: (query: string) => ipcRenderer.invoke('search:query', query),
-  openExternal: (url: string) => ipcRenderer.invoke('shell:openExternal', url)
+  openExternal: (url: string) => ipcRenderer.invoke('shell:openExternal', url),
+  launchUpdater: () => ipcRenderer.invoke('app:launchUpdater'),
+  onUpdateAvailable: (cb: (info: { current: string; latest: string }) => void) =>
+    ipcRenderer.on('app:updateAvailable', (_e, info) => cb(info))
 })
 
 contextBridge.exposeInMainWorld('chatApi', {

@@ -74,6 +74,8 @@ declare global {
       getCommentary(book: string, chapter: number, verse: number): Promise<CommentaryEntry[]>
       search(query: string): Promise<SearchResult>
       openExternal(url: string): Promise<void>
+      launchUpdater(): Promise<void>
+      onUpdateAvailable(cb: (info: { current: string; latest: string }) => void): void
     }
     chatApi: {
       getSessions(): Promise<ChatSession[]>
