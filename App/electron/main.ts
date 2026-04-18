@@ -250,7 +250,12 @@ ipcMain.handle('ollama:ensureRunning', async () => {
   if (!exe) return { success: false, error: 'Ollama not found. Install it from https://ollama.com' }
 
   try {
-    spawn(exe, ['serve'], { detached: true, stdio: 'ignore', windowsHide: true }).unref()
+    spawn('powershell.exe', [
+      '-WindowStyle', 'Hidden',
+      '-NonInteractive',
+      '-Command',
+      `Start-Process -FilePath '${exe.replace(/'/g, "''")}' -ArgumentList 'serve' -WindowStyle Hidden`
+    ], { detached: true, stdio: 'ignore', windowsHide: true }).unref()
   } catch (e: any) {
     return { success: false, error: `Failed to start Ollama: ${e.message}` }
   }
