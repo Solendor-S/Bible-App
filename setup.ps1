@@ -8,9 +8,34 @@ $AppDir      = Join-Path $InstallRoot 'App'
 
 function Bail($msg) {
     Write-Host ''
-    Write-Host "ERROR: $msg" -ForegroundColor Red
-    Read-Host 'Press Enter to exit'
+    Write-Host $msg -ForegroundColor Red
+    Write-Host 'You must install all prerequisites to use this software.' -ForegroundColor Red
+    for ($i = 5; $i -ge 1; $i--) {
+        Write-Host "Closing in $i..." -ForegroundColor DarkGray
+        Start-Sleep 1
+    }
     exit 1
+}
+
+function Install-Prereq($name, $wingetId, $manualUrl) {
+    Write-Host ''
+    $ans = Read-Host "  Install $name now? (y/n)"
+    if ($ans -ne 'y' -and $ans -ne 'Y') {
+        Bail "  $name is required but was not installed."
+    }
+
+    if (Get-Command winget -ErrorAction SilentlyContinue) {
+        Write-Host "  Installing $name via winget..." -ForegroundColor Yellow
+        winget install --id $wingetId -e --accept-source-agreements --accept-package-agreements
+    } else {
+        Write-Host "  Opening download page for $name..." -ForegroundColor Yellow
+        Start-Process $manualUrl
+        Read-Host "  Install $name, then press Enter to continue"
+    }
+
+    # Refresh PATH so newly installed tools are found
+    $env:PATH = [System.Environment]::GetEnvironmentVariable('PATH', 'Machine') + ';' +
+                [System.Environment]::GetEnvironmentVariable('PATH', 'User')
 }
 
 Write-Host ''
@@ -24,22 +49,28 @@ Write-Host 'Checking prerequisites...' -ForegroundColor Yellow
 
 if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
     Write-Host '  Node.js not found.' -ForegroundColor Red
-    Write-Host '  Install from: https://nodejs.org  then run setup.bat again.' -ForegroundColor White
-    Read-Host 'Press Enter to exit'; exit 1
+    Install-Prereq 'Node.js' 'OpenJS.NodeJS.LTS' 'https://nodejs.org'
+    if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
+        Bail '  Node.js still not found after install. Please restart and run setup again.'
+    }
 }
 Write-Host ("  Node.js " + (node --version) + " found.") -ForegroundColor Green
 
 if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
     Write-Host '  Git not found.' -ForegroundColor Red
-    Write-Host '  Install from: https://git-scm.com  then run setup.bat again.' -ForegroundColor White
-    Read-Host 'Press Enter to exit'; exit 1
+    Install-Prereq 'Git' 'Git.Git' 'https://git-scm.com'
+    if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
+        Bail '  Git still not found after install. Please restart and run setup again.'
+    }
 }
 Write-Host '  Git found.' -ForegroundColor Green
 
 if (-not (Get-Command git-lfs -ErrorAction SilentlyContinue)) {
-    Write-Host '  Git LFS not found (needed for the database file).' -ForegroundColor Red
-    Write-Host '  Install from: https://git-lfs.github.com  then run setup.bat again.' -ForegroundColor White
-    Read-Host 'Press Enter to exit'; exit 1
+    Write-Host '  Git LFS not found.' -ForegroundColor Red
+    Install-Prereq 'Git LFS' 'GitHub.GitLFS' 'https://git-lfs.github.com'
+    if (-not (Get-Command git-lfs -ErrorAction SilentlyContinue)) {
+        Bail '  Git LFS still not found after install. Please restart and run setup again.'
+    }
 }
 Write-Host '  Git LFS found.' -ForegroundColor Green
 
