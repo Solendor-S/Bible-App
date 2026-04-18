@@ -10,9 +10,16 @@ if %errorLevel% neq 0 (
     exit /b
 )
 
-:: ── Download and run setup.ps1 from GitHub ───────────────────────────────────
+:: ── Download setup.ps1 with curl (built into Windows 10+) ─────────────────────
 echo.
 echo Fetching setup script from GitHub...
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$s = $env:TEMP + '\bible-setup.ps1'; Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/Solendor-S/Bible-App/main/setup.ps1' -OutFile $s; & $s"
+curl -s -L -o "%TEMP%\bible-setup.ps1" "https://raw.githubusercontent.com/Solendor-S/Bible-App/main/setup.ps1"
+if %errorLevel% neq 0 (
+    echo Download failed. Check your internet connection.
+    pause
+    exit /b 1
+)
 
+:: ── Run it ────────────────────────────────────────────────────────────────────
+powershell -NoProfile -ExecutionPolicy Bypass -File "%TEMP%\bible-setup.ps1"
 pause
