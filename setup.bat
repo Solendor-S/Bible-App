@@ -1,6 +1,14 @@
 @echo off
 :: Bible App - Self-contained setup script
 :: Download this single file and double-click to install everything.
+
+:: Request admin privileges (UAC prompt)
+net session >nul 2>&1
+if %errorLevel% neq 0 (
+    powershell -Command "Start-Process -FilePath '%~f0' -Verb RunAs"
+    exit /b
+)
+
 powershell -NoProfile -ExecutionPolicy Bypass -Command "iex ((Get-Content -Raw '%~f0') -replace '(?ms)^.*?^__POWERSHELL__\r?\n','')"
 exit /b 0
 __POWERSHELL__
