@@ -1,0 +1,91 @@
+{
+  "name": "bible-app",
+  "version": "1.0.0",
+  "description": "Catena-style Bible study app with Church Fathers commentary",
+  "main": ".vite/build/main.js",
+  "scripts": {
+    "start": "electron-forge start",
+    "dev": "electron-forge start",
+    "build": "electron-forge make",
+    "package": "electron-forge package",
+    "setup-data": "node -r ts-node/register scripts/download-data.ts",
+    "build-db": "node -r ts-node/register data/build-db.ts",
+    "fetch-ccel": "node -r ts-node/register scripts/fetch-ccel.ts",
+    "scrape-catenabible": "node -r ts-node/register scripts/scrape-catenabible.ts",
+    "fetch-catenabible-api": "node -r ts-node/register scripts/fetch-catenabible-api.ts",
+    "fetch-all": "npm run fetch-ccel && npm run fetch-catenabible-api && npm run build-db"
+  },
+  "dependencies": {
+    "sql.js": "^1.12.0"
+  },
+  "devDependencies": {
+    "@electron-forge/cli": "^7.11.1",
+    "@electron-forge/maker-squirrel": "^7.11.1",
+    "@electron-forge/maker-zip": "^7.11.1",
+    "@electron-forge/plugin-auto-unpack-natives": "^7.11.1",
+    "@electron-forge/plugin-vite": "^7.11.1",
+    "@types/cheerio": "^0.22.35",
+    "@types/node": "^20.11.5",
+    "@types/react": "^18.2.48",
+    "@types/react-dom": "^18.2.18",
+    "@types/sql.js": "^1.4.11",
+    "@vitejs/plugin-react": "^4.2.1",
+    "cheerio": "^1.2.0",
+    "electron": "^32.0.0",
+    "playwright": "^1.59.1",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.12"
+  },
+  "config": {
+    "forge": {
+      "packagerConfig": {
+        "asar": true,
+        "extraResource": [
+          "data/bible.db"
+        ]
+      },
+      "makers": [
+        {
+          "name": "@electron-forge/maker-squirrel",
+          "config": {}
+        },
+        {
+          "name": "@electron-forge/maker-zip",
+          "platforms": [
+            "darwin"
+          ]
+        }
+      ],
+      "plugins": [
+        {
+          "name": "@electron-forge/plugin-auto-unpack-natives",
+          "config": {}
+        },
+        {
+          "name": "@electron-forge/plugin-vite",
+          "config": {
+            "build": [
+              {
+                "entry": "electron/main.ts",
+                "config": "vite.main.config.ts"
+              },
+              {
+                "entry": "electron/preload.ts",
+                "config": "vite.preload.config.ts"
+              }
+            ],
+            "renderer": [
+              {
+                "name": "main_window",
+                "config": "vite.renderer.config.ts"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

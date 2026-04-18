@@ -1,0 +1,2 @@
+data/bible.db filter=lfs diff=lfs merge=lfs -text
+data/raw/commentary-catenabible.json filter=lfs diff=lfs merge=lfs -text

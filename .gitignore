@@ -1,0 +1,26 @@
+node_modules/
+.vite/
+out/
+dist/
+dist-electron/
+release/
+
+# LFS-tracked large files are included (bible.db, commentary-catenabible.json)
+
+# Progress tracking files (only relevant during scraping)
+data/raw/catenabible-api-progress.json
+data/raw/scrape-progress.json
+
+# Backup files
+*.bak
+
+# Environment
+.env
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
