@@ -13,7 +13,6 @@ if %errorLevel% neq 0 (
 :: ── Download and run setup.ps1 from GitHub ───────────────────────────────────
 echo.
 echo Fetching setup script from GitHub...
-powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-  "Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/Solendor-S/Bible-App/main/setup.ps1' -OutFile '$env:TEMP\bible-setup.ps1'; & '$env:TEMP\bible-setup.ps1'"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$s = $env:TEMP + '\bible-setup.ps1'; Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/Solendor-S/Bible-App/main/setup.ps1' -OutFile $s; & $s"
 
 pause
