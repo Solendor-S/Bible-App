@@ -33,8 +33,10 @@
     "cheerio": "^1.2.0",
     "electron": "^32.0.0",
     "playwright": "^1.59.1",
+    "png-to-ico": "^3.0.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "sharp": "^0.34.5",
     "ts-node": "^10.9.2",
     "typescript": "^5.3.3",
     "vite": "^5.0.12"
@@ -43,6 +45,7 @@
     "forge": {
       "packagerConfig": {
         "asar": true,
+        "icon": "../../resources/icon",
         "extraResource": [
           "data/bible.db"
         ]
