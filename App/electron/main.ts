@@ -199,6 +199,8 @@ ipcMain.handle('commentary:searchByFather', async (_e, fatherName: string) => {
 
 // ── Ollama lifecycle ──────────────────────────
 
+let ollamaStartedByUs = false
+
 function isOllamaRunning(): Promise<boolean> {
   return new Promise((resolve) => {
     const req = http.get('http://localhost:11434/', (res) => {
@@ -262,6 +264,7 @@ ipcMain.handle('ollama:ensureRunning', async () => {
 
   const ready = await waitForOllama(20000)
   if (!ready) return { success: false, error: 'Ollama did not start within 20 seconds.' }
+  ollamaStartedByUs = true
   return { success: true, alreadyRunning: false }
 })
 
@@ -340,5 +343,11 @@ app.whenReady().then(async () => {
 
 app.on('window-all-closed', () => {
   db?.close()
+  if (ollamaStartedByUs) {
+    try {
+      const { execFileSync } = require('child_process')
+      execFileSync('taskkill', ['/F', '/IM', 'ollama.exe', '/T'], { windowsHide: true } as any)
+    } catch {}
+  }
   if (process.platform !== 'darwin') app.quit()
 })
