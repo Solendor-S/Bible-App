@@ -243,7 +243,7 @@ ipcMain.handle('ollama:ensureRunning', async () => {
   if (!exe) return { success: false, error: 'Ollama not found. Install it from https://ollama.com' }
 
   try {
-    spawn(exe, ['serve'], { detached: true, stdio: 'ignore', shell: exe === 'ollama' }).unref()
+    spawn(exe, ['serve'], { detached: true, stdio: 'ignore', shell: exe === 'ollama', windowsHide: true }).unref()
   } catch (e: any) {
     return { success: false, error: `Failed to start Ollama: ${e.message}` }
   }
