@@ -13,9 +13,17 @@ if %errorLevel% neq 0 (
 :: ── Download setup.ps1 with curl (built into Windows 10+) ─────────────────────
 echo.
 echo Fetching setup script from GitHub...
-curl -s -L -o "%TEMP%\bible-setup.ps1" "https://raw.githubusercontent.com/Solendor-S/Bible-App/main/setup.ps1"
+if exist "%TEMP%\bible-setup.ps1" del "%TEMP%\bible-setup.ps1"
+curl -L --fail -o "%TEMP%\bible-setup.ps1" "https://raw.githubusercontent.com/Solendor-S/Bible-App/main/setup.ps1"
 if %errorLevel% neq 0 (
+    echo.
     echo Download failed. Check your internet connection.
+    pause
+    exit /b 1
+)
+if not exist "%TEMP%\bible-setup.ps1" (
+    echo.
+    echo Download failed - file not created.
     pause
     exit /b 1
 )
