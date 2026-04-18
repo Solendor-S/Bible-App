@@ -211,14 +211,21 @@ function isOllamaRunning(): Promise<boolean> {
 }
 
 function findOllamaExe(): string | null {
-  const candidates = [
-    'ollama',
+  // Check known install locations first (full path = no shell needed)
+  const knownPaths = [
     join(homedir(), 'AppData', 'Local', 'Programs', 'Ollama', 'ollama.exe'),
-    'C:\\Program Files\\Ollama\\ollama.exe'
+    'C:\\Program Files\\Ollama\\ollama.exe',
   ]
-  for (const c of candidates) {
-    if (!c.includes(pathSep) || existsSync(c)) return c
+  for (const p of knownPaths) {
+    if (existsSync(p)) return p
   }
+  // Fall back to resolving via PATH using 'where' (synchronous, hidden)
+  try {
+    const { execFileSync } = require('child_process')
+    const result = execFileSync('where', ['ollama'], { windowsHide: true, encoding: 'utf-8' } as any)
+    const line = (result as string).trim().split(/\r?\n/)[0].trim()
+    if (line && existsSync(line)) return line
+  } catch {}
   return null
 }
 
@@ -243,7 +250,7 @@ ipcMain.handle('ollama:ensureRunning', async () => {
   if (!exe) return { success: false, error: 'Ollama not found. Install it from https://ollama.com' }
 
   try {
-    spawn(exe, ['serve'], { detached: true, stdio: 'ignore', shell: exe === 'ollama', windowsHide: true }).unref()
+    spawn(exe, ['serve'], { detached: true, stdio: 'ignore', windowsHide: true }).unref()
   } catch (e: any) {
     return { success: false, error: `Failed to start Ollama: ${e.message}` }
   }
