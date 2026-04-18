@@ -2,19 +2,39 @@
 :: Bible App - Self-contained setup script
 :: Download this single file and double-click to install everything.
 
-:: Request admin privileges (UAC prompt)
+:: ── UAC elevation ─────────────────────────────────────────────────────────────
 net session >nul 2>&1
 if %errorLevel% neq 0 (
-    powershell -Command "Start-Process -FilePath '%~f0' -Verb RunAs"
+    echo Requesting administrator privileges...
+    powershell -Command "Start-Process -FilePath 'cmd.exe' -ArgumentList '/c \"%~f0\"' -Verb RunAs -Wait" >nul 2>&1
+    if %errorLevel% neq 0 (
+        echo.
+        echo ERROR: Could not get administrator privileges.
+        echo Please right-click this file and choose "Run as administrator".
+        pause
+    )
     exit /b
 )
 
-powershell -NoProfile -ExecutionPolicy Bypass -Command "iex ((Get-Content -Raw '%~f0') -replace '(?ms)^.*?^__POWERSHELL__\r?\n','')"
+:: ── Run embedded PowerShell ───────────────────────────────────────────────────
+powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+    "$f = [System.IO.File]::ReadAllText('%~f0');" ^
+    "$ps = ($f -split '__POWERSHELL__')[1];" ^
+    "if (-not $ps) { Write-Host 'ERROR: Could not parse setup script.' -ForegroundColor Red; Read-Host 'Press Enter to exit'; exit 1 };" ^
+    "try { Invoke-Expression $ps } catch { Write-Host $_.Exception.Message -ForegroundColor Red; Read-Host 'Press Enter to exit'; exit 1 }"
+pause
 exit /b 0
 __POWERSHELL__
 $ErrorActionPreference = 'Stop'
 $InstallRoot = Join-Path $env:USERPROFILE 'BibleApp'
 $AppDir      = Join-Path $InstallRoot 'App'
+
+function Pause-OnError($msg) {
+    Write-Host ''
+    Write-Host "ERROR: $msg" -ForegroundColor Red
+    Read-Host 'Press Enter to exit'
+    exit 1
+}
 
 Write-Host ''
 Write-Host '========================================' -ForegroundColor Cyan
@@ -52,11 +72,11 @@ if (-not (Test-Path $AppDir)) {
     Write-Host 'Downloading app from GitHub (includes ~200MB database - please wait)...' -ForegroundColor Yellow
     git lfs install 2>&1 | Out-Null
     git clone https://github.com/Solendor-S/Bible-App.git $InstallRoot
-    if ($LASTEXITCODE -ne 0) { Write-Host 'Clone failed.' -ForegroundColor Red; exit 1 }
+    if ($LASTEXITCODE -ne 0) { Pause-OnError 'Clone failed. Check your internet connection.' }
     Write-Host '  Download complete.' -ForegroundColor Green
 } else {
     Write-Host ''
-    Write-Host "  Found existing install at $InstallRoot — skipping download." -ForegroundColor Green
+    Write-Host "  Found existing install at $InstallRoot - skipping download." -ForegroundColor Green
 }
 
 # ── npm install ───────────────────────────────────────────────────────────────
@@ -64,7 +84,7 @@ Write-Host ''
 Write-Host 'Installing dependencies...' -ForegroundColor Yellow
 Set-Location $AppDir
 npm install
-if ($LASTEXITCODE -ne 0) { Write-Host 'npm install failed.' -ForegroundColor Red; exit 1 }
+if ($LASTEXITCODE -ne 0) { Pause-OnError 'npm install failed.' }
 Write-Host '  Dependencies installed.' -ForegroundColor Green
 
 # ── Optional Ollama ───────────────────────────────────────────────────────────
