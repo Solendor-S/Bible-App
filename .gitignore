@@ -24,3 +24,9 @@ Thumbs.db
 # Logs
 *.log
 npm-debug.log*
+
+# Graphify knowledge graph outputs
+graphify-out/
+.graphify_*.json
+.graphify_*.txt
+.graphify_python
