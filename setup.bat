@@ -115,6 +115,7 @@ echo $sc1 = $wsh.CreateShortcut^($DesktopApp^)
 echo $sc1.TargetPath = $AppLauncher
 echo $sc1.WorkingDirectory = $AppDir
 echo $sc1.WindowStyle = 7
+echo $sc1.IconLocation = ^(Join-Path $InstallRoot 'resources\icon.ico'^) + ', 0'
 echo $sc1.Description = 'Launch Bible Study App'
 echo $sc1.Save^(^)
 echo Write-Host "  Shortcut created: $DesktopApp" -ForegroundColor Green
