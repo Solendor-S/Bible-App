@@ -10,52 +10,44 @@ A catena-style Bible study desktop app (Electron) built around KJV scripture and
 - **AI Scholar** — ask questions about the text and Fathers using a local Ollama model (no data leaves your machine)
 - **Chat sessions** — persistent conversation history
 
-## Prerequisites
+## Quick Setup (Windows)
 
-- [Node.js](https://nodejs.org/) v18+
-- [Git LFS](https://git-lfs.github.com/) — required to download the database file
-- [Ollama](https://ollama.com/) — only needed for the AI Scholar feature
+1. Install [Node.js](https://nodejs.org/), [Git](https://git-scm.com), and [Git LFS](https://git-lfs.github.com/) if you don't have them
+2. Download **[setup.bat](setup.bat)** from this repo
+3. Double-click it — it will clone the app, install dependencies, and optionally set up the AI
 
-## Setup
+That's it. The script walks you through everything including the optional AI model.
+
+## Manual Setup
 
 ```bash
-# 1. Clone (LFS must be installed first)
-git clone https://github.com/Solendor-S/bible-app.git
-cd bible-app
-
-# 2. Install dependencies
+# Git LFS must be installed first (for the 93MB database)
+git clone https://github.com/Solendor-S/Bible-App.git
+cd Bible-App/App
 npm install
-
-# 3. Run
 npm run dev
 ```
 
 ## AI Scholar (optional)
 
-The AI panel uses Ollama running locally. Install it from [ollama.com](https://ollama.com), then pull the model:
+The AI panel uses Ollama running locally — no data leaves your machine. Install [Ollama](https://ollama.com), then:
 
 ```bash
 ollama pull gemma4
 ```
 
-Make sure Ollama is running before opening the app. If it isn't running, the rest of the app works fine — the AI panel just shows a connection error.
+If Ollama isn't running, the rest of the app still works fine.
 
 ## Rebuilding the Database
 
-The compiled database (`data/bible.db`) is included via Git LFS. If you want to rebuild it from source:
+The compiled database (`App/data/bible.db`) is included via Git LFS. To rebuild from source:
 
 ```bash
-# Rebuild from raw data files (all included in the repo)
-npm run build-db
-
-# Re-scrape commentary from catenabible.com (takes a long time)
-npm run fetch-catenabible-api
-
-# Re-fetch CCEL Catena Aurea
-npm run fetch-ccel
-
-# Fetch all sources then rebuild
-npm run fetch-all
+cd App
+npm run build-db          # Rebuild from included raw data files
+npm run fetch-catenabible-api  # Re-scrape catenabible.com (slow)
+npm run fetch-ccel        # Re-fetch CCEL Catena Aurea
+npm run fetch-all         # Fetch all + rebuild
 ```
 
 ## Data Sources
