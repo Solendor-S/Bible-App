@@ -12,11 +12,10 @@ A catena-style Bible study desktop app (Electron) built around KJV scripture and
 
 ## Quick Setup (Windows)
 
-1. Install [Node.js](https://nodejs.org/), [Git](https://git-scm.com), and [Git LFS](https://git-lfs.github.com/) if you don't have them
-2. Download **[setup.bat](setup.bat)** from this repo
-3. Double-click it — it will clone the app, install dependencies, and optionally set up the AI
+1. Download **[setup.bat](setup.bat)** from this repo
+2. Double-click it — it will ask to install any missing dependencies, clone the app, and optionally set up the AI
 
-That's it. The script walks you through everything including the optional AI model.
+That's it. The script handles everything.
 
 ## Manual Setup
 
