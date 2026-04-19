@@ -341,14 +341,27 @@ async function checkForUpdateAndNotify(win: BrowserWindow): Promise<void> {
 }
 
 ipcMain.handle('app:launchUpdater', () => {
-  const updaterExe = join(homedir(), 'BibleApp', 'App', 'updater', 'out', 'BibleAppUpdater-win32-x64', 'BibleAppUpdater.exe')
-  if (existsSync(updaterExe)) {
-    spawn(updaterExe, [], { detached: true, stdio: 'ignore' }).unref()
-  } else {
-    // Dev fallback: run via npm in the updater directory
-    const updaterDir = join(__dirname, '../../../updater')
-    spawn('npm', ['run', 'start'], { cwd: updaterDir, detached: true, stdio: 'ignore', shell: true }).unref()
+  const outDir = join(homedir(), 'BibleApp', 'App', 'updater', 'out')
+
+  if (process.platform === 'win32') {
+    const exe = join(outDir, 'BibleAppUpdater-win32-x64', 'BibleAppUpdater.exe')
+    if (existsSync(exe)) {
+      spawn(exe, [], { detached: true, stdio: 'ignore' }).unref()
+      return
+    }
+  } else if (process.platform === 'darwin') {
+    for (const arch of ['arm64', 'x64']) {
+      const appBundle = join(outDir, `BibleAppUpdater-darwin-${arch}`, 'BibleAppUpdater.app')
+      if (existsSync(appBundle)) {
+        spawn('open', [appBundle], { detached: true, stdio: 'ignore' }).unref()
+        return
+      }
+    }
   }
+
+  // Fallback: run via npm (dev mode or binary not found)
+  const updaterDir = join(__dirname, '../../../updater')
+  spawn('npm', ['run', 'start'], { cwd: updaterDir, detached: true, stdio: 'ignore', shell: true }).unref()
 })
 
 app.whenReady().then(async () => {
