@@ -13,6 +13,7 @@
     "fetch-ccel": "node -r ts-node/register scripts/fetch-ccel.ts",
     "scrape-catenabible": "node -r ts-node/register scripts/scrape-catenabible.ts",
     "fetch-catenabible-api": "node -r ts-node/register scripts/fetch-catenabible-api.ts",
+    "fetch-gaps": "node -r ts-node/register scripts/fetch-gaps.ts",
     "fetch-all": "npm run fetch-ccel && npm run fetch-catenabible-api && npm run build-db"
   },
   "dependencies": {

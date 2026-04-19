@@ -10,6 +10,7 @@ release/
 # Progress tracking files (only relevant during scraping)
 App/data/raw/catenabible-api-progress.json
 App/data/raw/scrape-progress.json
+App/data/raw/fetch-gaps-progress.json
 
 # Backup files
 *.bak
