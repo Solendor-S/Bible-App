@@ -1,7 +1,7 @@
 import { app, BrowserWindow, ipcMain, shell } from 'electron'
 
 import { join, sep as pathSep } from 'path'
-import { readFileSync, existsSync, mkdirSync, writeFileSync, readdirSync, unlinkSync } from 'fs'
+import { readFileSync, existsSync, mkdirSync, writeFileSync, copyFileSync, readdirSync, unlinkSync } from 'fs'
 import { homedir, tmpdir } from 'os'
 import { spawn } from 'child_process'
 import https from 'https'
@@ -10,12 +10,28 @@ import initSqlJs, { Database } from 'sql.js'
 
 let db: Database | null = null
 
-function getDbPath(): string {
-  if (app.isPackaged) {
-    return join(process.resourcesPath, 'bible.db')
-  }
-  // In dev, main.ts compiles to .vite/build/main.js → two dirs up is project root
+function getCurrentVersion(): string {
+  try {
+    const pkgPath = app.isPackaged
+      ? join(process.resourcesPath, 'package.json')
+      : join(__dirname, '../../package.json')
+    return JSON.parse(readFileSync(pkgPath, 'utf-8')).version ?? '0.0.0'
+  } catch { return '0.0.0' }
+}
+
+// Seed DB lives in the repo (updated by git). Never read directly by the app.
+function getDbSeedPath(): string {
+  if (app.isPackaged) return join(process.resourcesPath, 'bible.db')
   return join(__dirname, '../../data/bible.db')
+}
+
+// Working DB lives in userData — outside the git repo, never touched by git.
+function getDbPath(): string {
+  return join(app.getPath('userData'), 'bible.db')
+}
+
+function getDbVersionPath(): string {
+  return join(app.getPath('userData'), '.db-version')
 }
 
 function getPreloadPath(): string {
@@ -24,9 +40,22 @@ function getPreloadPath(): string {
 
 async function openDb(): Promise<Database> {
   if (db) return db
+
   const SQL = await initSqlJs()
-  const dbPath = getDbPath()
-  if (!existsSync(dbPath)) {
+  const userDbPath = getDbPath()
+  const seedPath = getDbSeedPath()
+  const versionPath = getDbVersionPath()
+  const currentVersion = getCurrentVersion()
+
+  // Copy seed → userData if missing or app version has changed (new commentary data)
+  const installedVersion = existsSync(versionPath) ? readFileSync(versionPath, 'utf-8').trim() : ''
+  if (existsSync(seedPath) && (!existsSync(userDbPath) || installedVersion !== currentVersion)) {
+    mkdirSync(app.getPath('userData'), { recursive: true })
+    copyFileSync(seedPath, userDbPath)
+    writeFileSync(versionPath, currentVersion)
+  }
+
+  if (!existsSync(userDbPath)) {
     db = new SQL.Database()
     db.run(`
       CREATE TABLE IF NOT EXISTS bible_verses (id INTEGER PRIMARY KEY, book TEXT, book_order INTEGER, chapter INTEGER, verse INTEGER, text TEXT);
@@ -35,7 +64,8 @@ async function openDb(): Promise<Database> {
     `)
     return db
   }
-  const fileBuffer = readFileSync(dbPath)
+
+  const fileBuffer = readFileSync(userDbPath)
   db = new SQL.Database(fileBuffer)
   return db
 }
@@ -271,15 +301,6 @@ ipcMain.handle('ollama:ensureRunning', async () => {
 // ── Update check ─────────────────────────────
 
 const REPO = 'Solendor-S/Bible-App'
-
-function getCurrentVersion(): string {
-  try {
-    const pkgPath = app.isPackaged
-      ? join(process.resourcesPath, 'package.json')
-      : join(__dirname, '../../package.json')
-    return JSON.parse(readFileSync(pkgPath, 'utf-8')).version ?? '0.0.0'
-  } catch { return '0.0.0' }
-}
 
 function semverGt(a: string, b: string): boolean {
   const parse = (v: string) => v.replace(/^v/, '').split('.').map(Number)
