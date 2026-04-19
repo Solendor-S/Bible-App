@@ -126,49 +126,71 @@ ipcMain.handle('update:apply', async () => {
       return
     }
 
-    win?.webContents.send('update:progress', { line: 'Pulling latest changes from GitHub...\n', type: 'info' })
+    win?.webContents.send('update:progress', { line: 'Fetching latest release from GitHub...\n', type: 'info' })
 
-    const pull = spawn('git', ['pull'], {
+    const fetch = spawn('git', ['fetch', 'origin', 'main'], {
       cwd: INSTALL_ROOT,
       shell: true,
       env: { ...process.env }
     })
 
-    pull.stdout.on('data', (data: Buffer) => {
+    fetch.stdout.on('data', (data: Buffer) => {
       win?.webContents.send('update:progress', { line: data.toString(), type: 'output' })
     })
-    pull.stderr.on('data', (data: Buffer) => {
+    fetch.stderr.on('data', (data: Buffer) => {
       win?.webContents.send('update:progress', { line: data.toString(), type: 'output' })
     })
 
-    pull.on('close', (code) => {
-      if (code !== 0) {
-        resolve({ success: false, error: `git pull exited with code ${code}` })
+    fetch.on('close', (fetchCode) => {
+      if (fetchCode !== 0) {
+        resolve({ success: false, error: `git fetch exited with code ${fetchCode}` })
         return
       }
 
-      win?.webContents.send('update:progress', { line: '\nInstalling updated dependencies...\n', type: 'info' })
+      win?.webContents.send('update:progress', { line: 'Applying update...\n', type: 'info' })
 
-      const npmInstall = spawn('npm', ['install'], {
-        cwd: APP_DIR,
+      const reset = spawn('git', ['reset', '--hard', 'origin/main'], {
+        cwd: INSTALL_ROOT,
         shell: true,
         env: { ...process.env }
       })
 
-      npmInstall.stdout.on('data', (data: Buffer) => {
+      reset.stdout.on('data', (data: Buffer) => {
         win?.webContents.send('update:progress', { line: data.toString(), type: 'output' })
       })
-      npmInstall.stderr.on('data', (data: Buffer) => {
+      reset.stderr.on('data', (data: Buffer) => {
         win?.webContents.send('update:progress', { line: data.toString(), type: 'output' })
       })
 
-      npmInstall.on('close', (npmCode) => {
-        if (npmCode !== 0) {
-          resolve({ success: false, error: `npm install exited with code ${npmCode}` })
+      reset.on('close', (code) => {
+        if (code !== 0) {
+          resolve({ success: false, error: `git reset exited with code ${code}` })
           return
         }
-        win?.webContents.send('update:progress', { line: '\nUpdate complete!\n', type: 'success' })
-        resolve({ success: true })
+
+        win?.webContents.send('update:progress', { line: '\nInstalling updated dependencies...\n', type: 'info' })
+
+        const npmInstall = spawn('npm', ['install'], {
+          cwd: APP_DIR,
+          shell: true,
+          env: { ...process.env }
+        })
+
+        npmInstall.stdout.on('data', (data: Buffer) => {
+          win?.webContents.send('update:progress', { line: data.toString(), type: 'output' })
+        })
+        npmInstall.stderr.on('data', (data: Buffer) => {
+          win?.webContents.send('update:progress', { line: data.toString(), type: 'output' })
+        })
+
+        npmInstall.on('close', (npmCode) => {
+          if (npmCode !== 0) {
+            resolve({ success: false, error: `npm install exited with code ${npmCode}` })
+            return
+          }
+          win?.webContents.send('update:progress', { line: '\nUpdate complete!\n', type: 'success' })
+          resolve({ success: true })
+        })
       })
     })
   })
