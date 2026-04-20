@@ -945,12 +945,45 @@ body {
 
 .ai-input-bar {
   display: flex;
-  gap: 8px;
+  flex-direction: column;
+  gap: 6px;
   padding: 8px 12px;
   border-top: 1px solid var(--border-subtle);
   background: var(--bg-panel);
+}
+
+.ai-input-row {
+  display: flex;
+  gap: 8px;
   align-items: flex-end;
 }
+
+.ai-model-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ai-model-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.ai-model-select {
+  flex: 1;
+  background: var(--bg-secondary);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 3px 6px;
+  font-size: 11px;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  outline: none;
+}
+.ai-model-select:focus { border-color: var(--text-accent); color: var(--text-primary); }
+.ai-model-select:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .ai-input {
   flex: 1;

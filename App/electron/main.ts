@@ -227,6 +227,34 @@ ipcMain.handle('commentary:searchByFather', async (_e, fatherName: string) => {
   `, [fuzzy])
 })
 
+ipcMain.handle('commentary:searchByFatherAndVerse', async (_e, fatherName: string, book: string, chapter: number, verse: number) => {
+  const database = await openDb()
+  const exact = fatherName.trim()
+  const fuzzy = `%${exact}%`
+  // Try exact father + exact verse first
+  const exactMatch = rows(database, `
+    SELECT book, chapter, verse, father_name, father_era, excerpt, full_text, source, '' as source_url
+    FROM commentary WHERE father_name = ? AND book = ? AND chapter = ? AND verse = ? LIMIT 1
+  `, [exact, book, chapter, verse])
+  if (exactMatch.length > 0) return exactMatch
+  // Try fuzzy father name + exact verse
+  const fuzzyFather = rows(database, `
+    SELECT book, chapter, verse, father_name, father_era, excerpt, full_text, source, '' as source_url
+    FROM commentary WHERE father_name LIKE ? AND book = ? AND chapter = ? AND verse = ? LIMIT 1
+  `, [fuzzy, book, chapter, verse])
+  if (fuzzyFather.length > 0) return fuzzyFather
+  // Fall back to father-only (original behavior)
+  const fatherOnly = rows(database, `
+    SELECT book, chapter, verse, father_name, father_era, excerpt, full_text, source, '' as source_url
+    FROM commentary WHERE father_name = ? LIMIT 1
+  `, [exact])
+  if (fatherOnly.length > 0) return fatherOnly
+  return rows(database, `
+    SELECT book, chapter, verse, father_name, father_era, excerpt, full_text, source, '' as source_url
+    FROM commentary WHERE father_name LIKE ? LIMIT 1
+  `, [fuzzy])
+})
+
 // ── Ollama lifecycle ──────────────────────────
 
 let ollamaStartedByUs = false

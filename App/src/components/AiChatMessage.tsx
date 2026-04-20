@@ -5,14 +5,14 @@ interface Props {
   message: ChatMessage
   streaming?: boolean
   onNavigateVerse: (book: string, chapter: number, verse: number) => void
-  onNavigateFather: (fatherName: string) => void
+  onNavigateFather: (fatherName: string, book?: string, chapter?: number, verse?: number) => void
 }
 
 // Parse [VERSE: John 3:16] and [FATHER: Augustine | City of God] tags into React nodes
 function parseContent(
   content: string,
   onVerse: (book: string, chapter: number, verse: number) => void,
-  onFather: (name: string) => void
+  onFather: (name: string, book?: string, chapter?: number, verse?: number) => void
 ): React.ReactNode[] {
   const regex = /\[(VERSE|FATHER): ([^\]]+)\]/g
   const parts: React.ReactNode[] = []
@@ -43,9 +43,14 @@ function parseContent(
         parts.push(<span key={key++} className="ai-citation-verse">{value}</span>)
       }
     } else if (type === 'FATHER') {
-      const [name, source] = value.split('|').map(s => s.trim())
+      const [name, source, verseRef] = value.split('|').map(s => s.trim())
+      let fBook: string | undefined, fChapter: number | undefined, fVerse: number | undefined
+      if (verseRef) {
+        const vm = verseRef.match(/^(.+?)\s+(\d+):(\d+)/)
+        if (vm) { fBook = vm[1].trim(); fChapter = parseInt(vm[2], 10); fVerse = parseInt(vm[3], 10) }
+      }
       parts.push(
-        <button key={key++} className="ai-citation-father" onClick={() => onFather(name)}>
+        <button key={key++} className="ai-citation-father" onClick={() => onFather(name, fBook, fChapter, fVerse)}>
           {name}{source ? ` · ${source}` : ''}
         </button>
       )

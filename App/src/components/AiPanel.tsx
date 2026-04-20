@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { AiChatMessage } from './AiChatMessage'
-import { streamChat, buildSystemPrompt } from '../lib/ollamaClient'
+import { streamChat, buildSystemPrompt, OLLAMA_MODELS, DEFAULT_MODEL } from '../lib/ollamaClient'
 import type { ChatMessage, ChatSession, CommentarySearchResult, SelectedVerse } from '../types'
 
 const AI_PANEL_MIN = 200
@@ -19,6 +19,7 @@ export function AiPanel({ height, activeVerse, onHeightChange, onNavigate, onSho
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
+  const [selectedModel, setSelectedModel] = useState(DEFAULT_MODEL)
   const [streaming, setStreaming] = useState(false)
   const [streamingContent, setStreamingContent] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -102,6 +103,7 @@ export function AiPanel({ height, activeVerse, onHeightChange, onNavigate, onSho
     ]
 
     let fullContent = ''
+    let ollamaInstalled = false
     try {
       // Start Ollama if it isn't already running
       setStreamingContent('Starting AI Scholar…')
@@ -110,19 +112,22 @@ export function AiPanel({ height, activeVerse, onHeightChange, onNavigate, onSho
       if (!ollamaStatus.success) {
         throw new Error(ollamaStatus.error ?? 'Could not start Ollama.')
       }
+      ollamaInstalled = true
       if (!ollamaStatus.alreadyRunning) {
         // Brief pause to let the model server fully settle after cold start
         await new Promise(r => setTimeout(r, 800))
       }
 
-      for await (const chunk of streamChat(ollamaMessages)) {
+      for await (const chunk of streamChat(ollamaMessages, selectedModel)) {
         fullContent += chunk
         setStreamingContent(fullContent)
       }
     } catch (err: any) {
       const msg = err?.message ?? ''
-      if (msg.includes('not found') || msg.includes('install')) {
-        fullContent = `⚠️ Ollama is not installed. Download it from https://ollama.com, then run: ollama pull gemma4`
+      if (!ollamaInstalled) {
+        fullContent = `⚠️ Ollama is not installed. Download it from https://ollama.com, then run: \`ollama pull ${selectedModel}\``
+      } else if (msg.includes('not found') || msg.includes('404') || msg.includes('pull')) {
+        fullContent = `⚠️ Ollama is installed but **${selectedModel}** is not pulled. Run:\n\`ollama pull ${selectedModel}\``
       } else if (msg.includes('20 seconds')) {
         fullContent = `⚠️ Ollama took too long to start. Try opening Ollama manually and sending your message again.`
       } else {
@@ -156,8 +161,10 @@ export function AiPanel({ height, activeVerse, onHeightChange, onNavigate, onSho
     setSessions(prev => [session, ...prev.filter(s => s.id !== sessionId)])
   }
 
-  async function handleNavigateFather(fatherName: string) {
-    const results = await window.chatApi.searchCommentaryByFather(fatherName)
+  async function handleNavigateFather(fatherName: string, book?: string, chapter?: number, verse?: number) {
+    const results = (book && chapter !== undefined && verse !== undefined)
+      ? await window.chatApi.searchCommentaryByFatherAndVerse(fatherName, book, chapter, verse)
+      : await window.chatApi.searchCommentaryByFather(fatherName)
     if (results.length > 0) onShowFatherEntry(results[0])
   }
 
@@ -207,26 +214,41 @@ export function AiPanel({ height, activeVerse, onHeightChange, onNavigate, onSho
           </div>
 
           <div className="ai-input-bar">
-            <textarea
-              ref={textareaRef}
-              className="ai-input"
-              value={input}
-              onChange={e => setInput(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() }
-              }}
-              placeholder="Ask about Scripture or the Church Fathers… (Enter to send, Shift+Enter for newline)"
-              rows={2}
-              disabled={streaming}
-            />
-            <button
-              className="ai-send-btn"
-              onClick={handleSend}
-              disabled={streaming || !input.trim()}
-              title="Send (Enter)"
-            >
-              {streaming ? '…' : '↑'}
-            </button>
+            <div className="ai-input-row">
+              <textarea
+                ref={textareaRef}
+                className="ai-input"
+                value={input}
+                onChange={e => setInput(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() }
+                }}
+                placeholder="Ask about Scripture or the Church Fathers… (Enter to send, Shift+Enter for newline)"
+                rows={2}
+                disabled={streaming}
+              />
+              <button
+                className="ai-send-btn"
+                onClick={handleSend}
+                disabled={streaming || !input.trim()}
+                title="Send (Enter)"
+              >
+                {streaming ? '…' : '↑'}
+              </button>
+            </div>
+            <div className="ai-model-bar">
+              <span className="ai-model-label">Model:</span>
+              <select
+                className="ai-model-select"
+                value={selectedModel}
+                onChange={e => setSelectedModel(e.target.value)}
+                disabled={streaming}
+              >
+                {OLLAMA_MODELS.map(m => (
+                  <option key={m.id} value={m.id}>{m.label} · {m.ram} RAM</option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
 

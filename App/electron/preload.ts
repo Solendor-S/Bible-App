@@ -22,5 +22,7 @@ contextBridge.exposeInMainWorld('chatApi', {
   loadSession: (id: string) => ipcRenderer.invoke('chat:loadSession', id),
   deleteSession: (id: string) => ipcRenderer.invoke('chat:deleteSession', id),
   searchCommentary: (query: string) => ipcRenderer.invoke('commentary:search', query),
-  searchCommentaryByFather: (name: string) => ipcRenderer.invoke('commentary:searchByFather', name)
+  searchCommentaryByFather: (name: string) => ipcRenderer.invoke('commentary:searchByFather', name),
+  searchCommentaryByFatherAndVerse: (name: string, book: string, chapter: number, verse: number) =>
+    ipcRenderer.invoke('commentary:searchByFatherAndVerse', name, book, chapter, verse)
 })
