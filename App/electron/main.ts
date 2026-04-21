@@ -143,6 +143,33 @@ ipcMain.handle('bible:getCrossRefs', async (_e, book: string, chapter: number, v
   `, [book, chapter, verse])
 })
 
+ipcMain.handle('bible:getGreekWords', async (_e, book: string, chapter: number, verse: number) => {
+  const database = await openDb()
+  return rows(database, `SELECT position, greek, translit, strongs FROM greek_words WHERE book = ? AND chapter = ? AND verse = ? ORDER BY position`, [book, chapter, verse])
+})
+
+ipcMain.handle('bible:getHebrewWords', async (_e, book: string, chapter: number, verse: number) => {
+  const database = await openDb()
+  return rows(database, `SELECT position, hebrew, translit, strongs FROM hebrew_words WHERE book = ? AND chapter = ? AND verse = ? ORDER BY position`, [book, chapter, verse])
+})
+
+ipcMain.handle('bible:getStrongsEntry', async (_e, type: string, num: string) => {
+  const database = await openDb()
+  const table = type === 'hebrew' ? 'strongs_hebrew' : 'strongs_greek'
+  // TAGNT uses zero-padded numbers with optional suffixes (e.g. "G0910", "G2941G")
+  // OpenScriptures dictionary keys have no padding and no suffix (e.g. "G910", "G2941")
+  // Try exact match first, then strip padding/suffix for Greek
+  let r = rows(database, `SELECT number, lemma, translit, pronunciation, definition, kjv_usage FROM ${table} WHERE number = ?`, [num])
+  if (r.length === 0 && type === 'greek') {
+    const m = num.match(/^G0*(\d+)/)
+    if (m) {
+      const normalized = `G${parseInt(m[1])}`
+      r = rows(database, `SELECT number, lemma, translit, pronunciation, definition, kjv_usage FROM ${table} WHERE number = ?`, [normalized])
+    }
+  }
+  return r[0] ?? null
+})
+
 ipcMain.handle('bible:getCrossRefsFull', async (_e, book: string, chapter: number, verse: number) => {
   const database = await openDb()
   return rows(database, `
@@ -159,6 +186,17 @@ ipcMain.handle('commentary:getForVerse', async (_e, book: string, chapter: numbe
   return rows(database, `
     SELECT id, father_name, father_era, excerpt, full_text, source, source_url
     FROM commentary WHERE book = ? AND chapter = ? AND verse = ? ORDER BY father_era_order
+  `, [book, chapter, verse])
+})
+
+ipcMain.handle('josephus:getForVerse', async (_e, book: string, chapter: number, verse: number) => {
+  const database = await openDb()
+  return rows(database, `
+    SELECT j.work, j.book, j.chapter, j.section, j.text, j.ref, jr.note
+    FROM josephus_refs jr
+    JOIN josephus j ON j.work = jr.jos_work AND j.book = jr.jos_book
+                    AND j.chapter = jr.jos_chapter AND j.section = jr.jos_section
+    WHERE jr.bible_book = ? AND jr.bible_chapter = ? AND jr.bible_verse = ?
   `, [book, chapter, verse])
 })
 

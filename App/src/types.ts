@@ -15,6 +15,29 @@ export interface CrossRef {
   text: string
 }
 
+export interface GreekWord {
+  position: number
+  greek: string
+  translit: string
+  strongs: string
+}
+
+export interface HebrewWord {
+  position: number
+  hebrew: string
+  translit: string
+  strongs: string
+}
+
+export interface StrongsEntry {
+  number: string
+  lemma: string
+  translit: string
+  pronunciation: string
+  definition: string
+  kjv_usage: string
+}
+
 export interface CommentaryEntry {
   id: number
   father_name: string
@@ -58,6 +81,16 @@ export interface ChatSession {
   messages: ChatMessage[]
 }
 
+export interface JosephusEntry {
+  work: string
+  book: number
+  chapter: number
+  section: number
+  text: string
+  ref: string
+  note: string
+}
+
 export interface CommentarySearchResult extends CommentaryEntry {
   book: string
   chapter: number
@@ -72,7 +105,11 @@ declare global {
       getVerses(book: string, chapter: number): Promise<BibleVerse[]>
       getCrossRefs(book: string, chapter: number, verse: number): Promise<CrossRef[]>
       getCrossRefsFull(book: string, chapter: number, verse: number): Promise<CrossRef[]>
+      getGreekWords(book: string, chapter: number, verse: number): Promise<GreekWord[]>
+      getHebrewWords(book: string, chapter: number, verse: number): Promise<HebrewWord[]>
+      getStrongsEntry(type: string, num: string): Promise<StrongsEntry | null>
       getCommentary(book: string, chapter: number, verse: number): Promise<CommentaryEntry[]>
+      getJosephusForVerse(book: string, chapter: number, verse: number): Promise<JosephusEntry[]>
       search(query: string): Promise<SearchResult>
       openExternal(url: string): Promise<void>
       launchUpdater(): Promise<void>

@@ -10,12 +10,13 @@ interface VerseRowProps {
   verseNum: number
   text: string
   selected: boolean
+  activeWordPos?: number | null
   onSelect: () => void
   onContextMenu: (verseNum: number, rect: DOMRect) => void
   onNavigate: (book: string, chapter: number, verse: number) => void
 }
 
-function VerseRow({ book, chapter, verseNum, text, selected, onSelect, onContextMenu, onNavigate }: VerseRowProps) {
+function VerseRow({ book, chapter, verseNum, text, selected, activeWordPos, onSelect, onContextMenu, onNavigate }: VerseRowProps) {
   const refs = useCrossRefs(book, chapter, selected ? verseNum : 0)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -36,7 +37,23 @@ function VerseRow({ book, chapter, verseNum, text, selected, onSelect, onContext
       onContextMenu={handleContextMenu}
     >
       <sup className="verse-num">{verseNum}</sup>
-      <span className="verse-text">{text}</span>
+      {selected && activeWordPos != null ? (
+        <span className="verse-text">
+          {text.split(/(\s+)/).map((token, i, arr) => {
+            // Count only non-whitespace tokens to build word index
+            const wordIndex = arr.slice(0, i).filter(t => /\S/.test(t)).length
+            if (!/\S/.test(token)) return token
+            const highlighted = wordIndex === activeWordPos - 1
+            return (
+              <span key={i} className={highlighted ? 'word-highlight' : undefined}>
+                {token}
+              </span>
+            )
+          })}
+        </span>
+      ) : (
+        <span className="verse-text">{text}</span>
+      )}
       {selected && <CrossRefTooltip refs={refs} onNavigate={onNavigate} />}
     </div>
   )
@@ -50,11 +67,12 @@ interface CopyTarget {
 interface PassageSectionProps {
   passage: PassageRef
   activeVerse: SelectedVerse
+  activeWordPos?: number | null
   onVerseClick: (book: string, chapter: number, verse: number) => void
   onNavigate: (book: string, chapter: number, verse: number) => void
 }
 
-function PassageSection({ passage, activeVerse, onVerseClick, onNavigate }: PassageSectionProps) {
+function PassageSection({ passage, activeVerse, activeWordPos, onVerseClick, onNavigate }: PassageSectionProps) {
   const { verses, loading } = useVerses(passage.book, passage.chapter)
   const [copyTarget, setCopyTarget] = useState<CopyTarget | null>(null)
 
@@ -84,6 +102,11 @@ function PassageSection({ passage, activeVerse, onVerseClick, onNavigate }: Pass
             activeVerse.chapter === passage.chapter &&
             activeVerse.verse === v.verse
           }
+          activeWordPos={
+            activeVerse.book === passage.book &&
+            activeVerse.chapter === passage.chapter &&
+            activeVerse.verse === v.verse ? activeWordPos : null
+          }
           onSelect={() => onVerseClick(passage.book, passage.chapter, v.verse)}
           onContextMenu={(verse, rect) => setCopyTarget({ verse, rect })}
           onNavigate={onNavigate}
@@ -106,11 +129,12 @@ function PassageSection({ passage, activeVerse, onVerseClick, onNavigate }: Pass
 interface Props {
   passages: PassageRef[]
   activeVerse: SelectedVerse
+  activeWordPos?: number | null
   onVerseClick: (book: string, chapter: number, verse: number) => void
   onNavigate: (book: string, chapter: number, verse: number) => void
 }
 
-export function BiblePanel({ passages, activeVerse, onVerseClick, onNavigate }: Props) {
+export function BiblePanel({ passages, activeVerse, activeWordPos, onVerseClick, onNavigate }: Props) {
   return (
     <div className="panel bible-panel">
       <div className="panel-header">
@@ -125,6 +149,7 @@ export function BiblePanel({ passages, activeVerse, onVerseClick, onNavigate }: 
             key={`${p.book}-${p.chapter}-${p.verseStart ?? 0}-${i}`}
             passage={p}
             activeVerse={activeVerse}
+            activeWordPos={activeWordPos}
             onVerseClick={onVerseClick}
             onNavigate={onNavigate}
           />

@@ -48,9 +48,70 @@ async function main() {
       to_verse INTEGER NOT NULL,
       weight REAL DEFAULT 1.0
     );
+    CREATE TABLE IF NOT EXISTS greek_words (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      book TEXT NOT NULL,
+      chapter INTEGER NOT NULL,
+      verse INTEGER NOT NULL,
+      position INTEGER NOT NULL,
+      greek TEXT NOT NULL,
+      translit TEXT NOT NULL,
+      strongs TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS hebrew_words (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      book TEXT NOT NULL,
+      chapter INTEGER NOT NULL,
+      verse INTEGER NOT NULL,
+      position INTEGER NOT NULL,
+      hebrew TEXT NOT NULL,
+      translit TEXT NOT NULL,
+      strongs TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS strongs_greek (
+      number TEXT PRIMARY KEY,
+      lemma TEXT,
+      translit TEXT,
+      pronunciation TEXT,
+      definition TEXT,
+      kjv_usage TEXT
+    );
+    CREATE TABLE IF NOT EXISTS strongs_hebrew (
+      number TEXT PRIMARY KEY,
+      lemma TEXT,
+      translit TEXT,
+      pronunciation TEXT,
+      definition TEXT,
+      kjv_usage TEXT
+    );
     CREATE INDEX IF NOT EXISTS idx_verses_loc ON bible_verses(book, chapter, verse);
     CREATE INDEX IF NOT EXISTS idx_commentary_loc ON commentary(book, chapter, verse);
     CREATE INDEX IF NOT EXISTS idx_crossrefs_from ON cross_refs(from_book, from_chapter, from_verse);
+    CREATE INDEX IF NOT EXISTS idx_greek_loc ON greek_words(book, chapter, verse);
+    CREATE INDEX IF NOT EXISTS idx_hebrew_loc ON hebrew_words(book, chapter, verse);
+    CREATE TABLE IF NOT EXISTS josephus (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      work TEXT NOT NULL,
+      book INTEGER NOT NULL,
+      chapter INTEGER NOT NULL,
+      section INTEGER NOT NULL,
+      text TEXT NOT NULL,
+      ref TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_josephus_loc ON josephus(work, book, chapter, section);
+    CREATE TABLE IF NOT EXISTS josephus_refs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      bible_book TEXT NOT NULL,
+      bible_chapter INTEGER NOT NULL,
+      bible_verse INTEGER NOT NULL,
+      jos_work TEXT NOT NULL,
+      jos_book INTEGER NOT NULL,
+      jos_chapter INTEGER NOT NULL,
+      jos_section INTEGER NOT NULL,
+      ref TEXT NOT NULL,
+      note TEXT NOT NULL DEFAULT ''
+    );
+    CREATE INDEX IF NOT EXISTS idx_josephus_refs_loc ON josephus_refs(bible_book, bible_chapter, bible_verse);
   `)
 
   // Bible text
@@ -165,6 +226,91 @@ async function main() {
     console.log(`  Inserted ${count} cross-references`)
   } else {
     console.warn('  cross_refs.txt not found — skipping')
+  }
+
+  // Strong's Greek dictionary
+  const strongsGreekPath = join(RAW_DIR, 'strongs-greek.json')
+  if (existsSync(strongsGreekPath)) {
+    console.log('Inserting Strong\'s Greek dictionary...')
+    const dict = JSON.parse(readFileSync(strongsGreekPath, 'utf-8'))
+    const stmt = db.prepare('INSERT OR REPLACE INTO strongs_greek (number, lemma, translit, pronunciation, definition, kjv_usage) VALUES (?, ?, ?, ?, ?, ?)')
+    let count = 0
+    for (const [key, val] of Object.entries(dict) as any) {
+      stmt.run([key, val.lemma ?? '', val.translit ?? '', val.pronunciation ?? '', val.strongs_def ?? '', val.kjv_def ?? ''])
+      count++
+    }
+    stmt.free()
+    console.log(`  Inserted ${count} entries`)
+  }
+
+  // Strong's Hebrew dictionary
+  const strongsHebPath = join(RAW_DIR, 'strongs-hebrew.json')
+  if (existsSync(strongsHebPath)) {
+    console.log('Inserting Strong\'s Hebrew dictionary...')
+    const dict = JSON.parse(readFileSync(strongsHebPath, 'utf-8'))
+    const stmt = db.prepare('INSERT OR REPLACE INTO strongs_hebrew (number, lemma, translit, pronunciation, definition, kjv_usage) VALUES (?, ?, ?, ?, ?, ?)')
+    let count = 0
+    for (const [key, val] of Object.entries(dict) as any) {
+      stmt.run([key, val.lemma ?? '', val.translit ?? '', val.pronunciation ?? '', val.strongs_def ?? '', val.kjv_def ?? ''])
+      count++
+    }
+    stmt.free()
+    console.log(`  Inserted ${count} entries`)
+  }
+
+  // Greek NT words
+  const ntWordsPath = join(RAW_DIR, 'nt-words.json')
+  if (existsSync(ntWordsPath)) {
+    console.log('Inserting Greek NT words...')
+    const words = JSON.parse(readFileSync(ntWordsPath, 'utf-8'))
+    const stmt = db.prepare('INSERT INTO greek_words (book, chapter, verse, position, greek, translit, strongs) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    for (const w of words) {
+      stmt.run([w.book, w.chapter, w.verse, w.position, w.greek, w.translit, w.strongs])
+    }
+    stmt.free()
+    console.log(`  Inserted ${words.length} words`)
+  }
+
+  // Hebrew OT words
+  const otWordsPath = join(RAW_DIR, 'ot-words.json')
+  if (existsSync(otWordsPath)) {
+    console.log('Inserting Hebrew OT words...')
+    const words = JSON.parse(readFileSync(otWordsPath, 'utf-8'))
+    const stmt = db.prepare('INSERT INTO hebrew_words (book, chapter, verse, position, hebrew, translit, strongs) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    for (const w of words) {
+      stmt.run([w.book, w.chapter, w.verse, w.position, w.hebrew, w.translit, w.strongs])
+    }
+    stmt.free()
+    console.log(`  Inserted ${words.length} words`)
+  }
+
+  // Josephus sections
+  for (const josFile of ['josephus-antiquities.json', 'josephus-war.json']) {
+    const josPath = join(RAW_DIR, josFile)
+    if (existsSync(josPath)) {
+      const label = josFile.includes('antiquities') ? 'Antiquities' : 'Jewish War'
+      console.log(`Inserting Josephus ${label}...`)
+      const sections = JSON.parse(readFileSync(josPath, 'utf-8'))
+      const stmt = db.prepare('INSERT INTO josephus (work, book, chapter, section, text, ref) VALUES (?, ?, ?, ?, ?, ?)')
+      for (const s of sections) {
+        stmt.run([s.work, s.book, s.chapter, s.section, s.text, s.ref])
+      }
+      stmt.free()
+      console.log(`  Inserted ${sections.length} sections`)
+    }
+  }
+
+  // Josephus curated cross-reference map
+  const josRefsPath = join(RAW_DIR, 'josephus-refs.json')
+  if (existsSync(josRefsPath)) {
+    console.log('Inserting Josephus curated refs...')
+    const refs = JSON.parse(readFileSync(josRefsPath, 'utf-8'))
+    const stmt = db.prepare(`INSERT INTO josephus_refs (bible_book, bible_chapter, bible_verse, jos_work, jos_book, jos_chapter, jos_section, ref, note) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    for (const r of refs) {
+      stmt.run([r.bible_book, r.bible_chapter, r.bible_verse, r.jos_work, r.jos_book, r.jos_chapter, r.jos_section, r.ref, r.note ?? ''])
+    }
+    stmt.free()
+    console.log(`  Inserted ${refs.length} curated refs`)
   }
 
   // Write to disk

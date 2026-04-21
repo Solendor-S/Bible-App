@@ -15,6 +15,7 @@ export function CrossRefsPanel({ selected, onNavigate }: Props) {
     setLoading(true)
     window.bibleApi.getCrossRefsFull(selected.book, selected.chapter, selected.verse)
       .then(r => { setRefs(r); setLoading(false) })
+      .catch(() => setLoading(false))
   }, [selected?.book, selected?.chapter, selected?.verse])
 
   if (!selected?.verse) {

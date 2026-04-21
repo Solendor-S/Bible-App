@@ -20,7 +20,8 @@ export default function App() {
   const [aiPanelHeight, setAiPanelHeight] = useState(0)
   const [featuredEntry, setFeaturedEntry] = useState<CommentarySearchResult | null>(null)
   const [updateInfo, setUpdateInfo] = useState<{ current: string; latest: string } | null>(null)
-  const [rightTab, setRightTab] = useState<'commentary' | 'crossrefs'>('commentary')
+  const [rightTab, setRightTab] = useState<'commentary' | 'crossrefs' | 'wordstudy' | 'firstcentury'>('commentary')
+  const [activeWordPos, setActiveWordPos] = useState<number | null>(null)
   const [changelogOpen, setChangelogOpen] = useState(false)
 
   useEffect(() => {
@@ -44,6 +45,7 @@ export default function App() {
     setActiveVerse({ book, chapter, verse })
     setSearchOpen(false)
     setFeaturedEntry(null)
+    setActiveWordPos(null)
   }
 
   function toggleAiPanel() {
@@ -94,7 +96,8 @@ export default function App() {
         <BiblePanel
           passages={passages}
           activeVerse={activeVerse}
-          onVerseClick={(book, chapter, verse) => { setActiveVerse({ book, chapter, verse }); setFeaturedEntry(null) }}
+          activeWordPos={activeWordPos}
+          onVerseClick={(book, chapter, verse) => { setActiveVerse({ book, chapter, verse }); setFeaturedEntry(null); setActiveWordPos(null) }}
           onNavigate={handleNavigate}
         />
         <CommentaryPanel
@@ -104,6 +107,7 @@ export default function App() {
           onNavigate={handleNavigate}
           rightTab={rightTab}
           onTabChange={setRightTab}
+          onWordPositionChange={setActiveWordPos}
         />
       </div>
       {aiPanelHeight > 0 && (

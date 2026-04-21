@@ -8,8 +8,16 @@ contextBridge.exposeInMainWorld('bibleApi', {
     ipcRenderer.invoke('bible:getCrossRefs', book, chapter, verse),
   getCrossRefsFull: (book: string, chapter: number, verse: number) =>
     ipcRenderer.invoke('bible:getCrossRefsFull', book, chapter, verse),
+  getGreekWords: (book: string, chapter: number, verse: number) =>
+    ipcRenderer.invoke('bible:getGreekWords', book, chapter, verse),
+  getHebrewWords: (book: string, chapter: number, verse: number) =>
+    ipcRenderer.invoke('bible:getHebrewWords', book, chapter, verse),
+  getStrongsEntry: (type: string, num: string) =>
+    ipcRenderer.invoke('bible:getStrongsEntry', type, num),
   getCommentary: (book: string, chapter: number, verse: number) =>
     ipcRenderer.invoke('commentary:getForVerse', book, chapter, verse),
+  getJosephusForVerse: (book: string, chapter: number, verse: number) =>
+    ipcRenderer.invoke('josephus:getForVerse', book, chapter, verse),
   search: (query: string) => ipcRenderer.invoke('search:query', query),
   openExternal: (url: string) => ipcRenderer.invoke('shell:openExternal', url),
   launchUpdater: () => ipcRenderer.invoke('app:launchUpdater'),

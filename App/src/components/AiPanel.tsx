@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { AiChatMessage } from './AiChatMessage'
-import { streamChat, buildSystemPrompt, OLLAMA_MODELS, DEFAULT_MODEL } from '../lib/ollamaClient'
+import { streamChat, buildSystemPrompt, buildHistoricalContextPrompt, OLLAMA_MODELS, DEFAULT_MODEL } from '../lib/ollamaClient'
 import type { ChatMessage, ChatSession, CommentarySearchResult, SelectedVerse } from '../types'
 
 const AI_PANEL_MIN = 200
@@ -20,6 +20,7 @@ export function AiPanel({ height, activeVerse, onHeightChange, onNavigate, onSho
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
   const [selectedModel, setSelectedModel] = useState(DEFAULT_MODEL)
+  const [aiMode, setAiMode] = useState<'scholar' | 'context'>('scholar')
   const [streaming, setStreaming] = useState(false)
   const [streamingContent, setStreamingContent] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -67,30 +68,34 @@ export function AiPanel({ height, activeVerse, onHeightChange, onNavigate, onSho
     setStreaming(true)
     setStreamingContent('')
 
-    // Fetch relevant DB context in parallel
+    // Fetch relevant DB context in parallel (scholar mode only)
     let contextLines: string[] = []
-    try {
-      const [searchResult, commentaryResults] = await Promise.all([
-        window.bibleApi.search(text),
-        window.chatApi.searchCommentary(text)
-      ])
-      if (searchResult.verses.length > 0) {
-        contextLines.push('Relevant scripture from the database:')
-        searchResult.verses.slice(0, 5).forEach(v => {
-          contextLines.push(`${v.book} ${v.chapter}:${v.verse} — ${v.text}`)
-        })
+    if (aiMode === 'scholar') {
+      try {
+        const [searchResult, commentaryResults] = await Promise.all([
+          window.bibleApi.search(text),
+          window.chatApi.searchCommentary(text)
+        ])
+        if (searchResult.verses.length > 0) {
+          contextLines.push('Relevant scripture from the database:')
+          searchResult.verses.slice(0, 5).forEach(v => {
+            contextLines.push(`${v.book} ${v.chapter}:${v.verse} — ${v.text}`)
+          })
+        }
+        if (commentaryResults.length > 0) {
+          contextLines.push('Relevant Church Fathers commentary:')
+          commentaryResults.slice(0, 3).forEach(c => {
+            contextLines.push(`${c.father_name} on ${c.book} ${c.chapter}:${c.verse}: "${c.excerpt}"`)
+          })
+        }
+      } catch {
+        // context fetch failed — proceed without it
       }
-      if (commentaryResults.length > 0) {
-        contextLines.push('Relevant Church Fathers commentary:')
-        commentaryResults.slice(0, 3).forEach(c => {
-          contextLines.push(`${c.father_name} on ${c.book} ${c.chapter}:${c.verse}: "${c.excerpt}"`)
-        })
-      }
-    } catch {
-      // context fetch failed — proceed without it
     }
 
-    const systemPrompt = buildSystemPrompt(activeVerse.book, activeVerse.chapter)
+    const systemPrompt = aiMode === 'context'
+      ? buildHistoricalContextPrompt(activeVerse.book, activeVerse.chapter, activeVerse.verse)
+      : buildSystemPrompt(activeVerse.book, activeVerse.chapter)
     const ollamaMessages = [
       { role: 'system' as const, content: systemPrompt },
       ...newMessages.slice(0, -1).map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),
@@ -189,8 +194,10 @@ export function AiPanel({ height, activeVerse, onHeightChange, onNavigate, onSho
           <div className="ai-messages">
             {messages.length === 0 && !streaming && (
               <div className="ai-empty">
-                Ask anything about the Bible or Church Fathers.<br />
-                <span className="ai-empty-sub">Cite specific passages or ask general questions.</span>
+                {aiMode === 'context'
+                  ? <>Ask about the first-century historical &amp; cultural world.<br /><span className="ai-empty-sub">Roman governance, Jewish customs, geography, social structures.</span></>
+                  : <>Ask anything about the Bible or Church Fathers.<br /><span className="ai-empty-sub">Cite specific passages or ask general questions.</span></>
+                }
               </div>
             )}
             {messages.map(msg => (
@@ -223,7 +230,7 @@ export function AiPanel({ height, activeVerse, onHeightChange, onNavigate, onSho
                 onKeyDown={e => {
                   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() }
                 }}
-                placeholder="Ask about Scripture or the Church Fathers… (Enter to send, Shift+Enter for newline)"
+                placeholder={aiMode === 'context' ? 'Ask about the first-century historical context… (Enter to send)' : 'Ask about Scripture or the Church Fathers… (Enter to send, Shift+Enter for newline)'}
                 rows={2}
                 disabled={streaming}
               />
@@ -248,6 +255,20 @@ export function AiPanel({ height, activeVerse, onHeightChange, onNavigate, onSho
                   <option key={m.id} value={m.id}>{m.label} · {m.ram} RAM</option>
                 ))}
               </select>
+              <div className="ai-mode-toggle">
+                <button
+                  className={`ai-mode-btn${aiMode === 'scholar' ? ' ai-mode-btn--active' : ''}`}
+                  onClick={() => setAiMode('scholar')}
+                  disabled={streaming}
+                  title="Bible & Church Fathers focus"
+                >Scholar</button>
+                <button
+                  className={`ai-mode-btn${aiMode === 'context' ? ' ai-mode-btn--active' : ''}`}
+                  onClick={() => setAiMode('context')}
+                  disabled={streaming}
+                  title="First-century historical & cultural context"
+                >Historical Context</button>
+              </div>
             </div>
           </div>
         </div>

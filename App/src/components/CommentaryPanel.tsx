@@ -3,15 +3,20 @@ import { useCommentary } from '../hooks/useCommentary'
 import { getFatherDates, getFatherSortYear } from '../lib/fatherDates'
 import { getSourceUrl } from '../lib/sourceLinks'
 import { CrossRefsPanel } from './CrossRefsPanel'
+import { WordStudyPanel } from './WordStudyPanel'
+import { JosephusPanel } from './JosephusPanel'
 import type { CommentaryEntry, CommentarySearchResult, SelectedVerse } from '../types'
+
+type RightTab = 'commentary' | 'crossrefs' | 'wordstudy' | 'firstcentury'
 
 interface Props {
   selected: SelectedVerse
   featuredEntry?: CommentarySearchResult | null
   onClearFeatured?: () => void
   onNavigate?: (book: string, chapter: number, verse: number) => void
-  rightTab: 'commentary' | 'crossrefs'
-  onTabChange: (tab: 'commentary' | 'crossrefs') => void
+  rightTab: 'commentary' | 'crossrefs' | 'wordstudy' | 'firstcentury'
+  onTabChange: (tab: 'commentary' | 'crossrefs' | 'wordstudy' | 'firstcentury') => void
+  onWordPositionChange?: (pos: number | null) => void
 }
 
 function EntryView({
@@ -65,8 +70,8 @@ function TabHeader({
   onTabChange,
   location,
 }: {
-  rightTab: 'commentary' | 'crossrefs'
-  onTabChange: (tab: 'commentary' | 'crossrefs') => void
+  rightTab: 'commentary' | 'crossrefs' | 'wordstudy' | 'firstcentury'
+  onTabChange: (tab: 'commentary' | 'crossrefs' | 'wordstudy' | 'firstcentury') => void
   location: string
 }) {
   return (
@@ -76,13 +81,25 @@ function TabHeader({
           className={`panel-tab${rightTab === 'commentary' ? ' panel-tab--active' : ''}`}
           onClick={() => onTabChange('commentary')}
         >
-          Church Fathers
+          Fathers
         </button>
         <button
           className={`panel-tab${rightTab === 'crossrefs' ? ' panel-tab--active' : ''}`}
           onClick={() => onTabChange('crossrefs')}
         >
-          Cross-References
+          Cross-Refs
+        </button>
+        <button
+          className={`panel-tab${rightTab === 'wordstudy' ? ' panel-tab--active' : ''}`}
+          onClick={() => onTabChange('wordstudy')}
+        >
+          Words
+        </button>
+        <button
+          className={`panel-tab${rightTab === 'firstcentury' ? ' panel-tab--active' : ''}`}
+          onClick={() => onTabChange('firstcentury')}
+        >
+          History
         </button>
       </div>
       <span className="panel-location">{location}</span>
@@ -90,7 +107,7 @@ function TabHeader({
   )
 }
 
-export function CommentaryPanel({ selected, featuredEntry, onClearFeatured, onNavigate, rightTab, onTabChange }: Props) {
+export function CommentaryPanel({ selected, featuredEntry, onClearFeatured, onNavigate, rightTab, onTabChange, onWordPositionChange }: Props) {
   const { entries, loading } = useCommentary(selected.book, selected.chapter, selected.verse)
 
   const location = selected.verse
@@ -124,6 +141,10 @@ export function CommentaryPanel({ selected, featuredEntry, onClearFeatured, onNa
       <TabHeader rightTab={rightTab} onTabChange={onTabChange} location={location} />
       {rightTab === 'crossrefs' ? (
         <CrossRefsPanel selected={selected} onNavigate={onNavigate} />
+      ) : rightTab === 'wordstudy' ? (
+        <WordStudyPanel selected={selected} onPositionChange={onWordPositionChange} />
+      ) : rightTab === 'firstcentury' ? (
+        <JosephusPanel selected={selected} />
       ) : (
         <div className="panel-body">
           {!selected.verse && (

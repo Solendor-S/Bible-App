@@ -1,6 +1,6 @@
 {
   "name": "bible-app",
-  "version": "1.4.3",
+  "version": "1.4.4",
   "description": "Catena-style Bible study app with Church Fathers commentary",
   "main": ".vite/build/main.js",
   "scripts": {
@@ -14,6 +14,8 @@
     "scrape-catenabible": "node -r ts-node/register scripts/scrape-catenabible.ts",
     "fetch-catenabible-api": "node -r ts-node/register scripts/fetch-catenabible-api.ts",
     "fetch-gaps": "node -r ts-node/register scripts/fetch-gaps.ts",
+    "fetch-strongs": "node -r ts-node/register scripts/fetch-strongs.ts",
+    "fetch-josephus": "node -r ts-node/register scripts/fetch-josephus.ts",
     "fetch-all": "npm run fetch-ccel && npm run fetch-catenabible-api && npm run build-db"
   },
   "dependencies": {
