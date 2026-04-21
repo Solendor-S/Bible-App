@@ -114,8 +114,29 @@ async function main() {
   insertCommentary.free()
   console.log(`  Total commentary: ${totalInserted} entries`)
 
+  // OpenBible OSIS abbreviation → KJV full name
+  const BOOK_MAP: Record<string, string> = {
+    Gen: 'Genesis', Exod: 'Exodus', Lev: 'Leviticus', Num: 'Numbers', Deut: 'Deuteronomy',
+    Josh: 'Joshua', Judg: 'Judges', Ruth: 'Ruth', '1Sam': '1 Samuel', '2Sam': '2 Samuel',
+    '1Kgs': '1 Kings', '2Kgs': '2 Kings', '1Chr': '1 Chronicles', '2Chr': '2 Chronicles',
+    Ezra: 'Ezra', Neh: 'Nehemiah', Esth: 'Esther', Job: 'Job', Ps: 'Psalms',
+    Prov: 'Proverbs', Eccl: 'Ecclesiastes', Song: 'Song of Solomon', Isa: 'Isaiah',
+    Jer: 'Jeremiah', Lam: 'Lamentations', Ezek: 'Ezekiel', Dan: 'Daniel', Hos: 'Hosea',
+    Joel: 'Joel', Amos: 'Amos', Obad: 'Obadiah', Jonah: 'Jonah', Mic: 'Micah',
+    Nah: 'Nahum', Hab: 'Habakkuk', Zeph: 'Zephaniah', Hag: 'Haggai', Zech: 'Zechariah',
+    Mal: 'Malachi', Matt: 'Matthew', Mark: 'Mark', Luke: 'Luke', John: 'John',
+    Acts: 'Acts', Rom: 'Romans', '1Cor': '1 Corinthians', '2Cor': '2 Corinthians',
+    Gal: 'Galatians', Eph: 'Ephesians', Phil: 'Philippians', Col: 'Colossians',
+    '1Thess': '1 Thessalonians', '2Thess': '2 Thessalonians', '1Tim': '1 Timothy',
+    '2Tim': '2 Timothy', Titus: 'Titus', Phlm: 'Philemon', Heb: 'Hebrews',
+    Jas: 'James', '1Pet': '1 Peter', '2Pet': '2 Peter', '1John': '1 John',
+    '2John': '2 John', '3John': '3 John', Jude: 'Jude', Rev: 'Revelation',
+  }
+
   // Cross-references (OpenBible TSV)
-  const crossRefPath = join(RAW_DIR, 'cross_refs.txt')
+  const crossRefPath = existsSync(join(RAW_DIR, 'cross_refs.txt'))
+    ? join(RAW_DIR, 'cross_refs.txt')
+    : join(RAW_DIR, 'cross_references.txt')
   if (existsSync(crossRefPath)) {
     console.log('Inserting cross-references...')
     const lines = readFileSync(crossRefPath, 'utf-8').split('\n').filter(l => l && !l.startsWith('#'))
@@ -125,12 +146,19 @@ async function main() {
     let count = 0
     for (const line of lines) {
       const parts = line.split('\t')
-      if (parts.length < 5) continue
-      const [fromRef, toRef, , , votes] = parts
+      if (parts.length < 3) continue
+      const [fromRef, toRef, votes] = parts
+      // Handle verse ranges (e.g. "Ps.89.11-Ps.89.12") — take only the first verse
       const [fb, fc, fv] = fromRef.split('.')
-      const [tb, tc, tv] = toRef.split('.')
-      if (!fb || !tb) continue
-      stmt.run([fb, parseInt(fc), parseInt(fv), tb, parseInt(tc), parseInt(tv), parseFloat(votes) || 1])
+      const [tb, tc, tv] = toRef.split('.').map(p => p.split('-')[0])
+      const fromChapter = parseInt(fc)
+      const fromVerse = parseInt(fv)
+      const toChapter = parseInt(tc)
+      const toVerse = parseInt(tv)
+      const fromBook = BOOK_MAP[fb] ?? fb
+      const toBook = BOOK_MAP[tb] ?? tb
+      if (!fromBook || !toBook || isNaN(fromChapter) || isNaN(fromVerse) || isNaN(toChapter) || isNaN(toVerse)) continue
+      stmt.run([fromBook, fromChapter, fromVerse, toBook, toChapter, toVerse, parseFloat(votes) || 1])
       count++
     }
     stmt.free()

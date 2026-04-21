@@ -1,6 +1,6 @@
 {
   "name": "bible-app",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "description": "Catena-style Bible study app with Church Fathers commentary",
   "main": ".vite/build/main.js",
   "scripts": {

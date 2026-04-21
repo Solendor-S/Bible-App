@@ -19,6 +19,7 @@ export default function App() {
   const [aiPanelHeight, setAiPanelHeight] = useState(0)
   const [featuredEntry, setFeaturedEntry] = useState<CommentarySearchResult | null>(null)
   const [updateInfo, setUpdateInfo] = useState<{ current: string; latest: string } | null>(null)
+  const [rightTab, setRightTab] = useState<'commentary' | 'crossrefs'>('commentary')
 
   useEffect(() => {
     window.bibleApi.onUpdateAvailable((info) => setUpdateInfo(info))
@@ -98,6 +99,8 @@ export default function App() {
           featuredEntry={featuredEntry}
           onClearFeatured={() => setFeaturedEntry(null)}
           onNavigate={handleNavigate}
+          rightTab={rightTab}
+          onTabChange={setRightTab}
         />
       </div>
       {aiPanelHeight > 0 && (

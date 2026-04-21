@@ -6,6 +6,8 @@ contextBridge.exposeInMainWorld('bibleApi', {
   getVerses: (book: string, chapter: number) => ipcRenderer.invoke('bible:getVerses', book, chapter),
   getCrossRefs: (book: string, chapter: number, verse: number) =>
     ipcRenderer.invoke('bible:getCrossRefs', book, chapter, verse),
+  getCrossRefsFull: (book: string, chapter: number, verse: number) =>
+    ipcRenderer.invoke('bible:getCrossRefsFull', book, chapter, verse),
   getCommentary: (book: string, chapter: number, verse: number) =>
     ipcRenderer.invoke('commentary:getForVerse', book, chapter, verse),
   search: (query: string) => ipcRenderer.invoke('search:query', query),

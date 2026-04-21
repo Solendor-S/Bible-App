@@ -71,6 +71,7 @@ declare global {
       getChapters(book: string): Promise<number[]>
       getVerses(book: string, chapter: number): Promise<BibleVerse[]>
       getCrossRefs(book: string, chapter: number, verse: number): Promise<CrossRef[]>
+      getCrossRefsFull(book: string, chapter: number, verse: number): Promise<CrossRef[]>
       getCommentary(book: string, chapter: number, verse: number): Promise<CommentaryEntry[]>
       search(query: string): Promise<SearchResult>
       openExternal(url: string): Promise<void>

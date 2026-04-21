@@ -143,6 +143,17 @@ ipcMain.handle('bible:getCrossRefs', async (_e, book: string, chapter: number, v
   `, [book, chapter, verse])
 })
 
+ipcMain.handle('bible:getCrossRefsFull', async (_e, book: string, chapter: number, verse: number) => {
+  const database = await openDb()
+  return rows(database, `
+    SELECT cr.to_book, cr.to_chapter, cr.to_verse, bv.text
+    FROM cross_refs cr
+    JOIN bible_verses bv ON bv.book = cr.to_book AND bv.chapter = cr.to_chapter AND bv.verse = cr.to_verse
+    WHERE cr.from_book = ? AND cr.from_chapter = ? AND cr.from_verse = ?
+    ORDER BY cr.weight DESC LIMIT 50
+  `, [book, chapter, verse])
+})
+
 ipcMain.handle('commentary:getForVerse', async (_e, book: string, chapter: number, verse: number) => {
   const database = await openDb()
   return rows(database, `

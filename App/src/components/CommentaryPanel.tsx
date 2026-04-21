@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { useCommentary } from '../hooks/useCommentary'
 import { getFatherDates, getFatherSortYear } from '../lib/fatherDates'
 import { getSourceUrl } from '../lib/sourceLinks'
+import { CrossRefsPanel } from './CrossRefsPanel'
 import type { CommentaryEntry, CommentarySearchResult, SelectedVerse } from '../types'
 
 interface Props {
@@ -9,6 +10,8 @@ interface Props {
   featuredEntry?: CommentarySearchResult | null
   onClearFeatured?: () => void
   onNavigate?: (book: string, chapter: number, verse: number) => void
+  rightTab: 'commentary' | 'crossrefs'
+  onTabChange: (tab: 'commentary' | 'crossrefs') => void
 }
 
 function EntryView({
@@ -57,21 +60,48 @@ function EntryView({
   )
 }
 
-export function CommentaryPanel({ selected, featuredEntry, onClearFeatured, onNavigate }: Props) {
+function TabHeader({
+  rightTab,
+  onTabChange,
+  location,
+}: {
+  rightTab: 'commentary' | 'crossrefs'
+  onTabChange: (tab: 'commentary' | 'crossrefs') => void
+  location: string
+}) {
+  return (
+    <div className="panel-header panel-header--tabs">
+      <div className="panel-tabs">
+        <button
+          className={`panel-tab${rightTab === 'commentary' ? ' panel-tab--active' : ''}`}
+          onClick={() => onTabChange('commentary')}
+        >
+          Church Fathers
+        </button>
+        <button
+          className={`panel-tab${rightTab === 'crossrefs' ? ' panel-tab--active' : ''}`}
+          onClick={() => onTabChange('crossrefs')}
+        >
+          Cross-References
+        </button>
+      </div>
+      <span className="panel-location">{location}</span>
+    </div>
+  )
+}
+
+export function CommentaryPanel({ selected, featuredEntry, onClearFeatured, onNavigate, rightTab, onTabChange }: Props) {
   const { entries, loading } = useCommentary(selected.book, selected.chapter, selected.verse)
 
   const location = selected.verse
     ? `${selected.book} ${selected.chapter}:${selected.verse}`
     : `${selected.book} ${selected.chapter}`
 
-  if (featuredEntry) {
+  if (featuredEntry && rightTab === 'commentary') {
     const verseLabel = `${featuredEntry.book} ${featuredEntry.chapter}:${featuredEntry.verse}`
     return (
       <div className="panel commentary-panel">
-        <div className="panel-header">
-          <span className="panel-label">Church Fathers</span>
-          <span className="panel-location">{location}</span>
-        </div>
+        <TabHeader rightTab={rightTab} onTabChange={onTabChange} location={location} />
         <div className="panel-body">
           <div className="commentary-featured-header">
             <button className="commentary-back-btn" onClick={onClearFeatured}>← All</button>
@@ -91,24 +121,25 @@ export function CommentaryPanel({ selected, featuredEntry, onClearFeatured, onNa
 
   return (
     <div className="panel commentary-panel">
-      <div className="panel-header">
-        <span className="panel-label">Church Fathers</span>
-        <span className="panel-location">{location}</span>
-      </div>
-      <div className="panel-body">
-        {!selected.verse && (
-          <div className="panel-empty">Select a verse to see commentary.</div>
-        )}
-        {selected.verse && loading && <div className="panel-loading">Loading...</div>}
-        {selected.verse && !loading && entries.length === 0 && (
-          <div className="panel-empty">No commentary found for this verse.</div>
-        )}
-        {[...entries].sort((a, b) =>
-          getFatherSortYear(a.father_name, a.father_era) - getFatherSortYear(b.father_name, b.father_era)
-        ).map(entry => (
-          <EntryView key={entry.id} entry={entry} book={selected.book} chapter={selected.chapter} />
-        ))}
-      </div>
+      <TabHeader rightTab={rightTab} onTabChange={onTabChange} location={location} />
+      {rightTab === 'crossrefs' ? (
+        <CrossRefsPanel selected={selected} onNavigate={onNavigate} />
+      ) : (
+        <div className="panel-body">
+          {!selected.verse && (
+            <div className="panel-empty">Select a verse to see commentary.</div>
+          )}
+          {selected.verse && loading && <div className="panel-loading">Loading...</div>}
+          {selected.verse && !loading && entries.length === 0 && (
+            <div className="panel-empty">No commentary found for this verse.</div>
+          )}
+          {[...entries].sort((a, b) =>
+            getFatherSortYear(a.father_name, a.father_era) - getFatherSortYear(b.father_name, b.father_era)
+          ).map(entry => (
+            <EntryView key={entry.id} entry={entry} book={selected.book} chapter={selected.chapter} />
+          ))}
+        </div>
+      )}
     </div>
   )
 }
