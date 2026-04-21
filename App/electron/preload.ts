@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld('bibleApi', {
   search: (query: string) => ipcRenderer.invoke('search:query', query),
   openExternal: (url: string) => ipcRenderer.invoke('shell:openExternal', url),
   launchUpdater: () => ipcRenderer.invoke('app:launchUpdater'),
+  getReleases: () => ipcRenderer.invoke('app:getReleases'),
   onUpdateAvailable: (cb: (info: { current: string; latest: string }) => void) =>
     ipcRenderer.on('app:updateAvailable', (_e, info) => cb(info)),
   ensureOllama: () => ipcRenderer.invoke('ollama:ensureRunning')

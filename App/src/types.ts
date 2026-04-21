@@ -76,6 +76,7 @@ declare global {
       search(query: string): Promise<SearchResult>
       openExternal(url: string): Promise<void>
       launchUpdater(): Promise<void>
+      getReleases(): Promise<{ tag: string; name: string; date: string; body: string }[]>
       onUpdateAvailable(cb: (info: { current: string; latest: string }) => void): void
       ensureOllama(): Promise<{ success: boolean; alreadyRunning?: boolean; error?: string }>
     }

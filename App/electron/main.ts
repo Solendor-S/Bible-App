@@ -379,6 +379,29 @@ async function checkForUpdateAndNotify(win: BrowserWindow): Promise<void> {
   }
 }
 
+ipcMain.handle('app:getReleases', (): Promise<{ tag: string; name: string; date: string; body: string }[]> => {
+  return new Promise((resolve) => {
+    https.get(
+      { hostname: 'api.github.com', path: `/repos/${REPO}/releases?per_page=20`, headers: { 'User-Agent': 'BibleApp/1.0' } },
+      (res) => {
+        let data = ''
+        res.on('data', c => { data += c })
+        res.on('end', () => {
+          try {
+            const releases = JSON.parse(data)
+            resolve(releases.map((r: any) => ({
+              tag: r.tag_name ?? '',
+              name: r.name ?? r.tag_name ?? '',
+              date: r.published_at ?? '',
+              body: r.body ?? '',
+            })))
+          } catch { resolve([]) }
+        })
+      }
+    ).on('error', () => resolve([]))
+  })
+})
+
 ipcMain.handle('app:launchUpdater', () => {
   const outDir = join(homedir(), 'BibleApp', 'App', 'updater', 'out')
 

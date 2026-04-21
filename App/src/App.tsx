@@ -3,6 +3,7 @@ import { NavigationBar } from './components/NavigationBar'
 import { BiblePanel } from './components/BiblePanel'
 import { CommentaryPanel } from './components/CommentaryPanel'
 import { SearchModal } from './components/SearchModal'
+import { ChangelogModal } from './components/ChangelogModal'
 import { AiPanel } from './components/AiPanel'
 import { parsePassage } from './lib/parsePassage'
 import type { CommentarySearchResult, PassageRef, SelectedVerse } from './types'
@@ -20,6 +21,7 @@ export default function App() {
   const [featuredEntry, setFeaturedEntry] = useState<CommentarySearchResult | null>(null)
   const [updateInfo, setUpdateInfo] = useState<{ current: string; latest: string } | null>(null)
   const [rightTab, setRightTab] = useState<'commentary' | 'crossrefs'>('commentary')
+  const [changelogOpen, setChangelogOpen] = useState(false)
 
   useEffect(() => {
     window.bibleApi.onUpdateAvailable((info) => setUpdateInfo(info))
@@ -84,6 +86,7 @@ export default function App() {
           }
         }}
         onSearchOpen={() => setSearchOpen(true)}
+        onChangelogOpen={() => setChangelogOpen(true)}
         aiOpen={aiPanelHeight > 0}
         onToggleAi={toggleAiPanel}
       />
@@ -117,6 +120,7 @@ export default function App() {
         onClose={() => setSearchOpen(false)}
         onNavigate={loc => handleNavigate(loc.book, loc.chapter, loc.verse)}
       />
+      <ChangelogModal open={changelogOpen} onClose={() => setChangelogOpen(false)} />
     </div>
   )
 }
