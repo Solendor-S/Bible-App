@@ -9,9 +9,14 @@ const NT_BOOKS = new Set([
   '1 John', '2 John', '3 John', 'Jude', 'Revelation',
 ])
 
+export interface WordHighlight {
+  glossTerms: string[]   // English translation candidates from kjv_usage
+  positionRatio: number  // clicked word's position (0–1) within the verse
+}
+
 interface Props {
   selected: SelectedVerse
-  onPositionChange?: (pos: number | null) => void
+  onWordSelect?: (info: WordHighlight | null) => void
 }
 
 interface WordDef {
@@ -19,19 +24,36 @@ interface WordDef {
   entry: StrongsEntry | null
 }
 
-export function WordStudyPanel({ selected, onPositionChange }: Props) {
+// kjv_usage format: "the, this, that, one, he" or "word, saying, thing"
+// Some entries have "X word" (grammatical marker – skip), or "word(-ly)" (strip parens)
+function extractGlossTerms(entry: StrongsEntry | null): string[] {
+  if (!entry?.kjv_usage) return []
+  const terms: string[] = []
+  for (const raw of entry.kjv_usage.split(',')) {
+    let t = raw.trim()
+    if (/^[X+]\s/i.test(t)) continue                 // skip "X concerning", "+ reckon" etc.
+    t = t.replace(/\s*\(.*?\)/g, '').trim()          // strip "(-ly, -ward)"
+    t = t.toLowerCase()
+    if (!t || t === 'etc' || t.length < 2 || /^\d+$/.test(t)) continue
+    if (!terms.includes(t)) terms.push(t)
+  }
+  return terms
+}
+
+export function WordStudyPanel({ selected, onWordSelect }: Props) {
   const isNT = NT_BOOKS.has(selected?.book)
   const [words, setWords] = useState<(GreekWord | HebrewWord)[]>([])
   const [loading, setLoading] = useState(false)
-  const [activeStrongs, setActiveStrongs] = useState<string | null>(null)
+  // Use {strongs, position} so duplicate-strongs words are tracked independently
+  const [activeKey, setActiveKey] = useState<{ strongs: string; position: number } | null>(null)
   const [def, setDef] = useState<WordDef | null>(null)
   const [defLoading, setDefLoading] = useState(false)
 
   useEffect(() => {
     setWords([])
-    setActiveStrongs(null)
+    setActiveKey(null)
     setDef(null)
-    onPositionChange?.(null)
+    onWordSelect?.(null)
     if (!selected?.book || !selected?.verse) return
     setLoading(true)
     const fetch = isNT
@@ -40,21 +62,28 @@ export function WordStudyPanel({ selected, onPositionChange }: Props) {
     fetch.then(w => { setWords(w); setLoading(false) }).catch(() => setLoading(false))
   }, [selected?.book, selected?.chapter, selected?.verse])
 
+  // Emit highlight whenever the active word or its definition changes
+  useEffect(() => {
+    if (!activeKey || !words.length) return
+    const word = words.find(w => w.strongs === activeKey.strongs && w.position === activeKey.position)
+    if (!word) return
+    const positionRatio = words.length > 1 ? (word.position - 1) / (words.length - 1) : 0
+    const glossTerms = def?.strongs === activeKey.strongs ? extractGlossTerms(def.entry) : []
+    onWordSelect?.({ glossTerms, positionRatio })
+  }, [activeKey, def])
+
   function handleWordClick(strongs: string, position: number) {
-    if (activeStrongs === strongs) {
-      setActiveStrongs(null); setDef(null); onPositionChange?.(null); return
+    if (activeKey?.strongs === strongs && activeKey?.position === position) {
+      setActiveKey(null); setDef(null); onWordSelect?.(null); return
     }
-    setActiveStrongs(strongs)
-    onPositionChange?.(position)
+    setActiveKey({ strongs, position })
     setDefLoading(true)
     window.bibleApi.getStrongsEntry(isNT ? 'greek' : 'hebrew', strongs)
       .then(e => { setDef({ strongs, entry: e }); setDefLoading(false) })
       .catch(() => { setDef({ strongs, entry: null }); setDefLoading(false) })
   }
 
-  if (!selected?.verse) {
-    return <div className="panel-empty">Select a verse to see word study.</div>
-  }
+  if (!selected?.verse) return <div className="panel-empty">Select a verse to see word study.</div>
   if (loading) return <div className="panel-loading">Loading...</div>
   if (!words.length) return <div className="panel-empty">No {isNT ? 'Greek' : 'Hebrew'} words found for this verse.</div>
 
@@ -64,7 +93,7 @@ export function WordStudyPanel({ selected, onPositionChange }: Props) {
       <div className="wordstudy-words">
         {words.map((w, i) => {
           const text = isNT ? (w as GreekWord).greek : (w as HebrewWord).hebrew
-          const active = activeStrongs === w.strongs
+          const active = activeKey?.strongs === w.strongs && activeKey?.position === w.position
           return (
             <button
               key={i}
@@ -79,7 +108,7 @@ export function WordStudyPanel({ selected, onPositionChange }: Props) {
         })}
       </div>
 
-      {activeStrongs && (
+      {activeKey && (
         <div className="wordstudy-def">
           {defLoading && <div className="panel-loading">Loading definition...</div>}
           {!defLoading && def && (
@@ -90,15 +119,13 @@ export function WordStudyPanel({ selected, onPositionChange }: Props) {
                   <span className="strongs-lemma">{def.entry.lemma}</span>
                   <span className="strongs-translit">({def.entry.translit}{def.entry.pronunciation ? ` · ${def.entry.pronunciation}` : ''})</span>
                 </div>
-                {def.entry.definition && (
-                  <p className="strongs-def">{def.entry.definition.trim()}</p>
-                )}
+                {def.entry.definition && <p className="strongs-def">{def.entry.definition.trim()}</p>}
                 {def.entry.kjv_usage && (
                   <p className="strongs-kjv"><span className="strongs-kjv-label">KJV uses:</span> {def.entry.kjv_usage}</p>
                 )}
               </>
             ) : (
-              <div className="panel-empty">No definition found for {activeStrongs}.</div>
+              <div className="panel-empty">No definition found for {activeKey.strongs}.</div>
             )
           )}
         </div>

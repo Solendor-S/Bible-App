@@ -6,6 +6,7 @@ import { SearchModal } from './components/SearchModal'
 import { ChangelogModal } from './components/ChangelogModal'
 import { AiPanel } from './components/AiPanel'
 import { parsePassage } from './lib/parsePassage'
+import type { WordHighlight } from './components/WordStudyPanel'
 import type { CommentarySearchResult, PassageRef, SelectedVerse } from './types'
 import './styles/theme.css'
 
@@ -21,7 +22,7 @@ export default function App() {
   const [featuredEntry, setFeaturedEntry] = useState<CommentarySearchResult | null>(null)
   const [updateInfo, setUpdateInfo] = useState<{ current: string; latest: string } | null>(null)
   const [rightTab, setRightTab] = useState<'commentary' | 'crossrefs' | 'wordstudy' | 'firstcentury'>('commentary')
-  const [activeWordPos, setActiveWordPos] = useState<number | null>(null)
+  const [wordHighlight, setWordHighlight] = useState<WordHighlight | null>(null)
   const [changelogOpen, setChangelogOpen] = useState(false)
 
   useEffect(() => {
@@ -45,7 +46,7 @@ export default function App() {
     setActiveVerse({ book, chapter, verse })
     setSearchOpen(false)
     setFeaturedEntry(null)
-    setActiveWordPos(null)
+    setWordHighlight(null)
   }
 
   function toggleAiPanel() {
@@ -96,8 +97,8 @@ export default function App() {
         <BiblePanel
           passages={passages}
           activeVerse={activeVerse}
-          activeWordPos={activeWordPos}
-          onVerseClick={(book, chapter, verse) => { setActiveVerse({ book, chapter, verse }); setFeaturedEntry(null); setActiveWordPos(null) }}
+          wordHighlight={wordHighlight}
+          onVerseClick={(book, chapter, verse) => { setActiveVerse({ book, chapter, verse }); setFeaturedEntry(null); setWordHighlight(null) }}
           onNavigate={handleNavigate}
         />
         <CommentaryPanel
@@ -107,7 +108,7 @@ export default function App() {
           onNavigate={handleNavigate}
           rightTab={rightTab}
           onTabChange={setRightTab}
-          onWordPositionChange={setActiveWordPos}
+          onWordSelect={setWordHighlight}
         />
       </div>
       {aiPanelHeight > 0 && (

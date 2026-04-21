@@ -4,6 +4,7 @@ import { getFatherDates, getFatherSortYear } from '../lib/fatherDates'
 import { getSourceUrl } from '../lib/sourceLinks'
 import { CrossRefsPanel } from './CrossRefsPanel'
 import { WordStudyPanel } from './WordStudyPanel'
+import type { WordHighlight } from './WordStudyPanel'
 import { JosephusPanel } from './JosephusPanel'
 import type { CommentaryEntry, CommentarySearchResult, SelectedVerse } from '../types'
 
@@ -16,7 +17,7 @@ interface Props {
   onNavigate?: (book: string, chapter: number, verse: number) => void
   rightTab: 'commentary' | 'crossrefs' | 'wordstudy' | 'firstcentury'
   onTabChange: (tab: 'commentary' | 'crossrefs' | 'wordstudy' | 'firstcentury') => void
-  onWordPositionChange?: (pos: number | null) => void
+  onWordSelect?: (info: WordHighlight | null) => void
 }
 
 function EntryView({
@@ -107,7 +108,7 @@ function TabHeader({
   )
 }
 
-export function CommentaryPanel({ selected, featuredEntry, onClearFeatured, onNavigate, rightTab, onTabChange, onWordPositionChange }: Props) {
+export function CommentaryPanel({ selected, featuredEntry, onClearFeatured, onNavigate, rightTab, onTabChange, onWordSelect }: Props) {
   const { entries, loading } = useCommentary(selected.book, selected.chapter, selected.verse)
 
   const location = selected.verse
@@ -142,7 +143,7 @@ export function CommentaryPanel({ selected, featuredEntry, onClearFeatured, onNa
       {rightTab === 'crossrefs' ? (
         <CrossRefsPanel selected={selected} onNavigate={onNavigate} />
       ) : rightTab === 'wordstudy' ? (
-        <WordStudyPanel selected={selected} onPositionChange={onWordPositionChange} />
+        <WordStudyPanel selected={selected} onWordSelect={onWordSelect} />
       ) : rightTab === 'firstcentury' ? (
         <JosephusPanel selected={selected} />
       ) : (

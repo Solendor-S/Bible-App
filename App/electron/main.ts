@@ -41,7 +41,12 @@ function getPreloadPath(): string {
 async function openDb(): Promise<Database> {
   if (db) return db
 
-  const SQL = await initSqlJs()
+  const SQL = await initSqlJs({
+    locateFile: (file: string) => {
+      if (app.isPackaged) return join(process.resourcesPath, file)
+      return join(__dirname, '../../node_modules/sql.js/dist', file)
+    }
+  })
   const userDbPath = getDbPath()
   const seedPath = getDbSeedPath()
   const versionPath = getDbVersionPath()
@@ -82,19 +87,22 @@ function rows(database: Database, sql: string, params: any[] = []): any[] {
 }
 
 function createWindow(): BrowserWindow {
+  const isMac = process.platform === 'darwin'
   const win = new BrowserWindow({
     width: 1400,
     height: 900,
     minWidth: 900,
     minHeight: 600,
     backgroundColor: '#1a1a1a',
-    icon: join(__dirname, '../../../resources/icon.ico'),
-    titleBarStyle: 'hidden',
-    titleBarOverlay: {
-      color: '#1e1e1e',
-      symbolColor: '#9ca3af',
-      height: 36
-    },
+    icon: join(__dirname, isMac ? '../../../resources/icon.png' : '../../../resources/icon.ico'),
+    titleBarStyle: isMac ? 'hiddenInset' : 'hidden',
+    ...(isMac ? {} : {
+      titleBarOverlay: {
+        color: '#1e1e1e',
+        symbolColor: '#9ca3af',
+        height: 36
+      }
+    }),
     webPreferences: {
       preload: getPreloadPath(),
       contextIsolation: true,
@@ -156,14 +164,15 @@ ipcMain.handle('bible:getHebrewWords', async (_e, book: string, chapter: number,
 ipcMain.handle('bible:getStrongsEntry', async (_e, type: string, num: string) => {
   const database = await openDb()
   const table = type === 'hebrew' ? 'strongs_hebrew' : 'strongs_greek'
-  // TAGNT uses zero-padded numbers with optional suffixes (e.g. "G0910", "G2941G")
-  // OpenScriptures dictionary keys have no padding and no suffix (e.g. "G910", "G2941")
-  // Try exact match first, then strip padding/suffix for Greek
+  // TAGNT/TAHOT use zero-padded numbers with optional letter suffixes (e.g. "G0910", "G2941G", "H0430G", "H1254A")
+  // OpenScriptures dictionary keys have no padding and no suffix (e.g. "G910", "G2941", "H430", "H1254")
+  // Try exact match first, then normalize by stripping padding and suffix
   let r = rows(database, `SELECT number, lemma, translit, pronunciation, definition, kjv_usage FROM ${table} WHERE number = ?`, [num])
-  if (r.length === 0 && type === 'greek') {
-    const m = num.match(/^G0*(\d+)/)
+  if (r.length === 0) {
+    const prefix = type === 'greek' ? 'G' : 'H'
+    const m = num.match(new RegExp(`^${prefix}0*(\\d+)`))
     if (m) {
-      const normalized = `G${parseInt(m[1])}`
+      const normalized = `${prefix}${parseInt(m[1])}`
       r = rows(database, `SELECT number, lemma, translit, pronunciation, definition, kjv_usage FROM ${table} WHERE number = ?`, [normalized])
     }
   }

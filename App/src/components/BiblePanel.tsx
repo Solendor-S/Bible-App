@@ -2,7 +2,67 @@ import React, { useEffect, useRef, useState } from 'react'
 import { useVerses, useCrossRefs } from '../hooks/useBible'
 import { CrossRefTooltip } from './CrossRefTooltip'
 import { CopyRangePopover } from './CopyRangePopover'
+import type { WordHighlight } from './WordStudyPanel'
 import type { SelectedVerse, PassageRef } from '../types'
+
+// Returns the set of word indices to highlight in verseText given a WordHighlight.
+// Strips punctuation for comparison, disambiguates multiple hits by positionRatio.
+function resolveHighlightIndices(tokens: string[], hl: WordHighlight): Set<number> {
+  const { glossTerms, positionRatio } = hl
+  if (!glossTerms.length) return new Set()
+
+  const clean = (s: string) => s.replace(/[^\w']/g, '').toLowerCase()
+  const cleaned = tokens.map(clean)
+
+  const candidateSets: number[][] = []
+
+  for (const term of glossTerms) {
+    const termParts = term.toLowerCase().split(/\s+/)
+
+    if (termParts.length === 1) {
+      const t = termParts[0]
+      const stem = (s: string) => s.replace(/(ing|tion|ed|es|ly|s)$/, '')
+      const tStem = t.length >= 4 ? stem(t) : null
+      for (let i = 0; i < cleaned.length; i++) {
+        const w = cleaned[i]
+        if (!w) continue
+        if (w === t) {
+          candidateSets.push([i])
+        } else if (tStem && tStem.length >= 3 && (w === tStem || stem(w) === tStem)) {
+          candidateSets.push([i])
+        }
+      }
+    } else {
+      // Multi-word phrase — look for all parts appearing consecutively
+      outer: for (let i = 0; i <= cleaned.length - termParts.length; i++) {
+        for (let j = 0; j < termParts.length; j++) {
+          if (cleaned[i + j] !== termParts[j]) continue outer
+        }
+        candidateSets.push(Array.from({ length: termParts.length }, (_, j) => i + j))
+      }
+    }
+  }
+
+  if (!candidateSets.length) return new Set()
+
+  // Deduplicate by first index
+  const seen = new Set<number>()
+  const unique = candidateSets.filter(s => {
+    if (seen.has(s[0])) return false
+    seen.add(s[0]); return true
+  })
+
+  if (unique.length === 1) return new Set(unique[0])
+
+  // Disambiguate: pick the set whose midpoint is closest to positionRatio
+  const target = positionRatio * (tokens.length - 1)
+  unique.sort((a, b) => {
+    const midA = a.reduce((s, i) => s + i, 0) / a.length
+    const midB = b.reduce((s, i) => s + i, 0) / b.length
+    return Math.abs(midA - target) - Math.abs(midB - target)
+  })
+  return new Set(unique[0])
+}
 
 interface VerseRowProps {
   book: string
@@ -10,13 +70,13 @@ interface VerseRowProps {
   verseNum: number
   text: string
   selected: boolean
-  activeWordPos?: number | null
+  wordHighlight?: WordHighlight | null
   onSelect: () => void
   onContextMenu: (verseNum: number, rect: DOMRect) => void
   onNavigate: (book: string, chapter: number, verse: number) => void
 }
 
-function VerseRow({ book, chapter, verseNum, text, selected, activeWordPos, onSelect, onContextMenu, onNavigate }: VerseRowProps) {
+function VerseRow({ book, chapter, verseNum, text, selected, wordHighlight, onSelect, onContextMenu, onNavigate }: VerseRowProps) {
   const refs = useCrossRefs(book, chapter, selected ? verseNum : 0)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -37,21 +97,25 @@ function VerseRow({ book, chapter, verseNum, text, selected, activeWordPos, onSe
       onContextMenu={handleContextMenu}
     >
       <sup className="verse-num">{verseNum}</sup>
-      {selected && activeWordPos != null ? (
-        <span className="verse-text">
-          {text.split(/(\s+)/).map((token, i, arr) => {
-            // Count only non-whitespace tokens to build word index
-            const wordIndex = arr.slice(0, i).filter(t => /\S/.test(t)).length
-            if (!/\S/.test(token)) return token
-            const highlighted = wordIndex === activeWordPos - 1
-            return (
-              <span key={i} className={highlighted ? 'word-highlight' : undefined}>
-                {token}
-              </span>
-            )
-          })}
-        </span>
-      ) : (
+      {selected && wordHighlight ? (() => {
+        const tokens = text.split(/(\s+)/)
+        const wordTokens = tokens.filter(t => /\S/.test(t))
+        const highlighted = resolveHighlightIndices(wordTokens, wordHighlight)
+        let wordIdx = 0
+        return (
+          <span className="verse-text">
+            {tokens.map((token, i) => {
+              if (!/\S/.test(token)) return token
+              const idx = wordIdx++
+              return (
+                <span key={i} className={highlighted.has(idx) ? 'word-highlight' : undefined}>
+                  {token}
+                </span>
+              )
+            })}
+          </span>
+        )
+      })() : (
         <span className="verse-text">{text}</span>
       )}
       {selected && <CrossRefTooltip refs={refs} onNavigate={onNavigate} />}
@@ -67,12 +131,12 @@ interface CopyTarget {
 interface PassageSectionProps {
   passage: PassageRef
   activeVerse: SelectedVerse
-  activeWordPos?: number | null
+  wordHighlight?: WordHighlight | null
   onVerseClick: (book: string, chapter: number, verse: number) => void
   onNavigate: (book: string, chapter: number, verse: number) => void
 }
 
-function PassageSection({ passage, activeVerse, activeWordPos, onVerseClick, onNavigate }: PassageSectionProps) {
+function PassageSection({ passage, activeVerse, wordHighlight, onVerseClick, onNavigate }: PassageSectionProps) {
   const { verses, loading } = useVerses(passage.book, passage.chapter)
   const [copyTarget, setCopyTarget] = useState<CopyTarget | null>(null)
 
@@ -102,10 +166,10 @@ function PassageSection({ passage, activeVerse, activeWordPos, onVerseClick, onN
             activeVerse.chapter === passage.chapter &&
             activeVerse.verse === v.verse
           }
-          activeWordPos={
+          wordHighlight={
             activeVerse.book === passage.book &&
             activeVerse.chapter === passage.chapter &&
-            activeVerse.verse === v.verse ? activeWordPos : null
+            activeVerse.verse === v.verse ? wordHighlight : null
           }
           onSelect={() => onVerseClick(passage.book, passage.chapter, v.verse)}
           onContextMenu={(verse, rect) => setCopyTarget({ verse, rect })}
@@ -129,12 +193,12 @@ function PassageSection({ passage, activeVerse, activeWordPos, onVerseClick, onN
 interface Props {
   passages: PassageRef[]
   activeVerse: SelectedVerse
-  activeWordPos?: number | null
+  wordHighlight?: WordHighlight | null
   onVerseClick: (book: string, chapter: number, verse: number) => void
   onNavigate: (book: string, chapter: number, verse: number) => void
 }
 
-export function BiblePanel({ passages, activeVerse, activeWordPos, onVerseClick, onNavigate }: Props) {
+export function BiblePanel({ passages, activeVerse, wordHighlight, onVerseClick, onNavigate }: Props) {
   return (
     <div className="panel bible-panel">
       <div className="panel-header">
@@ -149,7 +213,7 @@ export function BiblePanel({ passages, activeVerse, activeWordPos, onVerseClick,
             key={`${p.book}-${p.chapter}-${p.verseStart ?? 0}-${i}`}
             passage={p}
             activeVerse={activeVerse}
-            activeWordPos={activeWordPos}
+            wordHighlight={wordHighlight}
             onVerseClick={onVerseClick}
             onNavigate={onNavigate}
           />

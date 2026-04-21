@@ -1,6 +1,6 @@
 {
   "name": "bible-app",
-  "version": "1.4.4",
+  "version": "1.4.5",
   "description": "Catena-style Bible study app with Church Fathers commentary",
   "main": ".vite/build/main.js",
   "scripts": {
@@ -50,7 +50,8 @@
         "asar": true,
         "icon": "../../resources/icon",
         "extraResource": [
-          "data/bible.db"
+          "data/bible.db",
+          "node_modules/sql.js/dist/sql-wasm.wasm"
         ]
       },
       "makers": [
