@@ -10,8 +10,9 @@ const NT_BOOKS = new Set([
 ])
 
 export interface WordHighlight {
-  glossTerms: string[]   // English translation candidates from kjv_usage
-  positionRatio: number  // clicked word's position (0–1) within the verse
+  gloss: string | null    // context-specific term from OpenGNT (primary)
+  glossTerms: string[]    // kjv_usage candidates (fallback)
+  positionRatio: number   // clicked word's position (0–1) within the verse
 }
 
 interface Props {
@@ -24,6 +25,13 @@ interface WordDef {
   entry: StrongsEntry | null
 }
 
+const GLOSS_STOPWORDS = new Set([
+  'be', 'is', 'are', 'was', 'were', 'am',
+  'the', 'a', 'an', 'to', 'of', 'in', 'at',
+  'it', 'he', 'she', 'they', 'we', 'ye',
+  'as', 'so', 'no', 'on', 'do', 'did', 'not',
+])
+
 // kjv_usage format: "the, this, that, one, he" or "word, saying, thing"
 // Some entries have "X word" (grammatical marker – skip), or "word(-ly)" (strip parens)
 function extractGlossTerms(entry: StrongsEntry | null): string[] {
@@ -32,10 +40,25 @@ function extractGlossTerms(entry: StrongsEntry | null): string[] {
   for (const raw of entry.kjv_usage.split(',')) {
     let t = raw.trim()
     if (/^[X+]\s/i.test(t)) continue                 // skip "X concerning", "+ reckon" etc.
-    t = t.replace(/\s*\(.*?\)/g, '').trim()          // strip "(-ly, -ward)"
+    // Expand parenthetical suffixes: "strong(-er)" → ["strong", "stronger"]
+    const parenMatch = t.match(/^(\w[\w\s]*)\((-\w+)\)/)
+    if (parenMatch) {
+      const base = parenMatch[1].trim().toLowerCase()
+      const variant = (parenMatch[1].trim() + parenMatch[2].slice(1)).toLowerCase()
+      if (!GLOSS_STOPWORDS.has(base) && base.length >= 2) {
+        if (!terms.includes(base)) terms.push(base)
+      }
+      if (!GLOSS_STOPWORDS.has(variant) && variant.length >= 2) {
+        if (!terms.includes(variant)) terms.push(variant)
+      }
+      continue
+    }
+    t = t.replace(/\s*\(.*?\)/g, '').trim()          // strip remaining parens
     t = t.toLowerCase()
     if (!t || t === 'etc' || t.length < 2 || /^\d+$/.test(t)) continue
+    if (GLOSS_STOPWORDS.has(t)) continue
     if (!terms.includes(t)) terms.push(t)
+    if (terms.length >= 10) break                     // cap at 10 terms
   }
   return terms
 }
@@ -69,7 +92,7 @@ export function WordStudyPanel({ selected, onWordSelect }: Props) {
     if (!word) return
     const positionRatio = words.length > 1 ? (word.position - 1) / (words.length - 1) : 0
     const glossTerms = def?.strongs === activeKey.strongs ? extractGlossTerms(def.entry) : []
-    onWordSelect?.({ glossTerms, positionRatio })
+    onWordSelect?.({ gloss: word.gloss ?? null, glossTerms, positionRatio })
   }, [activeKey, def])
 
   function handleWordClick(strongs: string, position: number) {

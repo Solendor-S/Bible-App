@@ -20,6 +20,7 @@ export interface GreekWord {
   greek: string
   translit: string
   strongs: string
+  gloss: string | null
 }
 
 export interface HebrewWord {
@@ -27,6 +28,7 @@ export interface HebrewWord {
   hebrew: string
   translit: string
   strongs: string
+  gloss: string | null
 }
 
 export interface StrongsEntry {

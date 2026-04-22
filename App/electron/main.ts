@@ -153,12 +153,12 @@ ipcMain.handle('bible:getCrossRefs', async (_e, book: string, chapter: number, v
 
 ipcMain.handle('bible:getGreekWords', async (_e, book: string, chapter: number, verse: number) => {
   const database = await openDb()
-  return rows(database, `SELECT position, greek, translit, strongs FROM greek_words WHERE book = ? AND chapter = ? AND verse = ? ORDER BY position`, [book, chapter, verse])
+  return rows(database, `SELECT position, greek, translit, strongs, gloss FROM greek_words WHERE book = ? AND chapter = ? AND verse = ? ORDER BY position`, [book, chapter, verse])
 })
 
 ipcMain.handle('bible:getHebrewWords', async (_e, book: string, chapter: number, verse: number) => {
   const database = await openDb()
-  return rows(database, `SELECT position, hebrew, translit, strongs FROM hebrew_words WHERE book = ? AND chapter = ? AND verse = ? ORDER BY position`, [book, chapter, verse])
+  return rows(database, `SELECT position, hebrew, translit, strongs, gloss FROM hebrew_words WHERE book = ? AND chapter = ? AND verse = ? ORDER BY position`, [book, chapter, verse])
 })
 
 ipcMain.handle('bible:getStrongsEntry', async (_e, type: string, num: string) => {

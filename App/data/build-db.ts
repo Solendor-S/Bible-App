@@ -56,7 +56,8 @@ async function main() {
       position INTEGER NOT NULL,
       greek TEXT NOT NULL,
       translit TEXT NOT NULL,
-      strongs TEXT NOT NULL
+      strongs TEXT NOT NULL,
+      gloss TEXT
     );
     CREATE TABLE IF NOT EXISTS hebrew_words (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -66,7 +67,8 @@ async function main() {
       position INTEGER NOT NULL,
       hebrew TEXT NOT NULL,
       translit TEXT NOT NULL,
-      strongs TEXT NOT NULL
+      strongs TEXT NOT NULL,
+      gloss TEXT
     );
     CREATE TABLE IF NOT EXISTS strongs_greek (
       number TEXT PRIMARY KEY,
@@ -269,6 +271,21 @@ async function main() {
     }
     stmt.free()
     console.log(`  Inserted ${words.length} words`)
+  }
+
+  // OpenGNT per-word context-sensitive English glosses
+  const ntGlossesPath = join(RAW_DIR, 'nt-glosses.json')
+  if (existsSync(ntGlossesPath)) {
+    console.log('Updating Greek words with OpenGNT glosses...')
+    const glosses = JSON.parse(readFileSync(ntGlossesPath, 'utf-8'))
+    const stmt = db.prepare('UPDATE greek_words SET gloss = ? WHERE book = ? AND chapter = ? AND verse = ? AND position = ?')
+    let count = 0
+    for (const g of glosses) {
+      stmt.run([g.gloss, g.book, g.chapter, g.verse, g.position])
+      count++
+    }
+    stmt.free()
+    console.log(`  Updated ${count} word glosses`)
   }
 
   // Hebrew OT words

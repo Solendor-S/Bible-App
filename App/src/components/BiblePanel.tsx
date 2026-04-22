@@ -5,63 +5,80 @@ import { CopyRangePopover } from './CopyRangePopover'
 import type { WordHighlight } from './WordStudyPanel'
 import type { SelectedVerse, PassageRef } from '../types'
 
-// Returns the set of word indices to highlight in verseText given a WordHighlight.
-// Strips punctuation for comparison, disambiguates multiple hits by positionRatio.
-function resolveHighlightIndices(tokens: string[], hl: WordHighlight): Set<number> {
-  const { glossTerms, positionRatio } = hl
-  if (!glossTerms.length) return new Set()
+const clean = (s: string) => s.replace(/[^\w']/g, '').toLowerCase()
+const stem = (s: string) => { const r = s.replace(/(ing|tion|ed|es|ly|s)$/, ''); return r.length >= 3 ? r : s }
 
-  const clean = (s: string) => s.replace(/[^\w']/g, '').toLowerCase()
+// Phase 1: match a single specific gloss term (OpenGNT context-sensitive)
+function resolveHighlightIndices(tokens: string[], hl: WordHighlight): Set<number> {
   const cleaned = tokens.map(clean)
 
-  const candidateSets: number[][] = []
+  if (hl.gloss) {
+    const g = clean(hl.gloss)
+    const hits = cleaned.map((_, i) => i).filter(i => cleaned[i] === g || stem(cleaned[i]) === stem(g))
+    if (hits.length === 1) return new Set(hits)
+    if (hits.length > 1) {
+      // Same word appears multiple times — positionRatio tiebreaker
+      const target = hl.positionRatio * (tokens.length - 1)
+      hits.sort((a, b) => Math.abs(a - target) - Math.abs(b - target))
+      return new Set([hits[0]])
+    }
+    // Gloss not found (KJV/Berean divergence) — fall through to Phase 2
+  }
 
-  for (const term of glossTerms) {
-    const termParts = term.toLowerCase().split(/\s+/)
+  return resolveHighlightIndicesFuzzy(cleaned, hl.glossTerms, hl.positionRatio, tokens.length)
+}
+
+// Phase 2: improved fuzzy fallback used for OT and NT cases where gloss is null/unmatched
+function resolveHighlightIndicesFuzzy(
+  cleaned: string[],
+  glossTerms: string[],
+  positionRatio: number,
+  tokenCount: number
+): Set<number> {
+  if (!glossTerms.length) return new Set()
+
+  // Score each candidate token index by term priority + match type
+  const scores = new Map<number, number>()
+
+  for (let termIdx = 0; termIdx < glossTerms.length; termIdx++) {
+    const termWeight = 1 / (termIdx + 1)
+    const term = glossTerms[termIdx]
+    const termParts = term.split(/\s+/)
 
     if (termParts.length === 1) {
       const t = termParts[0]
-      const stem = (s: string) => s.replace(/(ing|tion|ed|es|ly|s)$/, '')
       const tStem = t.length >= 4 ? stem(t) : null
       for (let i = 0; i < cleaned.length; i++) {
         const w = cleaned[i]
         if (!w) continue
         if (w === t) {
-          candidateSets.push([i])
-        } else if (tStem && tStem.length >= 3 && (w === tStem || stem(w) === tStem)) {
-          candidateSets.push([i])
+          scores.set(i, (scores.get(i) ?? 0) + termWeight * 2)         // exact match bonus
+        } else if (tStem && (w === tStem || stem(w) === tStem)) {
+          scores.set(i, (scores.get(i) ?? 0) + termWeight * 0.8)       // stem match penalty
         }
       }
     } else {
-      // Multi-word phrase — look for all parts appearing consecutively
+      // Multi-word phrase
       outer: for (let i = 0; i <= cleaned.length - termParts.length; i++) {
         for (let j = 0; j < termParts.length; j++) {
           if (cleaned[i + j] !== termParts[j]) continue outer
         }
-        candidateSets.push(Array.from({ length: termParts.length }, (_, j) => i + j))
+        scores.set(i, (scores.get(i) ?? 0) + termWeight * 2)
       }
     }
   }
 
-  if (!candidateSets.length) return new Set()
+  if (!scores.size) return new Set()
 
-  // Deduplicate by first index
-  const seen = new Set<number>()
-  const unique = candidateSets.filter(s => {
-    if (seen.has(s[0])) return false
-    seen.add(s[0]); return true
-  })
+  // Apply position window — drop candidates more than 45% away from target position
+  const target = positionRatio * (tokenCount - 1)
+  const window = tokenCount * 0.45
+  const windowed = [...scores.entries()].filter(([i]) => Math.abs(i - target) <= window)
+  const pool = windowed.length > 0 ? windowed : [...scores.entries()]
 
-  if (unique.length === 1) return new Set(unique[0])
-
-  // Disambiguate: pick the set whose midpoint is closest to positionRatio
-  const target = positionRatio * (tokens.length - 1)
-  unique.sort((a, b) => {
-    const midA = a.reduce((s, i) => s + i, 0) / a.length
-    const midB = b.reduce((s, i) => s + i, 0) / b.length
-    return Math.abs(midA - target) - Math.abs(midB - target)
-  })
-  return new Set(unique[0])
+  // Pick highest-scoring candidate; positionRatio breaks ties
+  pool.sort((a, b) => b[1] - a[1] || Math.abs(a[0] - target) - Math.abs(b[0] - target))
+  return new Set([pool[0][0]])
 }
 
 interface VerseRowProps {
