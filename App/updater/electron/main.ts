@@ -1,6 +1,6 @@
 import { app, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
-import { existsSync, readFileSync } from 'fs'
+import { existsSync, readFileSync, rmSync } from 'fs'
 import { homedir } from 'os'
 import { spawn } from 'child_process'
 import https from 'https'
@@ -119,6 +119,8 @@ ipcMain.handle('update:getInfo', async () => {
   }
 })
 
+ipcMain.handle('update:getPlatform', () => process.platform)
+
 ipcMain.handle('update:apply', async () => {
   return new Promise<{ success: boolean; error?: string }>((resolve) => {
     if (!existsSync(INSTALL_ROOT)) {
@@ -126,10 +128,12 @@ ipcMain.handle('update:apply', async () => {
       return
     }
 
-    win?.webContents.send('update:progress', { line: 'Fetching latest release from GitHub...\n', type: 'info' })
+    const send = (line: string, type = 'output') =>
+      win?.webContents.send('update:progress', { line, type })
 
-    // Hard-reset to HEAD first to discard any local changes (e.g. npm-modified
-    // package-lock.json). More reliable than `git checkout -- .` on Windows.
+    send('Fetching latest release from GitHub...\n', 'info')
+
+    // Discard any local changes (including npm-modified package-lock.json)
     const discard = spawn('git', ['reset', '--hard', 'HEAD'], {
       cwd: INSTALL_ROOT,
       shell: true,
@@ -137,74 +141,71 @@ ipcMain.handle('update:apply', async () => {
     })
 
     discard.on('close', () => {
-    // Ignore exit code
-
-    const fetch = spawn('git', ['fetch', 'origin', 'main'], {
-      cwd: INSTALL_ROOT,
-      shell: true,
-      env: { ...process.env }
-    })
-
-    fetch.stdout.on('data', (data: Buffer) => {
-      win?.webContents.send('update:progress', { line: data.toString(), type: 'output' })
-    })
-    fetch.stderr.on('data', (data: Buffer) => {
-      win?.webContents.send('update:progress', { line: data.toString(), type: 'output' })
-    })
-
-    fetch.on('close', (fetchCode) => {
-      if (fetchCode !== 0) {
-        resolve({ success: false, error: `git fetch exited with code ${fetchCode}` })
-        return
-      }
-
-      win?.webContents.send('update:progress', { line: 'Applying update...\n', type: 'info' })
-
-      const reset = spawn('git', ['reset', '--hard', 'origin/main'], {
+      const fetch = spawn('git', ['fetch', 'origin', 'main'], {
         cwd: INSTALL_ROOT,
         shell: true,
         env: { ...process.env }
       })
 
-      reset.stdout.on('data', (data: Buffer) => {
-        win?.webContents.send('update:progress', { line: data.toString(), type: 'output' })
-      })
-      reset.stderr.on('data', (data: Buffer) => {
-        win?.webContents.send('update:progress', { line: data.toString(), type: 'output' })
-      })
+      fetch.stdout.on('data', (data: Buffer) => send(data.toString()))
+      fetch.stderr.on('data', (data: Buffer) => send(data.toString()))
 
-      reset.on('close', (code) => {
-        if (code !== 0) {
-          resolve({ success: false, error: `git reset exited with code ${code}` })
+      fetch.on('close', (fetchCode) => {
+        if (fetchCode !== 0) {
+          resolve({ success: false, error: `git fetch failed (code ${fetchCode})` })
           return
         }
 
-        win?.webContents.send('update:progress', { line: '\nInstalling updated dependencies...\n', type: 'info' })
+        send('Applying update...\n', 'info')
 
-        const npmInstall = spawn('npm', ['install'], {
-          cwd: APP_DIR,
+        const reset = spawn('git', ['reset', '--hard', 'origin/main'], {
+          cwd: INSTALL_ROOT,
           shell: true,
           env: { ...process.env }
         })
 
-        npmInstall.stdout.on('data', (data: Buffer) => {
-          win?.webContents.send('update:progress', { line: data.toString(), type: 'output' })
-        })
-        npmInstall.stderr.on('data', (data: Buffer) => {
-          win?.webContents.send('update:progress', { line: data.toString(), type: 'output' })
-        })
+        reset.stdout.on('data', (data: Buffer) => send(data.toString()))
+        reset.stderr.on('data', (data: Buffer) => send(data.toString()))
 
-        npmInstall.on('close', (npmCode) => {
-          if (npmCode !== 0) {
-            resolve({ success: false, error: `npm install exited with code ${npmCode}` })
+        reset.on('close', (code) => {
+          if (code !== 0) {
+            resolve({ success: false, error: `git reset failed (code ${code})` })
             return
           }
-          win?.webContents.send('update:progress', { line: '\nUpdate complete!\n', type: 'success' })
-          resolve({ success: true })
+
+          // Delete node_modules before reinstalling to avoid lockfile conflicts
+          send('\nClearing cached modules...\n', 'info')
+          const nodeModules = join(APP_DIR, 'node_modules')
+          try {
+            if (existsSync(nodeModules)) {
+              rmSync(nodeModules, { recursive: true, force: true })
+            }
+          } catch (e: any) {
+            send(`Warning: could not clear node_modules: ${e.message}\n`)
+          }
+
+          send('\nInstalling updated dependencies...\n', 'info')
+
+          const npmInstall = spawn('npm', ['install', '--no-progress'], {
+            cwd: APP_DIR,
+            shell: true,
+            env: { ...process.env }
+          })
+
+          npmInstall.stdout.on('data', (data: Buffer) => send(data.toString()))
+          npmInstall.stderr.on('data', (data: Buffer) => send(data.toString()))
+
+          npmInstall.on('close', (npmCode) => {
+            if (npmCode !== 0) {
+              resolve({ success: false, error: `npm install failed (code ${npmCode})` })
+              return
+            }
+            send('\nUpdate complete!\n', 'success')
+            resolve({ success: true })
+          })
         })
       })
     })
-    }) // end discard.on('close')
   })
 })
 

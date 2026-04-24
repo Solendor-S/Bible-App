@@ -18,6 +18,8 @@ export default function App() {
   const [status, setStatus] = useState<Status>('idle')
   const [log, setLog] = useState<{ text: string; type: string }[]>([])
   const [updateError, setUpdateError] = useState<string | null>(null)
+  const [platform, setPlatform] = useState<string>('win32')
+  const [copied, setCopied] = useState(false)
   const logEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -28,8 +30,20 @@ export default function App() {
     window.updaterApi.onProgress((data) => {
       setLog((prev) => [...prev, { text: data.line, type: data.type }])
     })
+    window.updaterApi.getPlatform().then(setPlatform)
     return () => window.updaterApi.removeProgressListeners()
   }, [])
+
+  const fallbackCommand = platform === 'darwin'
+    ? 'cd ~/BibleApp && git fetch origin main && git reset --hard origin/main && cd App && rm -rf node_modules && npm install'
+    : 'cd "$env:USERPROFILE\\BibleApp"; git fetch origin main; git reset --hard origin/main; cd App; if (Test-Path node_modules) { Remove-Item -Recurse -Force node_modules }; npm install'
+
+  function copyFallback() {
+    navigator.clipboard.writeText(fallbackCommand).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    })
+  }
 
   async function checkForUpdates() {
     setStatus('checking')
@@ -132,6 +146,24 @@ export default function App() {
           </div>
         )}
 
+        {/* Manual fallback — shown only when the update apply step failed */}
+        {updateError && (
+          <div className="fallback-box">
+            <div className="fallback-title">
+              Manual fallback — run this in {platform === 'darwin' ? 'Terminal' : 'PowerShell'}:
+            </div>
+            <div className="fallback-command-row">
+              <code className="fallback-command">{fallbackCommand}</code>
+              <button className="btn-copy" onClick={copyFallback}>
+                {copied ? 'Copied!' : 'Copy'}
+              </button>
+            </div>
+            <div className="fallback-hint">
+              After it finishes, restart the Bible App.
+            </div>
+          </div>
+        )}
+
         {/* Install not found warning */}
         {info && !info.installFound && (
           <div className="error-box">
@@ -179,6 +211,7 @@ declare global {
     updaterApi: {
       getInfo: () => Promise<UpdateInfo>
       apply: () => Promise<{ success: boolean; error?: string }>
+      getPlatform: () => Promise<string>
       onProgress: (cb: (data: { line: string; type: string }) => void) => void
       removeProgressListeners: () => void
     }

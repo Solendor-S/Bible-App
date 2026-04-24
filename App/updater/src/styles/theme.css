@@ -236,6 +236,68 @@ body {
   font-size: 12px;
 }
 
+/* ── Fallback box ── */
+.fallback-box {
+  background: #1a1a10;
+  border: 1px solid #4a4a20;
+  border-radius: 8px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.fallback-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #c9a84c;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.fallback-command-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.fallback-command {
+  flex: 1;
+  font-family: 'Consolas', 'Courier New', monospace;
+  font-size: 11px;
+  color: #b0a878;
+  background: #0f0f0a;
+  border: 1px solid #3a3a1a;
+  border-radius: 4px;
+  padding: 6px 8px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  user-select: text;
+  line-height: 1.5;
+}
+
+.btn-copy {
+  flex-shrink: 0;
+  padding: 5px 10px;
+  background: #2a2a10;
+  border: 1px solid #4a4a20;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #c9a84c;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.btn-copy:hover {
+  background: #3a3a18;
+}
+
+.fallback-hint {
+  font-size: 11px;
+  color: #5a5a3a;
+}
+
 /* ── Scrollbars ── */
 ::-webkit-scrollbar { width: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }

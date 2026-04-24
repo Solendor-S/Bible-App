@@ -3,6 +3,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 contextBridge.exposeInMainWorld('updaterApi', {
   getInfo: () => ipcRenderer.invoke('update:getInfo'),
   apply: () => ipcRenderer.invoke('update:apply'),
+  getPlatform: () => ipcRenderer.invoke('update:getPlatform'),
   onProgress: (cb: (data: { line: string; type: string }) => void) => {
     ipcRenderer.on('update:progress', (_e, data) => cb(data))
   },
