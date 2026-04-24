@@ -6,18 +6,20 @@ import { CrossRefsPanel } from './CrossRefsPanel'
 import { WordStudyPanel } from './WordStudyPanel'
 import type { WordHighlight } from './WordStudyPanel'
 import { JosephusPanel } from './JosephusPanel'
+import { NotesPanel } from './NotesPanel'
 import type { CommentaryEntry, CommentarySearchResult, SelectedVerse } from '../types'
 
-type RightTab = 'commentary' | 'crossrefs' | 'wordstudy' | 'firstcentury'
+export type RightTab = 'commentary' | 'crossrefs' | 'wordstudy' | 'firstcentury' | 'notes'
 
 interface Props {
   selected: SelectedVerse
   featuredEntry?: CommentarySearchResult | null
   onClearFeatured?: () => void
   onNavigate?: (book: string, chapter: number, verse: number) => void
-  rightTab: 'commentary' | 'crossrefs' | 'wordstudy' | 'firstcentury'
-  onTabChange: (tab: 'commentary' | 'crossrefs' | 'wordstudy' | 'firstcentury') => void
+  rightTab: RightTab
+  onTabChange: (tab: RightTab) => void
   onWordSelect?: (info: WordHighlight | null) => void
+  notesRefreshToken?: number
 }
 
 function EntryView({
@@ -71,36 +73,27 @@ function TabHeader({
   onTabChange,
   location,
 }: {
-  rightTab: 'commentary' | 'crossrefs' | 'wordstudy' | 'firstcentury'
-  onTabChange: (tab: 'commentary' | 'crossrefs' | 'wordstudy' | 'firstcentury') => void
+  rightTab: RightTab
+  onTabChange: (tab: RightTab) => void
   location: string
 }) {
   return (
     <div className="panel-header panel-header--tabs">
       <div className="panel-tabs">
-        <button
-          className={`panel-tab${rightTab === 'commentary' ? ' panel-tab--active' : ''}`}
-          onClick={() => onTabChange('commentary')}
-        >
+        <button className={`panel-tab${rightTab === 'commentary' ? ' panel-tab--active' : ''}`} onClick={() => onTabChange('commentary')}>
           Fathers
         </button>
-        <button
-          className={`panel-tab${rightTab === 'crossrefs' ? ' panel-tab--active' : ''}`}
-          onClick={() => onTabChange('crossrefs')}
-        >
+        <button className={`panel-tab${rightTab === 'crossrefs' ? ' panel-tab--active' : ''}`} onClick={() => onTabChange('crossrefs')}>
           Cross-Refs
         </button>
-        <button
-          className={`panel-tab${rightTab === 'wordstudy' ? ' panel-tab--active' : ''}`}
-          onClick={() => onTabChange('wordstudy')}
-        >
+        <button className={`panel-tab${rightTab === 'wordstudy' ? ' panel-tab--active' : ''}`} onClick={() => onTabChange('wordstudy')}>
           Words
         </button>
-        <button
-          className={`panel-tab${rightTab === 'firstcentury' ? ' panel-tab--active' : ''}`}
-          onClick={() => onTabChange('firstcentury')}
-        >
+        <button className={`panel-tab${rightTab === 'firstcentury' ? ' panel-tab--active' : ''}`} onClick={() => onTabChange('firstcentury')}>
           History
+        </button>
+        <button className={`panel-tab${rightTab === 'notes' ? ' panel-tab--active' : ''}`} onClick={() => onTabChange('notes')}>
+          Notes
         </button>
       </div>
       <span className="panel-location">{location}</span>
@@ -108,8 +101,9 @@ function TabHeader({
   )
 }
 
-export function CommentaryPanel({ selected, featuredEntry, onClearFeatured, onNavigate, rightTab, onTabChange, onWordSelect }: Props) {
+export function CommentaryPanel({ selected, featuredEntry, onClearFeatured, onNavigate, rightTab, onTabChange, onWordSelect, notesRefreshToken }: Props) {
   const { entries, loading } = useCommentary(selected.book, selected.chapter, selected.verse)
+  const [fatherSearch, setFatherSearch] = useState('')
 
   const location = selected.verse
     ? `${selected.book} ${selected.chapter}:${selected.verse}`
@@ -140,7 +134,9 @@ export function CommentaryPanel({ selected, featuredEntry, onClearFeatured, onNa
   return (
     <div className="panel commentary-panel">
       <TabHeader rightTab={rightTab} onTabChange={onTabChange} location={location} />
-      {rightTab === 'crossrefs' ? (
+      {rightTab === 'notes' ? (
+        <NotesPanel onNavigate={onNavigate ?? (() => {})} refreshToken={notesRefreshToken} />
+      ) : rightTab === 'crossrefs' ? (
         <CrossRefsPanel selected={selected} onNavigate={onNavigate} />
       ) : rightTab === 'wordstudy' ? (
         <WordStudyPanel selected={selected} onWordSelect={onWordSelect} />
@@ -151,15 +147,31 @@ export function CommentaryPanel({ selected, featuredEntry, onClearFeatured, onNa
           {!selected.verse && (
             <div className="panel-empty">Select a verse to see commentary.</div>
           )}
+          {selected.verse && (
+            <input
+              className="commentary-father-search"
+              placeholder="Filter by father name…"
+              value={fatherSearch}
+              onChange={e => setFatherSearch(e.target.value)}
+              spellCheck={false}
+            />
+          )}
           {selected.verse && loading && <div className="panel-loading">Loading...</div>}
           {selected.verse && !loading && entries.length === 0 && (
             <div className="panel-empty">No commentary found for this verse.</div>
           )}
-          {[...entries].sort((a, b) =>
-            getFatherSortYear(a.father_name, a.father_era) - getFatherSortYear(b.father_name, b.father_era)
-          ).map(entry => (
-            <EntryView key={entry.id} entry={entry} book={selected.book} chapter={selected.chapter} />
-          ))}
+          {(() => {
+            const q = fatherSearch.trim().toLowerCase()
+            const filtered = [...entries]
+              .sort((a, b) => getFatherSortYear(a.father_name, a.father_era) - getFatherSortYear(b.father_name, b.father_era))
+              .filter(e => !q || e.father_name.toLowerCase().includes(q))
+            if (selected.verse && !loading && q && filtered.length === 0) {
+              return <div className="panel-empty">No results for "{fatherSearch}".</div>
+            }
+            return filtered.map(entry => (
+              <EntryView key={entry.id} entry={entry} book={selected.book} chapter={selected.chapter} />
+            ))
+          })()}
         </div>
       )}
     </div>

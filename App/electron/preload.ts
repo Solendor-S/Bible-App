@@ -18,6 +18,9 @@ contextBridge.exposeInMainWorld('bibleApi', {
     ipcRenderer.invoke('commentary:getForVerse', book, chapter, verse),
   getJosephusForVerse: (book: string, chapter: number, verse: number) =>
     ipcRenderer.invoke('josephus:getForVerse', book, chapter, verse),
+  getHistoricalForVerse: (book: string, chapter: number, verse: number) =>
+    ipcRenderer.invoke('historical:getForVerse', book, chapter, verse),
+  getHistoricalAll: () => ipcRenderer.invoke('historical:getAll'),
   search: (query: string) => ipcRenderer.invoke('search:query', query),
   openExternal: (url: string) => ipcRenderer.invoke('shell:openExternal', url),
   launchUpdater: () => ipcRenderer.invoke('app:launchUpdater'),
@@ -25,6 +28,21 @@ contextBridge.exposeInMainWorld('bibleApi', {
   onUpdateAvailable: (cb: (info: { current: string; latest: string }) => void) =>
     ipcRenderer.on('app:updateAvailable', (_e, info) => cb(info)),
   ensureOllama: () => ipcRenderer.invoke('ollama:ensureRunning')
+})
+
+contextBridge.exposeInMainWorld('notesApi', {
+  getNotebooks: () => ipcRenderer.invoke('notes:getNotebooks'),
+  saveNotebook: (notebook: any) => ipcRenderer.invoke('notes:saveNotebook', notebook),
+  deleteNotebook: (id: string) => ipcRenderer.invoke('notes:deleteNotebook', id),
+  getNotes: (notebookId: string) => ipcRenderer.invoke('notes:getNotes', notebookId),
+  saveNote: (note: any) => ipcRenderer.invoke('notes:saveNote', note),
+  deleteNote: (id: string) => ipcRenderer.invoke('notes:deleteNote', id),
+})
+
+contextBridge.exposeInMainWorld('apocryphaApi', {
+  getBooks: () => ipcRenderer.invoke('apocrypha:getBooks'),
+  getChapters: (book: string) => ipcRenderer.invoke('apocrypha:getChapters', book),
+  getVerses: (book: string, chapter: number) => ipcRenderer.invoke('apocrypha:getVerses', book, chapter),
 })
 
 contextBridge.exposeInMainWorld('chatApi', {

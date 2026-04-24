@@ -1439,3 +1439,974 @@ body {
   padding: 12px;
   text-align: center;
 }
+
+/* ── Verse context menu ──────────────────────── */
+
+.verse-context-menu {
+  z-index: 1000;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  overflow: hidden;
+  min-width: 140px;
+}
+
+.verse-context-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 8px 14px;
+  font-size: 13px;
+  color: var(--text-primary);
+  cursor: pointer;
+  text-align: left;
+}
+.verse-context-item:hover { background: var(--bg-hover); }
+.verse-context-item + .verse-context-item { border-top: 1px solid var(--border-subtle); }
+
+/* ── Add Note Modal ──────────────────────────── */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+
+.add-note-modal {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  width: 480px;
+  max-width: calc(100vw - 40px);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.add-note-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.add-note-ref {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-accent);
+  font-family: var(--font-serif);
+}
+
+.modal-close-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 20px;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0 4px;
+}
+.modal-close-btn:hover { color: var(--text-primary); }
+
+.add-note-verse-text {
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-style: italic;
+  font-family: var(--font-serif);
+  border-left: 2px solid var(--border);
+  padding-left: 10px;
+  line-height: 1.5;
+  max-height: 60px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.add-note-section-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.add-note-notebooks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.notebook-chip {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 4px 12px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s, border-color 0.1s;
+}
+.notebook-chip:hover { background: var(--bg-hover); color: var(--text-primary); }
+.notebook-chip--active { background: var(--bg-selected); border-color: var(--text-accent); color: var(--text-accent); }
+.notebook-chip--new { border-style: dashed; }
+
+.add-note-nb-input {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-primary);
+  font-size: 13px;
+  padding: 7px 10px;
+  outline: none;
+  width: 100%;
+}
+.add-note-nb-input:focus { border-color: var(--text-accent); }
+
+.add-note-textarea {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: var(--font-sans);
+  padding: 8px 10px;
+  outline: none;
+  resize: vertical;
+  width: 100%;
+  line-height: 1.5;
+}
+.add-note-textarea:focus { border-color: var(--text-accent); }
+
+.add-note-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  padding-top: 4px;
+}
+
+.add-note-cancel {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-secondary);
+  padding: 7px 16px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.add-note-cancel:hover { background: var(--bg-hover); }
+
+.add-note-save {
+  background: var(--bg-selected);
+  border: 1px solid var(--text-accent);
+  border-radius: var(--radius);
+  color: var(--text-accent);
+  padding: 7px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.add-note-save:hover:not(:disabled) { background: var(--bg-selected-hover); }
+.add-note-save:disabled { opacity: 0.4; cursor: default; }
+
+/* ── Notes Panel ─────────────────────────────── */
+
+.notes-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.notes-panel-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.notes-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 32px 16px;
+  color: var(--text-muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+.notes-empty-sub {
+  font-size: 12px;
+  color: var(--text-muted);
+  opacity: 0.7;
+}
+
+.notes-nb-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+
+.notes-back-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  color: var(--text-accent);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: var(--radius);
+}
+.notes-back-btn:hover { background: var(--bg-hover); }
+
+.notes-nb-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.notebook-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.notebook-row:hover { background: var(--bg-hover); }
+
+.notebook-row-icon { color: var(--text-gold); flex-shrink: 0; }
+
+.notebook-row-name {
+  flex: 1;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.notebook-row-delete {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+.notebook-row:hover .notebook-row-delete { opacity: 1; }
+.notebook-row-delete:hover { color: #e06c6c; }
+
+.note-card {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.note-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.note-ref-btn {
+  background: none;
+  border: none;
+  color: var(--text-accent);
+  font-size: 12px;
+  font-weight: 600;
+  font-family: var(--font-serif);
+  cursor: pointer;
+  padding: 0;
+}
+.note-ref-btn:hover { text-decoration: underline; }
+
+.note-card-delete {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+.note-card:hover .note-card-delete { opacity: 1; }
+.note-card-delete:hover { color: #e06c6c; }
+
+.note-verse-preview {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-style: italic;
+  font-family: var(--font-serif);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.note-text {
+  font-size: 13px;
+  color: var(--text-primary);
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  cursor: pointer;
+  white-space: pre-wrap;
+}
+.note-text--expanded {
+  display: block;
+  -webkit-line-clamp: unset;
+  overflow: visible;
+}
+
+/* ── Commentary father search ────────────────── */
+
+.commentary-father-search {
+  display: block;
+  width: calc(100% - 24px);
+  margin: 8px 12px 4px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-primary);
+  font-size: 12px;
+  padding: 5px 10px;
+  outline: none;
+  flex-shrink: 0;
+}
+.commentary-father-search:focus { border-color: var(--text-accent); }
+.commentary-father-search::placeholder { color: var(--text-muted); }
+
+/* ── Book Preface Panel ───────────────────────── */
+
+.book-preface {
+  padding: 16px 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.book-preface-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-gold);
+  letter-spacing: 0.02em;
+  font-family: var(--font-serif);
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 10px;
+}
+
+.book-preface-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.book-preface-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-accent);
+}
+
+.book-preface-text {
+  font-size: 13px;
+  color: var(--text-primary);
+  line-height: 1.65;
+  font-family: var(--font-serif);
+  margin: 0;
+}
+
+.book-preface-themes {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.book-preface-themes li {
+  font-size: 13px;
+  color: var(--text-primary);
+  line-height: 1.5;
+}
+
+.book-preface-meta {
+  background: var(--bg-secondary);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  gap: 8px;
+}
+
+.book-preface-meta-row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.book-preface-meta-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  min-width: 52px;
+  padding-top: 1px;
+  flex-shrink: 0;
+}
+
+.book-preface-meta-value {
+  font-size: 12.5px;
+  color: var(--text-primary);
+  line-height: 1.5;
+}
+
+.book-preface-evidence-toggle {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-accent);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 10px;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+}
+.book-preface-evidence-toggle:hover { background: var(--bg-hover); }
+
+.book-preface-evidence {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.book-preface-evidence li {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.book-preface-sources {
+  gap: 8px;
+}
+
+.book-preface-source-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.book-preface-source-chip {
+  font-size: 11px;
+  color: var(--text-muted);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  padding: 2px 8px;
+}
+
+.book-preface-read-btn {
+  align-self: flex-start;
+  background: var(--text-accent);
+  border: none;
+  border-radius: var(--radius);
+  color: var(--bg-primary);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 16px;
+  cursor: pointer;
+  margin-top: 4px;
+}
+.book-preface-read-btn:hover { opacity: 0.88; }
+
+/* ── Historical Sources (History Tab) ────────── */
+
+.historical-entry {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.historical-entry:last-child { border-bottom: none; }
+
+.historical-header {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.historical-title-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.historical-title {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text-gold);
+}
+
+.historical-author {
+  font-size: 12px;
+  color: var(--text-accent);
+  font-style: italic;
+}
+
+.historical-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.historical-category-badge {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 3px;
+}
+.historical-category-badge--ancient_author {
+  background: rgba(180, 140, 80, 0.18);
+  color: #c9a45a;
+}
+.historical-category-badge--archaeology {
+  background: rgba(80, 160, 120, 0.18);
+  color: #5bac8a;
+}
+.historical-category-badge--manuscript {
+  background: rgba(100, 130, 200, 0.18);
+  color: #7a9fd4;
+}
+.historical-category-badge--inscription {
+  background: rgba(160, 100, 180, 0.18);
+  color: #b07ecf;
+}
+
+.historical-date {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.historical-location {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+.historical-location::before { content: '· '; }
+
+.historical-description {
+  font-size: 13px;
+  color: var(--text-primary);
+  line-height: 1.6;
+  font-family: var(--font-serif);
+  margin: 0;
+}
+
+.historical-significance {
+  background: var(--bg-secondary);
+  border-left: 2px solid var(--text-accent);
+  padding: 7px 10px;
+  border-radius: 0 var(--radius) var(--radius) 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.historical-significance-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-accent);
+}
+
+.historical-significance-text {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  line-height: 1.55;
+  margin: 0;
+}
+
+.historical-citation {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-style: italic;
+  margin: 0;
+}
+
+/* ── History Panel modes ─────────────────────── */
+
+.history-panel-wrap {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.history-mode-toggle {
+  display: flex;
+  gap: 4px;
+  padding: 8px 12px 0;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border-subtle);
+  padding-bottom: 8px;
+}
+
+.history-mode-btn {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 4px 14px;
+  cursor: pointer;
+  transition: all 0.1s;
+}
+.history-mode-btn:hover { color: var(--text-primary); border-color: var(--text-accent); }
+.history-mode-btn--active {
+  background: var(--text-accent);
+  border-color: var(--text-accent);
+  color: var(--bg-primary);
+  font-weight: 700;
+}
+
+.history-browse-section {
+  padding: 0 0 16px;
+}
+
+.history-browse-heading {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-gold);
+  padding: 14px 14px 8px;
+  margin-bottom: 4px;
+  cursor: pointer;
+  text-align: left;
+}
+.history-browse-heading:hover { color: var(--text-accent); }
+
+.history-browse-chevron {
+  font-size: 14px;
+  transition: transform 0.15s;
+  display: inline-block;
+  color: var(--text-muted);
+}
+.history-browse-chevron--closed { transform: rotate(-90deg); }
+
+.history-browse-count {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--text-muted);
+}
+
+.history-josephus-note {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin: 8px 14px 4px;
+  background: var(--bg-secondary);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+.history-josephus-note-icon { flex-shrink: 0; }
+
+/* ── Canon / Apocrypha tab bar ────────────────────────────────────── */
+.left-panel-wrap {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  flex: 1;
+  min-width: 0;
+  border-right: 1px solid var(--border);
+}
+.left-panel-wrap .panel { border-right: none; }
+.left-panel-wrap .apocrypha-panel { border-right: none; }
+.canon-tab-bar {
+  display: flex;
+  gap: 2px;
+  padding: 6px 14px 0;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-primary);
+  flex-shrink: 0;
+}
+.canon-tab-btn {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 5px 12px 7px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  border-radius: 4px 4px 0 0;
+  transition: color 0.15s, border-color 0.15s;
+}
+.canon-tab-btn:hover { color: var(--text-primary); }
+.canon-tab-btn--active {
+  color: var(--text-primary);
+  border-bottom-color: var(--accent);
+}
+
+/* ── ApocryphaPanel ───────────────────────────────────────────────── */
+.apocrypha-panel {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  flex: 1;
+  min-height: 0;
+  border-right: 1px solid var(--border);
+}
+.apocrypha-disclaimer {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 8px 14px;
+  background: #3d2a0a;
+  border-bottom: 1px solid #7c5215;
+  font-size: 12px;
+  color: #f0c060;
+  line-height: 1.5;
+  flex-shrink: 0;
+}
+.apocrypha-disclaimer-icon {
+  flex-shrink: 0;
+  margin-top: 1px;
+  font-size: 11px;
+  opacity: 0.8;
+}
+.apocrypha-browse {
+  overflow-y: auto;
+  flex: 1;
+  padding: 10px 0;
+}
+.apocrypha-group {
+  margin-bottom: 16px;
+}
+.apocrypha-group-header {
+  padding: 4px 14px 6px;
+}
+.apocrypha-group-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #d97706;
+  margin-bottom: 2px;
+}
+.apocrypha-group-desc {
+  display: block;
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+.apocrypha-book-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 4px;
+  padding: 4px 14px;
+}
+.apocrypha-book-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s, border-color 0.12s;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.apocrypha-book-card:hover {
+  background: var(--bg-hover);
+  border-color: #7c5215;
+}
+.apocrypha-book-name {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-primary);
+  line-height: 1.3;
+}
+.apocrypha-book-meta {
+  font-size: 10px;
+  color: var(--text-secondary);
+}
+
+/* Read mode */
+.apocrypha-read {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
+}
+.apocrypha-read-topbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  border-bottom: 2px solid #7c5215;
+  background: #2a1a04;
+  flex-shrink: 0;
+}
+.apocrypha-back-btn {
+  background: none;
+  border: none;
+  color: #d97706;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px 4px;
+  flex-shrink: 0;
+}
+.apocrypha-back-btn:hover { color: #f0c060; }
+.apocrypha-read-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+.apocrypha-read-book {
+  font-size: 14px;
+  font-weight: 600;
+  color: #f0c060;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.apocrypha-badge {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #3d2a0a;
+  background: #d97706;
+  padding: 1px 6px;
+  border-radius: 3px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.apocrypha-chapter-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 6px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-primary);
+  flex-shrink: 0;
+}
+.apocrypha-chapter-btn {
+  min-width: 26px;
+  height: 22px;
+  padding: 0 4px;
+  font-size: 11px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s;
+}
+.apocrypha-chapter-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+.apocrypha-chapter-btn--active {
+  background: #7c5215;
+  border-color: #d97706;
+  color: #f0c060;
+}
+.apocrypha-verses {
+  overflow-y: auto;
+  flex: 1;
+  padding: 12px 14px;
+}
+.apocrypha-verse-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 6px;
+  line-height: 1.6;
+}
+.apocrypha-verse-num {
+  font-size: 11px;
+  font-weight: 600;
+  color: #d97706;
+  min-width: 20px;
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+.apocrypha-verse-text {
+  font-size: 14px;
+  color: var(--text-primary);
+}
+.apocrypha-no-text {
+  padding: 24px 0;
+  text-align: center;
+}
+.apocrypha-no-text-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+.apocrypha-no-text-body {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  max-width: 320px;
+  margin: 0 auto;
+}

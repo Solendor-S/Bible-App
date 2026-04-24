@@ -157,6 +157,8 @@ function resolveBook(raw: string): string {
 
 // Regex: optional number prefix + book word(s) + chapter + optional :verse[-verse]
 const PASSAGE_RE = /^([1-3]?\s*[a-z]+(?:\s+[a-z]+)*)\s+(\d+)(?::(\d+)(?:-(\d+))?)?$/i
+// Book-only: optional number prefix + book name, nothing else
+const BOOK_ONLY_RE = /^([1-3]?\s*[a-z]+(?:\s+[a-z]+)*)$/i
 
 export function parsePassage(input: string): PassageRef[] {
   return input
@@ -165,12 +167,21 @@ export function parsePassage(input: string): PassageRef[] {
     .filter(Boolean)
     .flatMap(token => {
       const m = token.match(PASSAGE_RE)
-      if (!m) return []
-      const book = resolveBook(m[1].trim())
-      const chapter = parseInt(m[2], 10)
-      const verseStart = m[3] ? parseInt(m[3], 10) : undefined
-      const verseEnd = m[4] ? parseInt(m[4], 10) : undefined
-      return [{ book, chapter, verseStart, verseEnd, raw: token.trim() }]
+      if (m) {
+        const book = resolveBook(m[1].trim())
+        const chapter = parseInt(m[2], 10)
+        const verseStart = m[3] ? parseInt(m[3], 10) : undefined
+        const verseEnd = m[4] ? parseInt(m[4], 10) : undefined
+        return [{ book, chapter, verseStart, verseEnd, raw: token.trim() }]
+      }
+      // Book-only input (e.g. "John", "1 Peter", "Dan")
+      if (BOOK_ONLY_RE.test(token)) {
+        const book = resolveBook(token.trim())
+        if (CANONICAL_BOOKS.includes(book)) {
+          return [{ book, chapter: 1, raw: token.trim(), bookOnly: true }]
+        }
+      }
+      return []
     })
 }
 

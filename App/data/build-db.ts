@@ -6,6 +6,8 @@
 import initSqlJs from 'sql.js'
 import { join } from 'path'
 import { readFileSync, writeFileSync, existsSync } from 'fs'
+import { HISTORICAL_CREATE_SQL, HISTORICAL_SOURCES, HISTORICAL_REFS } from '../electron/historicalData'
+import { APOCRYPHA_CREATE_SQL, APOCRYPHA_BOOKS, APOCRYPHA_VERSES } from '../electron/apocryphaData'
 
 const DB_PATH = join(__dirname, 'bible.db')
 const RAW_DIR = join(__dirname, 'raw')
@@ -301,6 +303,21 @@ async function main() {
     console.log(`  Inserted ${words.length} words`)
   }
 
+  // Hebrew OT per-word context glosses (from STEP Bible TAHOT)
+  const otGlossesPath = join(RAW_DIR, 'ot-glosses.json')
+  if (existsSync(otGlossesPath)) {
+    console.log('Updating Hebrew words with TAHOT glosses...')
+    const glosses = JSON.parse(readFileSync(otGlossesPath, 'utf-8'))
+    const stmt = db.prepare('UPDATE hebrew_words SET gloss = ? WHERE book = ? AND chapter = ? AND verse = ? AND position = ?')
+    let count = 0
+    for (const g of glosses) {
+      stmt.run([g.gloss, g.book, g.chapter, g.verse, g.position])
+      count++
+    }
+    stmt.free()
+    console.log(`  Updated ${count} word glosses`)
+  }
+
   // Josephus sections
   for (const josFile of ['josephus-antiquities.json', 'josephus-war.json']) {
     const josPath = join(RAW_DIR, josFile)
@@ -329,6 +346,43 @@ async function main() {
     stmt.free()
     console.log(`  Inserted ${refs.length} curated refs`)
   }
+
+  // Historical sources (Tacitus, Pliny, archaeology, inscriptions, etc.)
+  console.log('Inserting historical sources...')
+  db.run(HISTORICAL_CREATE_SQL)
+  const hSrcStmt = db.prepare(`
+    INSERT OR IGNORE INTO historical_sources
+      (source_key, title, category, author, date_desc, location, description, significance, citation, testament, sort_year)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `)
+  for (const s of HISTORICAL_SOURCES) {
+    hSrcStmt.run([s.source_key, s.title, s.category, s.author, s.date_desc, s.location, s.description, s.significance, s.citation, s.testament, s.sort_year])
+  }
+  hSrcStmt.free()
+  const hRefStmt = db.prepare(`
+    INSERT INTO historical_refs (bible_book, bible_chapter, bible_verse, source_key) VALUES (?, ?, ?, ?)
+  `)
+  for (const r of HISTORICAL_REFS) {
+    hRefStmt.run([r.bible_book, r.bible_chapter, r.bible_verse, r.source_key])
+  }
+  hRefStmt.free()
+  console.log(`  Inserted ${HISTORICAL_SOURCES.length} sources, ${HISTORICAL_REFS.length} refs`)
+
+  // Apocrypha books and verses
+  console.log('Inserting apocrypha metadata and verses...')
+  db.run(APOCRYPHA_CREATE_SQL)
+  const aBkStmt = db.prepare(`INSERT OR IGNORE INTO apocrypha_books (book, book_order, group_label, chapter_count) VALUES (?, ?, ?, ?)`)
+  for (const b of APOCRYPHA_BOOKS) {
+    aBkStmt.run([b.book, b.book_order, b.group_label, b.chapter_count])
+  }
+  aBkStmt.free()
+  const aVStmt = db.prepare(`INSERT INTO apocrypha_verses (book, book_order, chapter, verse, text) VALUES (?, ?, ?, ?, ?)`)
+  for (const v of APOCRYPHA_VERSES) {
+    const bookOrder = APOCRYPHA_BOOKS.find(b => b.book === v.book)?.book_order ?? 99
+    aVStmt.run([v.book, bookOrder, v.chapter, v.verse, v.text])
+  }
+  aVStmt.free()
+  console.log(`  Inserted ${APOCRYPHA_BOOKS.length} books, ${APOCRYPHA_VERSES.length} verses`)
 
   // Write to disk
   const data = db.export()

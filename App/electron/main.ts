@@ -7,6 +7,8 @@ import { spawn } from 'child_process'
 import https from 'https'
 import http from 'http'
 import initSqlJs, { Database } from 'sql.js'
+import { HISTORICAL_CREATE_SQL, HISTORICAL_MIGRATE_SQL, HISTORICAL_SOURCES, HISTORICAL_REFS } from './historicalData'
+import { APOCRYPHA_CREATE_SQL, APOCRYPHA_BOOKS, APOCRYPHA_VERSES } from './apocryphaData'
 
 let db: Database | null = null
 
@@ -72,6 +74,75 @@ async function openDb(): Promise<Database> {
 
   const fileBuffer = readFileSync(userDbPath)
   db = new SQL.Database(fileBuffer)
+
+  // Migrate: add historical_sources and historical_refs if not present
+  const hasHistorical = db.exec("SELECT name FROM sqlite_master WHERE type='table' AND name='historical_sources'")
+  if (!hasHistorical.length || !hasHistorical[0].values.length) {
+    db.run(HISTORICAL_CREATE_SQL)
+    const srcStmt = db.prepare(`
+      INSERT OR IGNORE INTO historical_sources
+        (source_key, title, category, author, date_desc, location, description, significance, citation, testament, sort_year)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `)
+    for (const s of HISTORICAL_SOURCES) {
+      srcStmt.run([s.source_key, s.title, s.category, s.author, s.date_desc, s.location, s.description, s.significance, s.citation, s.testament, s.sort_year])
+    }
+    srcStmt.free()
+    const refStmt = db.prepare(`
+      INSERT INTO historical_refs (bible_book, bible_chapter, bible_verse, source_key)
+      VALUES (?, ?, ?, ?)
+    `)
+    for (const r of HISTORICAL_REFS) {
+      refStmt.run([r.bible_book, r.bible_chapter, r.bible_verse, r.source_key])
+    }
+    refStmt.free()
+    const data = db.export()
+    writeFileSync(userDbPath, Buffer.from(data))
+  } else {
+    // Add testament/sort_year columns if upgrading from initial schema (no testament column)
+    const cols = db.exec("PRAGMA table_info(historical_sources)")
+    const colNames = cols.length ? (cols[0].values as string[][]).map(r => r[1]) : []
+    if (!colNames.includes('testament')) {
+      for (const sql of HISTORICAL_MIGRATE_SQL.split(';').map(s => s.trim()).filter(Boolean)) {
+        try { db.run(sql) } catch { /* column may already exist */ }
+      }
+      // Backfill testament and sort_year for existing rows
+      const upStmt = db.prepare('UPDATE historical_sources SET testament = ?, sort_year = ? WHERE source_key = ?')
+      for (const s of HISTORICAL_SOURCES) {
+        upStmt.run([s.testament, s.sort_year, s.source_key])
+      }
+      upStmt.free()
+      const data = db.export()
+      writeFileSync(userDbPath, Buffer.from(data))
+    }
+  }
+
+  // Migrate: add apocrypha tables and seed full verse data
+  const hasApocrypha = db.exec("SELECT name FROM sqlite_master WHERE type='table' AND name='apocrypha_books'")
+  const apocryphaTableMissing = !hasApocrypha.length || !hasApocrypha[0].values.length
+  const apocryphaVerseCount = apocryphaTableMissing ? 0
+    : (db.exec('SELECT COUNT(*) FROM apocrypha_verses')[0]?.values[0][0] as number ?? 0)
+
+  if (apocryphaTableMissing || apocryphaVerseCount < 1000) {
+    if (apocryphaTableMissing) db.run(APOCRYPHA_CREATE_SQL)
+    // Upsert book metadata
+    const bkStmt = db.prepare(`INSERT OR REPLACE INTO apocrypha_books (book, book_order, group_label, chapter_count) VALUES (?, ?, ?, ?)`)
+    for (const b of APOCRYPHA_BOOKS) {
+      bkStmt.run([b.book, b.book_order, b.group_label, b.chapter_count])
+    }
+    bkStmt.free()
+    // Replace all verses
+    if (!apocryphaTableMissing) db.run('DELETE FROM apocrypha_verses')
+    const vStmt = db.prepare(`INSERT INTO apocrypha_verses (book, book_order, chapter, verse, text) VALUES (?, ?, ?, ?, ?)`)
+    for (const v of APOCRYPHA_VERSES) {
+      const bookOrder = APOCRYPHA_BOOKS.find(b => b.book === v.book)?.book_order ?? 99
+      vStmt.run([v.book, bookOrder, v.chapter, v.verse, v.text])
+    }
+    vStmt.free()
+    const data = db.export()
+    writeFileSync(userDbPath, Buffer.from(data))
+  }
+
   return db
 }
 
@@ -209,6 +280,53 @@ ipcMain.handle('josephus:getForVerse', async (_e, book: string, chapter: number,
   `, [book, chapter, verse])
 })
 
+ipcMain.handle('historical:getForVerse', async (_e, book: string, chapter: number, verse: number) => {
+  const database = await openDb()
+  return rows(database, `
+    SELECT hs.id, hs.source_key, hs.title, hs.category, hs.author,
+           hs.date_desc, hs.location, hs.description, hs.significance, hs.citation,
+           hs.testament, hs.sort_year
+    FROM historical_refs hr
+    JOIN historical_sources hs ON hs.source_key = hr.source_key
+    WHERE hr.bible_book = ? AND hr.bible_chapter = ? AND hr.bible_verse = ?
+    ORDER BY hs.sort_year
+  `, [book, chapter, verse])
+})
+
+ipcMain.handle('historical:getAll', async () => {
+  const database = await openDb()
+  return rows(database, `
+    SELECT id, source_key, title, category, author, date_desc, location,
+           description, significance, citation, testament, sort_year
+    FROM historical_sources
+    ORDER BY sort_year
+  `)
+})
+
+ipcMain.handle('apocrypha:getBooks', async () => {
+  const database = await openDb()
+  return rows(database, 'SELECT id, book, book_order, group_label, chapter_count FROM apocrypha_books ORDER BY book_order')
+})
+
+ipcMain.handle('apocrypha:getChapters', async (_e, book: string) => {
+  const database = await openDb()
+  const result = rows(database, 'SELECT DISTINCT chapter FROM apocrypha_verses WHERE book = ? ORDER BY chapter', [book])
+  if (result.length === 0) {
+    // Book metadata exists but no verse text yet — return chapter numbers from book metadata
+    const meta = rows(database, 'SELECT chapter_count FROM apocrypha_books WHERE book = ?', [book])
+    if (meta.length > 0) {
+      return Array.from({ length: meta[0].chapter_count }, (_, i) => i + 1)
+    }
+    return []
+  }
+  return result.map((r: any) => r.chapter)
+})
+
+ipcMain.handle('apocrypha:getVerses', async (_e, book: string, chapter: number) => {
+  const database = await openDb()
+  return rows(database, 'SELECT verse, text FROM apocrypha_verses WHERE book = ? AND chapter = ? ORDER BY verse', [book, chapter])
+})
+
 ipcMain.handle('shell:openExternal', (_e, url: string) => shell.openExternal(url))
 
 ipcMain.handle('search:query', async (_e, query: string) => {
@@ -258,6 +376,72 @@ ipcMain.handle('chat:loadSession', (_e, id: string) => {
 
 ipcMain.handle('chat:deleteSession', (_e, id: string) => {
   const p = join(sessionsDir(), `${id}.json`)
+  if (existsSync(p)) unlinkSync(p)
+})
+
+// ── Notes persistence ──────────────────────────
+function notebooksPath(): string {
+  const dir = app.getPath('userData')
+  mkdirSync(dir, { recursive: true })
+  return join(dir, 'notebooks.json')
+}
+
+function notesDir(): string {
+  const dir = join(app.getPath('userData'), 'notes')
+  mkdirSync(dir, { recursive: true })
+  return dir
+}
+
+ipcMain.handle('notes:getNotebooks', () => {
+  const p = notebooksPath()
+  if (!existsSync(p)) return []
+  try { return JSON.parse(readFileSync(p, 'utf-8')) } catch { return [] }
+})
+
+ipcMain.handle('notes:saveNotebook', (_e, notebook: any) => {
+  const p = notebooksPath()
+  const list: any[] = existsSync(p) ? (() => { try { return JSON.parse(readFileSync(p, 'utf-8')) } catch { return [] } })() : []
+  const idx = list.findIndex((n: any) => n.id === notebook.id)
+  if (idx >= 0) { list[idx] = notebook } else { list.push(notebook) }
+  writeFileSync(p, JSON.stringify(list))
+})
+
+ipcMain.handle('notes:deleteNotebook', (_e, id: string) => {
+  const p = notebooksPath()
+  if (!existsSync(p)) return
+  try {
+    const list = JSON.parse(readFileSync(p, 'utf-8')).filter((n: any) => n.id !== id)
+    writeFileSync(p, JSON.stringify(list))
+  } catch {}
+  // also delete all notes in this notebook
+  const dir = notesDir()
+  try {
+    readdirSync(dir)
+      .filter(f => f.endsWith('.json'))
+      .forEach(f => {
+        try {
+          const note = JSON.parse(readFileSync(join(dir, f), 'utf-8'))
+          if (note.notebookId === id) unlinkSync(join(dir, f))
+        } catch {}
+      })
+  } catch {}
+})
+
+ipcMain.handle('notes:getNotes', (_e, notebookId: string) => {
+  const dir = notesDir()
+  return readdirSync(dir)
+    .filter(f => f.endsWith('.json'))
+    .map(f => { try { return JSON.parse(readFileSync(join(dir, f), 'utf-8')) } catch { return null } })
+    .filter((n: any) => n && n.notebookId === notebookId)
+    .sort((a: any, b: any) => b.createdAt - a.createdAt)
+})
+
+ipcMain.handle('notes:saveNote', (_e, note: any) => {
+  writeFileSync(join(notesDir(), `${note.id}.json`), JSON.stringify(note))
+})
+
+ipcMain.handle('notes:deleteNote', (_e, id: string) => {
+  const p = join(notesDir(), `${id}.json`)
   if (existsSync(p)) unlinkSync(p)
 })
 

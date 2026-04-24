@@ -67,6 +67,7 @@ export interface PassageRef {
   verseStart?: number
   verseEnd?: number
   raw: string
+  bookOnly?: boolean
 }
 
 export interface ChatMessage {
@@ -83,6 +84,21 @@ export interface ChatSession {
   messages: ChatMessage[]
 }
 
+export interface HistoricalEntry {
+  id: number
+  source_key: string
+  title: string
+  category: 'ancient_author' | 'archaeology' | 'manuscript' | 'inscription'
+  author: string
+  date_desc: string
+  location: string
+  description: string
+  significance: string
+  citation: string
+  testament: 'ot' | 'nt'
+  sort_year: number
+}
+
 export interface JosephusEntry {
   work: string
   book: number
@@ -93,14 +109,53 @@ export interface JosephusEntry {
   note: string
 }
 
+export interface ApocryphaBook {
+  id: number
+  book: string
+  book_order: number
+  group_label: string
+  chapter_count: number
+}
+
+export interface ApocryphaVerse {
+  verse: number
+  text: string
+}
+
 export interface CommentarySearchResult extends CommentaryEntry {
   book: string
   chapter: number
   verse: number
 }
 
+export interface Notebook {
+  id: string
+  name: string
+  createdAt: number
+}
+
+export interface Note {
+  id: string
+  notebookId: string
+  book: string
+  chapter: number
+  verse: number
+  verseText: string
+  noteText: string
+  createdAt: number
+  updatedAt: number
+}
+
 declare global {
   interface Window {
+    notesApi: {
+      getNotebooks(): Promise<Notebook[]>
+      saveNotebook(notebook: Notebook): Promise<void>
+      deleteNotebook(id: string): Promise<void>
+      getNotes(notebookId: string): Promise<Note[]>
+      saveNote(note: Note): Promise<void>
+      deleteNote(id: string): Promise<void>
+    }
     bibleApi: {
       getBooks(): Promise<Book[]>
       getChapters(book: string): Promise<number[]>
@@ -112,12 +167,19 @@ declare global {
       getStrongsEntry(type: string, num: string): Promise<StrongsEntry | null>
       getCommentary(book: string, chapter: number, verse: number): Promise<CommentaryEntry[]>
       getJosephusForVerse(book: string, chapter: number, verse: number): Promise<JosephusEntry[]>
+      getHistoricalForVerse(book: string, chapter: number, verse: number): Promise<HistoricalEntry[]>
+      getHistoricalAll(): Promise<HistoricalEntry[]>
       search(query: string): Promise<SearchResult>
       openExternal(url: string): Promise<void>
       launchUpdater(): Promise<void>
       getReleases(): Promise<{ tag: string; name: string; date: string; body: string }[]>
       onUpdateAvailable(cb: (info: { current: string; latest: string }) => void): void
       ensureOllama(): Promise<{ success: boolean; alreadyRunning?: boolean; error?: string }>
+    }
+    apocryphaApi: {
+      getBooks(): Promise<ApocryphaBook[]>
+      getChapters(book: string): Promise<number[]>
+      getVerses(book: string, chapter: number): Promise<ApocryphaVerse[]>
     }
     chatApi: {
       getSessions(): Promise<ChatSession[]>

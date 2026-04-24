@@ -169,6 +169,8 @@ async function main() {
   const sources = [
     { url: 'https://www.ccel.org/ccel/aquinas/catena1.xml', label: 'Matthew' },
     { url: 'https://www.ccel.org/ccel/aquinas/catena2.xml', label: 'Mark' },
+    { url: 'https://www.ccel.org/ccel/aquinas/catena3.xml', label: 'Luke' },
+    { url: 'https://www.ccel.org/ccel/aquinas/catena4.xml', label: 'John' },
   ]
 
   const allEntries: any[] = []

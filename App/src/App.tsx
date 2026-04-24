@@ -2,9 +2,13 @@ import React, { useState, useEffect } from 'react'
 import { NavigationBar } from './components/NavigationBar'
 import { BiblePanel } from './components/BiblePanel'
 import { CommentaryPanel } from './components/CommentaryPanel'
+import type { RightTab } from './components/CommentaryPanel'
 import { SearchModal } from './components/SearchModal'
 import { ChangelogModal } from './components/ChangelogModal'
 import { AiPanel } from './components/AiPanel'
+import { AddNoteModal } from './components/AddNoteModal'
+import type { NoteTarget } from './components/AddNoteModal'
+import { ApocryphaPanel } from './components/ApocryphaPanel'
 import { parsePassage } from './lib/parsePassage'
 import type { WordHighlight } from './components/WordStudyPanel'
 import type { CommentarySearchResult, PassageRef, SelectedVerse } from './types'
@@ -21,9 +25,12 @@ export default function App() {
   const [aiPanelHeight, setAiPanelHeight] = useState(0)
   const [featuredEntry, setFeaturedEntry] = useState<CommentarySearchResult | null>(null)
   const [updateInfo, setUpdateInfo] = useState<{ current: string; latest: string } | null>(null)
-  const [rightTab, setRightTab] = useState<'commentary' | 'crossrefs' | 'wordstudy' | 'firstcentury'>('commentary')
+  const [rightTab, setRightTab] = useState<RightTab>('commentary')
   const [wordHighlight, setWordHighlight] = useState<WordHighlight | null>(null)
   const [changelogOpen, setChangelogOpen] = useState(false)
+  const [noteTarget, setNoteTarget] = useState<NoteTarget | null>(null)
+  const [notesRefreshToken, setNotesRefreshToken] = useState(0)
+  const [leftTab, setLeftTab] = useState<'canon' | 'apocrypha'>('canon')
 
   useEffect(() => {
     window.bibleApi.onUpdateAvailable((info) => setUpdateInfo(info))
@@ -94,13 +101,34 @@ export default function App() {
         onToggleAi={toggleAiPanel}
       />
       <div className="content">
-        <BiblePanel
-          passages={passages}
-          activeVerse={activeVerse}
-          wordHighlight={wordHighlight}
-          onVerseClick={(book, chapter, verse) => { setActiveVerse({ book, chapter, verse }); setFeaturedEntry(null); setWordHighlight(null) }}
-          onNavigate={handleNavigate}
-        />
+        <div className="left-panel-wrap">
+          <div className="canon-tab-bar">
+            <button
+              className={`canon-tab-btn${leftTab === 'canon' ? ' canon-tab-btn--active' : ''}`}
+              onClick={() => setLeftTab('canon')}
+            >
+              Canon
+            </button>
+            <button
+              className={`canon-tab-btn${leftTab === 'apocrypha' ? ' canon-tab-btn--active' : ''}`}
+              onClick={() => setLeftTab('apocrypha')}
+            >
+              Apocrypha
+            </button>
+          </div>
+          {leftTab === 'canon' ? (
+            <BiblePanel
+              passages={passages}
+              activeVerse={activeVerse}
+              wordHighlight={wordHighlight}
+              onVerseClick={(book, chapter, verse) => { setActiveVerse({ book, chapter, verse }); setFeaturedEntry(null); setWordHighlight(null) }}
+              onNavigate={handleNavigate}
+              onAddNote={(book, chapter, verse, text) => setNoteTarget({ book, chapter, verse, text })}
+            />
+          ) : (
+            <ApocryphaPanel />
+          )}
+        </div>
         <CommentaryPanel
           selected={activeVerse}
           featuredEntry={featuredEntry}
@@ -109,6 +137,7 @@ export default function App() {
           rightTab={rightTab}
           onTabChange={setRightTab}
           onWordSelect={setWordHighlight}
+          notesRefreshToken={notesRefreshToken}
         />
       </div>
       {aiPanelHeight > 0 && (
@@ -126,6 +155,13 @@ export default function App() {
         onNavigate={loc => handleNavigate(loc.book, loc.chapter, loc.verse)}
       />
       <ChangelogModal open={changelogOpen} onClose={() => setChangelogOpen(false)} />
+      {noteTarget && (
+        <AddNoteModal
+          target={noteTarget}
+          onClose={() => setNoteTarget(null)}
+          onSaved={() => { setNotesRefreshToken(t => t + 1); setRightTab('notes') }}
+        />
+      )}
     </div>
   )
 }
