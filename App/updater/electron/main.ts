@@ -128,15 +128,16 @@ ipcMain.handle('update:apply', async () => {
 
     win?.webContents.send('update:progress', { line: 'Fetching latest release from GitHub...\n', type: 'info' })
 
-    // Discard any local changes (e.g. npm-modified package-lock.json) before fetching
-    const discard = spawn('git', ['checkout', '--', '.'], {
+    // Hard-reset to HEAD first to discard any local changes (e.g. npm-modified
+    // package-lock.json). More reliable than `git checkout -- .` on Windows.
+    const discard = spawn('git', ['reset', '--hard', 'HEAD'], {
       cwd: INSTALL_ROOT,
       shell: true,
       env: { ...process.env }
     })
 
     discard.on('close', () => {
-    // Ignore exit code — if there's nothing to discard this still exits 0
+    // Ignore exit code
 
     const fetch = spawn('git', ['fetch', 'origin', 'main'], {
       cwd: INSTALL_ROOT,
