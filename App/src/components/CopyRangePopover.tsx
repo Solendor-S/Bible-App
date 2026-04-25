@@ -15,6 +15,8 @@ export function CopyRangePopover({ book, chapter, allVerses, initialVerse, ancho
   const [end, setEnd] = useState(initialVerse)
   const [copied, setCopied] = useState(false)
   const popoverRef = useRef<HTMLDivElement>(null)
+  const startSliderRef = useRef<HTMLInputElement>(null)
+  const endSliderRef = useRef<HTMLInputElement>(null)
 
   const min = allVerses[0]?.verse ?? 1
   const max = allVerses[allVerses.length - 1]?.verse ?? 1
@@ -55,6 +57,38 @@ export function CopyRangePopover({ book, chapter, allVerses, initialVerse, ancho
     if (v < start) setStart(v)
   }
 
+  // Non-passive wheel listeners so preventDefault() actually stops page scroll
+  useEffect(() => {
+    const startEl = startSliderRef.current
+    const endEl = endSliderRef.current
+    if (!startEl || !endEl) return
+
+    function onStartWheel(e: WheelEvent) {
+      e.preventDefault()
+      setStart(s => {
+        const next = Math.min(max, Math.max(min, s + (e.deltaY > 0 ? 1 : -1)))
+        setEnd(en => next > en ? next : en)
+        return next
+      })
+    }
+
+    function onEndWheel(e: WheelEvent) {
+      e.preventDefault()
+      setEnd(en => {
+        const next = Math.min(max, Math.max(min, en + (e.deltaY > 0 ? 1 : -1)))
+        setStart(s => next < s ? next : s)
+        return next
+      })
+    }
+
+    startEl.addEventListener('wheel', onStartWheel, { passive: false })
+    endEl.addEventListener('wheel', onEndWheel, { passive: false })
+    return () => {
+      startEl.removeEventListener('wheel', onStartWheel)
+      endEl.removeEventListener('wheel', onEndWheel)
+    }
+  }, [min, max])
+
   function buildCopyText(): string {
     const ref = start === end ? `${book} ${chapter}:${start}` : `${book} ${chapter}:${start}-${end}`
     const header = `${ref} (KJV)`
@@ -85,6 +119,7 @@ export function CopyRangePopover({ book, chapter, allVerses, initialVerse, ancho
           min={min}
           max={max}
           value={start}
+          ref={startSliderRef}
           onChange={e => handleStartChange(Number(e.target.value))}
         />
         <span className="copy-slider-num">{start}</span>
@@ -98,6 +133,7 @@ export function CopyRangePopover({ book, chapter, allVerses, initialVerse, ancho
           min={min}
           max={max}
           value={end}
+          ref={endSliderRef}
           onChange={e => handleEndChange(Number(e.target.value))}
         />
         <span className="copy-slider-num">{end}</span>

@@ -9,9 +9,13 @@ interface Props {
   onChangelogOpen: () => void
   aiOpen: boolean
   onToggleAi: () => void
+  canBack: boolean
+  canForward: boolean
+  onBack: () => void
+  onForward: () => void
 }
 
-export function NavigationBar({ passages, onPassagesChange, onSearchOpen, onChangelogOpen, aiOpen, onToggleAi }: Props) {
+export function NavigationBar({ passages, onPassagesChange, onSearchOpen, onChangelogOpen, aiOpen, onToggleAi, canBack, canForward, onBack, onForward }: Props) {
   const [inputValue, setInputValue] = useState(passagesToString(passages))
 
   useEffect(() => {
@@ -25,16 +29,30 @@ export function NavigationBar({ passages, onPassagesChange, onSearchOpen, onChan
 
   return (
     <div className="nav-bar">
-      <div className="nav-passage-input">
-        <input
-          className="nav-passage-field"
-          value={inputValue}
-          onChange={e => setInputValue(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && submit()}
-          placeholder="e.g. John 3:16; Romans 8:28"
-          spellCheck={false}
-        />
-        <button className="nav-go-btn" onClick={submit}>Go</button>
+      <div className="nav-left">
+        <div className="nav-history-btns">
+          <button className="nav-hist-btn" onClick={onBack} disabled={!canBack} title="Back (Alt+←)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M15 18l-6-6 6-6" />
+            </svg>
+          </button>
+          <button className="nav-hist-btn" onClick={onForward} disabled={!canForward} title="Forward (Alt+→)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 18l6-6-6-6" />
+            </svg>
+          </button>
+        </div>
+        <div className="nav-passage-input">
+          <input
+            className="nav-passage-field"
+            value={inputValue}
+            onChange={e => setInputValue(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && submit()}
+            placeholder="e.g. John 3:16; Romans 8:28"
+            spellCheck={false}
+          />
+          <button className="nav-go-btn" onClick={submit}>Go</button>
+        </div>
       </div>
 
       <div className="nav-title">Bible Study</div>
