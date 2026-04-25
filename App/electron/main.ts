@@ -9,6 +9,7 @@ import http from 'http'
 import initSqlJs, { Database } from 'sql.js'
 import { HISTORICAL_CREATE_SQL, HISTORICAL_MIGRATE_SQL, HISTORICAL_SOURCES, HISTORICAL_REFS } from './historicalData'
 import { APOCRYPHA_CREATE_SQL, APOCRYPHA_BOOKS, APOCRYPHA_VERSES } from './apocryphaData'
+import { NAVES_CREATE_SQL, NAVES_TOPICS, NAVES_REFS } from './navesData'
 
 let db: Database | null = null
 
@@ -139,6 +140,40 @@ async function openDb(): Promise<Database> {
       vStmt.run([v.book, bookOrder, v.chapter, v.verse, v.text])
     }
     vStmt.free()
+    const data = db.export()
+    writeFileSync(userDbPath, Buffer.from(data))
+  }
+
+  // Migrate: create bible_translations table if missing
+  const hasTrans = db.exec("SELECT name FROM sqlite_master WHERE type='table' AND name='bible_translations'")
+  if (!hasTrans.length || !hasTrans[0].values.length) {
+    db.run(`
+      CREATE TABLE IF NOT EXISTS bible_translations (
+        translation TEXT NOT NULL,
+        book        TEXT NOT NULL,
+        chapter     INTEGER NOT NULL,
+        verse       INTEGER NOT NULL,
+        text        TEXT NOT NULL,
+        PRIMARY KEY (translation, book, chapter, verse)
+      )
+    `)
+    db.run(`CREATE INDEX IF NOT EXISTS idx_btrans_bcv ON bible_translations(translation, book, chapter, verse)`)
+    const data = db.export()
+    writeFileSync(userDbPath, Buffer.from(data))
+  }
+
+  // Migrate: seed Nave's Topical Bible if not present or empty
+  const hasNaves = db.exec("SELECT name FROM sqlite_master WHERE type='table' AND name='naves_topics'")
+  const navesEmpty = !hasNaves.length || !hasNaves[0].values.length ||
+    !(db.exec("SELECT COUNT(*) FROM naves_topics")[0]?.values[0][0])
+  if (navesEmpty) {
+    db.run(NAVES_CREATE_SQL)
+    const topicStmt = db.prepare('INSERT OR IGNORE INTO naves_topics (id, name) VALUES (?, ?)')
+    for (const [id, name] of NAVES_TOPICS) topicStmt.run([id, name])
+    topicStmt.free()
+    const refStmt = db.prepare('INSERT INTO naves_refs (topic_id, book, chapter, verse) VALUES (?, ?, ?, ?)')
+    for (const [topicId, book, ch, v] of NAVES_REFS) refStmt.run([topicId, book, ch, v])
+    refStmt.free()
     const data = db.export()
     writeFileSync(userDbPath, Buffer.from(data))
   }
@@ -329,18 +364,61 @@ ipcMain.handle('apocrypha:getVerses', async (_e, book: string, chapter: number) 
 
 ipcMain.handle('shell:openExternal', (_e, url: string) => shell.openExternal(url))
 
-ipcMain.handle('search:query', async (_e, query: string) => {
+ipcMain.handle('search:query', async (_e, params: { query: string; tab?: string; book?: string; father?: string; offset?: number; limit?: number }) => {
   const database = await openDb()
-  const term = `%${query.trim()}%`
-  const verses = rows(database, `
-    SELECT book, chapter, verse, text, 'scripture' as type
-    FROM bible_verses WHERE text LIKE ? LIMIT 30
-  `, [term])
-  const commentary = rows(database, `
-    SELECT book, chapter, verse, father_name, excerpt as text, 'commentary' as type
-    FROM commentary WHERE full_text LIKE ? OR excerpt LIKE ? LIMIT 20
-  `, [term, term])
-  return { verses, commentary }
+  const { query, tab = 'all', book = '', father = '', offset = 0, limit = 20 } = params
+
+  const words = query.trim().split(/\s+/).filter(Boolean)
+  if (words.length === 0) return { verses: [], commentary: [], totalVerses: 0, totalCommentary: 0 }
+
+  let verses: any[] = []
+  let totalVerses = 0
+  let commentary: any[] = []
+  let totalCommentary = 0
+
+  if (tab !== 'commentary') {
+    const wordClauses = words.map(() => 'text LIKE ?').join(' AND ')
+    const wordArgs = words.map(w => `%${w}%`)
+    const bookClause = book ? ' AND book = ?' : ''
+    const baseArgs = [...wordArgs, ...(book ? [book] : [])]
+    totalVerses = (rows(database, `SELECT COUNT(*) as n FROM bible_verses WHERE ${wordClauses}${bookClause}`, baseArgs)[0]?.n ?? 0) as number
+    verses = rows(database, `SELECT book, chapter, verse, text FROM bible_verses WHERE ${wordClauses}${bookClause} LIMIT ${limit} OFFSET ${offset}`, baseArgs)
+  }
+
+  if (tab !== 'scripture') {
+    const wordClauses = words.map(() => '(full_text LIKE ? OR excerpt LIKE ?)').join(' AND ')
+    const wordArgs = words.flatMap(w => [`%${w}%`, `%${w}%`])
+    const bookClause = book ? ' AND book = ?' : ''
+    const fatherClause = father ? ' AND father_name = ?' : ''
+    const filterArgs: any[] = [...(book ? [book] : []), ...(father ? [father] : [])]
+    const baseArgs = [...wordArgs, ...filterArgs]
+    totalCommentary = (rows(database, `SELECT COUNT(*) as n FROM commentary WHERE ${wordClauses}${bookClause}${fatherClause}`, baseArgs)[0]?.n ?? 0) as number
+    commentary = rows(database, `SELECT book, chapter, verse, father_name, excerpt as text FROM commentary WHERE ${wordClauses}${bookClause}${fatherClause} LIMIT ${limit} OFFSET ${offset}`, baseArgs)
+  }
+
+  return { verses, commentary, totalVerses, totalCommentary }
+})
+
+ipcMain.handle('concordance:search', async (_e, word: string) => {
+  const database = await openDb()
+  const clean = word.trim().replace(/[^a-zA-Z'-]/g, '')
+  if (!clean) return { total: 0, results: [] }
+  const candidates = rows(database,
+    `SELECT book, chapter, verse, text FROM bible_verses WHERE LOWER(text) LIKE LOWER(?)`,
+    [`%${clean}%`]
+  )
+  const re = new RegExp(`\\b${clean.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i')
+  const matched = candidates.filter((r: any) => re.test(r.text))
+  return { total: matched.length, results: matched }
+})
+
+ipcMain.handle('search:getFathers', async () => {
+  const database = await openDb()
+  return rows(database,
+    `SELECT DISTINCT father_name FROM commentary
+     WHERE LENGTH(father_name) < 70 AND father_name NOT LIKE '%[%'
+     ORDER BY father_name`
+  ).map((r: any) => r.father_name as string)
 })
 
 // ── Chat session persistence ──────────────────
@@ -445,6 +523,75 @@ ipcMain.handle('notes:deleteNote', (_e, id: string) => {
   if (existsSync(p)) unlinkSync(p)
 })
 
+// ── Bookmarks persistence ──────────────────────
+interface BookmarkRecord {
+  id: string
+  book: string
+  chapter: number
+  verse: number
+  verseText: string
+  createdAt: number
+}
+
+function bookmarksPath(): string {
+  return join(app.getPath('userData'), 'bookmarks.json')
+}
+
+function loadBookmarks(): BookmarkRecord[] {
+  const p = bookmarksPath()
+  if (!existsSync(p)) return []
+  try { return JSON.parse(readFileSync(p, 'utf-8')) } catch { return [] }
+}
+
+ipcMain.handle('bookmarks:getAll', () =>
+  loadBookmarks().sort((a, b) => b.createdAt - a.createdAt)
+)
+
+ipcMain.handle('bookmarks:add', (_e, bm: BookmarkRecord) => {
+  const data = loadBookmarks()
+  if (data.some(b => b.book === bm.book && b.chapter === bm.chapter && b.verse === bm.verse)) return
+  data.push(bm)
+  writeFileSync(bookmarksPath(), JSON.stringify(data))
+})
+
+ipcMain.handle('bookmarks:remove', (_e, book: string, chapter: number, verse: number) => {
+  const data = loadBookmarks().filter(
+    b => !(b.book === book && b.chapter === chapter && b.verse === verse)
+  )
+  writeFileSync(bookmarksPath(), JSON.stringify(data))
+})
+
+// ── Highlights persistence ─────────────────────
+function highlightsPath(): string {
+  return join(app.getPath('userData'), 'highlights.json')
+}
+
+function loadHighlights(): Record<string, string> {
+  const p = highlightsPath()
+  if (!existsSync(p)) return {}
+  try { return JSON.parse(readFileSync(p, 'utf-8')) } catch { return {} }
+}
+
+ipcMain.handle('highlights:get', (_e, book: string, chapter: number) => {
+  const data = loadHighlights()
+  const prefix = `${book}|${chapter}|`
+  return Object.entries(data)
+    .filter(([k]) => k.startsWith(prefix))
+    .map(([k, color]) => ({ verse: parseInt(k.split('|')[2], 10), color }))
+})
+
+ipcMain.handle('highlights:set', (_e, book: string, chapter: number, verse: number, color: string) => {
+  const data = loadHighlights()
+  data[`${book}|${chapter}|${verse}`] = color
+  writeFileSync(highlightsPath(), JSON.stringify(data))
+})
+
+ipcMain.handle('highlights:clear', (_e, book: string, chapter: number, verse: number) => {
+  const data = loadHighlights()
+  delete data[`${book}|${chapter}|${verse}`]
+  writeFileSync(highlightsPath(), JSON.stringify(data))
+})
+
 ipcMain.handle('commentary:search', async (_e, query: string) => {
   const database = await openDb()
   const term = `%${query.trim()}%`
@@ -495,6 +642,56 @@ ipcMain.handle('commentary:searchByFatherAndVerse', async (_e, fatherName: strin
     SELECT book, chapter, verse, father_name, father_era, excerpt, full_text, source, '' as source_url
     FROM commentary WHERE father_name LIKE ? LIMIT 1
   `, [fuzzy])
+})
+
+// ── Nave's Topical Bible ──────────────────────
+
+ipcMain.handle('naves:getForVerse', async (_e, book: string, chapter: number, verse: number) => {
+  const database = await openDb()
+  return rows(database,
+    `SELECT DISTINCT t.id, t.name
+     FROM naves_topics t
+     JOIN naves_refs r ON r.topic_id = t.id
+     WHERE r.book = ? AND r.chapter = ? AND r.verse = ?
+     ORDER BY t.name`,
+    [book, chapter, verse]
+  )
+})
+
+ipcMain.handle('naves:getTopicRefs', async (_e, topicId: number) => {
+  const database = await openDb()
+  return rows(database,
+    `SELECT r.book, r.chapter, r.verse, bv.text
+     FROM naves_refs r
+     LEFT JOIN bible_verses bv
+       ON bv.book = r.book AND bv.chapter = r.chapter AND bv.verse = r.verse
+     WHERE r.topic_id = ?
+     ORDER BY r.rowid`,
+    [topicId]
+  )
+})
+
+ipcMain.handle('naves:search', async (_e, query: string) => {
+  const database = await openDb()
+  return rows(database,
+    `SELECT id, name FROM naves_topics WHERE name LIKE ? ORDER BY name LIMIT 80`,
+    [`%${query.trim()}%`]
+  )
+})
+
+// ── Bible Translations ────────────────────────
+ipcMain.handle('translations:getList', async () => {
+  const database = await openDb()
+  const result = rows(database, 'SELECT DISTINCT translation FROM bible_translations ORDER BY translation')
+  return result.map((r: any) => r.translation as string)
+})
+
+ipcMain.handle('translations:getVerses', async (_e, translation: string, book: string, chapter: number) => {
+  const database = await openDb()
+  return rows(database,
+    'SELECT verse, text FROM bible_translations WHERE translation = ? AND book = ? AND chapter = ? ORDER BY verse',
+    [translation, book, chapter]
+  )
 })
 
 // ── Ollama lifecycle ──────────────────────────

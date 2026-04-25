@@ -1,10 +1,19 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { useVerses, useCrossRefs } from '../hooks/useBible'
+import { useTranslationVerses, useCrossRefs, useHighlights } from '../hooks/useBible'
 import { CrossRefTooltip } from './CrossRefTooltip'
 import { CopyRangePopover } from './CopyRangePopover'
 import { BookPrefacePanel } from './BookPrefacePanel'
+import { isRedLetter, splitRedLetterVerse } from '../data/redLetter'
+import type { Segment } from '../data/redLetter'
 import type { WordHighlight } from './WordStudyPanel'
 import type { SelectedVerse, PassageRef } from '../types'
+
+const HIGHLIGHT_COLORS = [
+  { id: 'yellow', label: 'Important',  hex: '#eab308' },
+  { id: 'red',    label: 'Conviction', hex: '#ef4444' },
+  { id: 'blue',   label: 'Promise',    hex: '#60a5fa' },
+  { id: 'green',  label: 'Blessing',   hex: '#4ade80' },
+]
 
 const clean = (s: string) => s.replace(/[^\w']/g, '').toLowerCase()
 const stem = (s: string) => { const r = s.replace(/(ing|tion|ed|es|ly|s)$/, ''); return r.length >= 3 ? r : s }
@@ -102,14 +111,20 @@ interface VerseRowProps {
   chapter: number
   verseNum: number
   text: string
+  compareText?: string
   selected: boolean
+  highlightColor?: string
   wordHighlight?: WordHighlight | null
+  redLetterOn: boolean
+  isBookmarked: boolean
   onSelect: () => void
   onContextMenu: (verseNum: number, rect: DOMRect, text: string) => void
   onNavigate: (book: string, chapter: number, verse: number) => void
+  onWordClick?: (word: string) => void
+  onBookmarkToggle: () => void
 }
 
-function VerseRow({ book, chapter, verseNum, text, selected, wordHighlight, onSelect, onContextMenu, onNavigate }: VerseRowProps) {
+function VerseRow({ book, chapter, verseNum, text, compareText, selected, highlightColor, wordHighlight, redLetterOn, isBookmarked, onSelect, onContextMenu, onNavigate, onWordClick, onBookmarkToggle }: VerseRowProps) {
   const refs = useCrossRefs(book, chapter, selected ? verseNum : 0)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -122,35 +137,86 @@ function VerseRow({ book, chapter, verseNum, text, selected, wordHighlight, onSe
     onContextMenu(verseNum, (e.currentTarget as HTMLElement).getBoundingClientRect(), text)
   }
 
+  const primaryContent = (() => {
+        const isRL = redLetterOn && isRedLetter(book, chapter, verseNum)
+        const segs: Segment[] = isRL ? splitRedLetterVerse(text) : [{ t: text, red: false }]
+
+        // Word-study highlight active — takes priority, no red letter
+        if (selected && wordHighlight) {
+          const tokens = text.split(/(\s+)/)
+          const wordTokens = tokens.filter(t => /\S/.test(t))
+          const highlighted = resolveHighlightIndices(wordTokens, wordHighlight)
+          let wordIdx = 0
+          return (
+            <span className="verse-text">
+              {tokens.map((token, i) => {
+                if (!/\S/.test(token)) return token
+                const idx = wordIdx++
+                return <span key={i} className={highlighted.has(idx) ? 'word-highlight' : undefined}>{token}</span>
+              })}
+            </span>
+          )
+        }
+
+        // Selected + concordance word-click mode — split attribution from speech, each word clickable
+        if (selected && onWordClick) {
+          let key = 0
+          return (
+            <span className="verse-text">
+              {segs.flatMap(seg =>
+                seg.t.split(/(\s+)/).map(token => {
+                  const k = key++
+                  if (!/\S/.test(token)) return token
+                  const word = token.replace(/^[^a-zA-Z'-]+|[^a-zA-Z'-]+$/g, '')
+                  if (!word) return <span key={k}>{token}</span>
+                  return (
+                    <span
+                      key={k}
+                      className={`verse-word-clickable${seg.red ? ' verse-speech' : ''}`}
+                      onClick={e => { e.stopPropagation(); onWordClick(word) }}
+                    >
+                      {token}
+                    </span>
+                  )
+                })
+              )}
+            </span>
+          )
+        }
+
+        // Normal (non-selected) — render attribution in default color, speech in red
+        return (
+          <span className="verse-text">
+            {segs.map((seg, i) =>
+              seg.red
+                ? <span key={i} className="verse-speech">{seg.t}</span>
+                : <span key={i}>{seg.t}</span>
+            )}
+          </span>
+        )
+  })()
+
   return (
     <div
       ref={ref}
-      className={`verse-row ${selected ? 'verse-row-selected' : ''}`}
+      className={`verse-row ${selected ? 'verse-row-selected' : ''} ${highlightColor ? `verse-hl-${highlightColor}` : ''} ${compareText !== undefined ? 'verse-row--parallel' : ''}`}
       onClick={onSelect}
       onContextMenu={handleContextMenu}
     >
       <sup className="verse-num">{verseNum}</sup>
-      {selected && wordHighlight ? (() => {
-        const tokens = text.split(/(\s+)/)
-        const wordTokens = tokens.filter(t => /\S/.test(t))
-        const highlighted = resolveHighlightIndices(wordTokens, wordHighlight)
-        let wordIdx = 0
-        return (
-          <span className="verse-text">
-            {tokens.map((token, i) => {
-              if (!/\S/.test(token)) return token
-              const idx = wordIdx++
-              return (
-                <span key={i} className={highlighted.has(idx) ? 'word-highlight' : undefined}>
-                  {token}
-                </span>
-              )
-            })}
-          </span>
-        )
-      })() : (
-        <span className="verse-text">{text}</span>
-      )}
+      {compareText !== undefined ? (
+        <div className="verse-cols">
+          {primaryContent}
+          <span className="verse-text verse-text--compare">{compareText}</span>
+        </div>
+      ) : primaryContent}
+      <button
+        className={`verse-bookmark-btn${isBookmarked ? ' verse-bookmark-btn--on' : ''}`}
+        onClick={e => { e.stopPropagation(); onBookmarkToggle() }}
+        title={isBookmarked ? 'Remove bookmark' : 'Bookmark verse'}
+      >
+        {isBookmarked ? '★' : '☆'}
+      </button>
       {selected && <CrossRefTooltip refs={refs} onNavigate={onNavigate} />}
     </div>
   )
@@ -166,13 +232,23 @@ interface PassageSectionProps {
   passage: PassageRef
   activeVerse: SelectedVerse
   wordHighlight?: WordHighlight | null
+  redLetterOn: boolean
+  primaryTrans: string
+  compareTrans: string | null
+  bookmarkedKeys: Set<string>
   onVerseClick: (book: string, chapter: number, verse: number) => void
   onNavigate: (book: string, chapter: number, verse: number) => void
   onAddNote: (book: string, chapter: number, verse: number, text: string) => void
+  onWordClick?: (word: string) => void
+  onViewParallels?: (book: string, chapter: number, verse: number) => void
+  onBookmarkToggle: (book: string, chapter: number, verse: number, text: string) => void
 }
 
-function PassageSection({ passage, activeVerse, wordHighlight, onVerseClick, onNavigate, onAddNote }: PassageSectionProps) {
-  const { verses, loading } = useVerses(passage.book, passage.chapter)
+function PassageSection({ passage, activeVerse, wordHighlight, redLetterOn, primaryTrans, compareTrans, bookmarkedKeys, onVerseClick, onNavigate, onAddNote, onWordClick, onViewParallels, onBookmarkToggle }: PassageSectionProps) {
+  const { verses, loading } = useTranslationVerses(primaryTrans, passage.book, passage.chapter)
+  const { verses: compareVerses } = useTranslationVerses(compareTrans ?? '', passage.book, passage.chapter)
+  const compareMap = new Map(compareVerses.map(v => [v.verse, v.text]))
+  const { highlights, setHighlight } = useHighlights(passage.book, passage.chapter)
   const [contextTarget, setContextTarget] = useState<ContextTarget | null>(null)
   const [copyTarget, setCopyTarget] = useState<ContextTarget | null>(null)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -221,14 +297,20 @@ function PassageSection({ passage, activeVerse, wordHighlight, onVerseClick, onN
             activeVerse.chapter === passage.chapter &&
             activeVerse.verse === v.verse
           }
+          highlightColor={highlights.get(v.verse)}
           wordHighlight={
             activeVerse.book === passage.book &&
             activeVerse.chapter === passage.chapter &&
             activeVerse.verse === v.verse ? wordHighlight : null
           }
+          compareText={compareTrans ? compareMap.get(v.verse) : undefined}
+          redLetterOn={redLetterOn}
+          isBookmarked={bookmarkedKeys.has(`${passage.book}|${passage.chapter}|${v.verse}`)}
           onSelect={() => onVerseClick(passage.book, passage.chapter, v.verse)}
           onContextMenu={(verse, rect, text) => setContextTarget({ verse, rect, text })}
           onNavigate={onNavigate}
+          onWordClick={onWordClick}
+          onBookmarkToggle={() => onBookmarkToggle(passage.book, passage.chapter, v.verse, v.text)}
         />
       ))}
       {contextTarget && (
@@ -263,6 +345,45 @@ function PassageSection({ passage, activeVerse, wordHighlight, onVerseClick, onN
             </svg>
             Add Note
           </button>
+          {onViewParallels && (
+            <button
+              className="verse-context-item"
+              onClick={() => {
+                onViewParallels(passage.book, passage.chapter, contextTarget.verse)
+                setContextTarget(null)
+              }}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="2" y="3" width="9" height="18" rx="1" />
+                <rect x="13" y="3" width="9" height="18" rx="1" />
+              </svg>
+              Open Parallels
+            </button>
+          )}
+          <div className="verse-context-hl-row">
+            {HIGHLIGHT_COLORS.map(({ id, label, hex }) => {
+              const active = highlights.get(contextTarget.verse) === id
+              return (
+                <button
+                  key={id}
+                  className={`hl-swatch${active ? ' hl-swatch--active' : ''}`}
+                  style={{ background: hex }}
+                  title={label}
+                  onClick={() => {
+                    setHighlight(contextTarget.verse, active ? '' : id)
+                    setContextTarget(null)
+                  }}
+                />
+              )
+            })}
+            {highlights.has(contextTarget.verse) && (
+              <button
+                className="hl-swatch-clear"
+                title="Remove highlight"
+                onClick={() => { setHighlight(contextTarget.verse, ''); setContextTarget(null) }}
+              >✕</button>
+            )}
+          </div>
         </div>
       )}
       {copyTarget && (
@@ -283,16 +404,61 @@ interface Props {
   passages: PassageRef[]
   activeVerse: SelectedVerse
   wordHighlight?: WordHighlight | null
+  redLetterOn: boolean
+  onRedLetterToggle: () => void
+  bookmarkedKeys: Set<string>
+  primaryTrans: string
+  compareTrans: string | null
+  availableTranslations: string[]
   onVerseClick: (book: string, chapter: number, verse: number) => void
   onNavigate: (book: string, chapter: number, verse: number) => void
   onAddNote: (book: string, chapter: number, verse: number, text: string) => void
+  onWordClick?: (word: string) => void
+  onViewParallels?: (book: string, chapter: number, verse: number) => void
+  onBookmarkToggle: (book: string, chapter: number, verse: number, text: string) => void
+  onPrimaryTransChange: (t: string) => void
+  onCompareTransChange: (t: string | null) => void
 }
 
-export function BiblePanel({ passages, activeVerse, wordHighlight, onVerseClick, onNavigate, onAddNote }: Props) {
+export function BiblePanel({ passages, activeVerse, wordHighlight, redLetterOn, onRedLetterToggle, bookmarkedKeys, primaryTrans, compareTrans, availableTranslations, onVerseClick, onNavigate, onAddNote, onWordClick, onViewParallels, onBookmarkToggle, onPrimaryTransChange, onCompareTransChange }: Props) {
+  const otherTrans = availableTranslations.filter(t => t !== primaryTrans)
   return (
     <div className="panel bible-panel">
       <div className="panel-header">
-        <span className="panel-label">Scripture</span>
+        <div className="trans-bar">
+          <select
+            className="trans-select"
+            value={primaryTrans}
+            onChange={e => onPrimaryTransChange(e.target.value)}
+          >
+            {availableTranslations.map(t => <option key={t} value={t}>{t}</option>)}
+          </select>
+          {otherTrans.length > 0 && (
+            <button
+              className={`parallel-btn${compareTrans ? ' parallel-btn--on' : ''}`}
+              onClick={() => onCompareTransChange(compareTrans ? null : otherTrans[0])}
+              title="Toggle parallel mode"
+            >
+              ∥
+            </button>
+          )}
+          {compareTrans && (
+            <select
+              className="trans-select"
+              value={compareTrans}
+              onChange={e => onCompareTransChange(e.target.value)}
+            >
+              {otherTrans.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+          )}
+        </div>
+        <button
+          className={`rl-toggle-btn${redLetterOn ? ' rl-toggle-btn--on' : ''}`}
+          onClick={onRedLetterToggle}
+          title={redLetterOn ? 'Red letter on' : 'Red letter off'}
+        >
+          RL
+        </button>
       </div>
       <div className="panel-body">
         {passages.length === 0 && (
@@ -304,9 +470,16 @@ export function BiblePanel({ passages, activeVerse, wordHighlight, onVerseClick,
             passage={p}
             activeVerse={activeVerse}
             wordHighlight={wordHighlight}
+            redLetterOn={redLetterOn}
+            primaryTrans={primaryTrans}
+            compareTrans={compareTrans}
+            bookmarkedKeys={bookmarkedKeys}
             onVerseClick={onVerseClick}
             onNavigate={onNavigate}
             onAddNote={onAddNote}
+            onWordClick={onWordClick}
+            onViewParallels={onViewParallels}
+            onBookmarkToggle={onBookmarkToggle}
           />
         ))}
       </div>

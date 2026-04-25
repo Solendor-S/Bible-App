@@ -32,6 +32,43 @@ export function useVerses(book: string, chapter: number) {
   return { verses, loading }
 }
 
+export function useTranslationVerses(translation: string, book: string, chapter: number) {
+  const [verses, setVerses] = useState<BibleVerse[]>([])
+  const [loading, setLoading] = useState(false)
+  useEffect(() => {
+    if (!book || !chapter || !translation) { setVerses([]); return }
+    setLoading(true)
+    const promise = translation === 'KJV'
+      ? window.bibleApi.getVerses(book, chapter)
+      : window.translationsApi.getVerses(translation, book, chapter)
+    promise.then(v => { setVerses(v); setLoading(false) })
+  }, [translation, book, chapter])
+  return { verses, loading }
+}
+
+export function useHighlights(book: string, chapter: number) {
+  const [highlights, setHighlights] = useState<Map<number, string>>(new Map())
+
+  useEffect(() => {
+    if (!book || !chapter) return
+    window.highlightApi.get(book, chapter).then(list => {
+      setHighlights(new Map(list.map(h => [h.verse, h.color])))
+    })
+  }, [book, chapter])
+
+  function setHighlight(verse: number, color: string) {
+    if (color) {
+      window.highlightApi.set(book, chapter, verse, color)
+      setHighlights(m => { const n = new Map(m); n.set(verse, color); return n })
+    } else {
+      window.highlightApi.clear(book, chapter, verse)
+      setHighlights(m => { const n = new Map(m); n.delete(verse); return n })
+    }
+  }
+
+  return { highlights, setHighlight }
+}
+
 export function useCrossRefs(book: string, chapter: number, verse: number) {
   const [refs, setRefs] = useState<CrossRef[]>([])
   useEffect(() => {

@@ -21,7 +21,10 @@ contextBridge.exposeInMainWorld('bibleApi', {
   getHistoricalForVerse: (book: string, chapter: number, verse: number) =>
     ipcRenderer.invoke('historical:getForVerse', book, chapter, verse),
   getHistoricalAll: () => ipcRenderer.invoke('historical:getAll'),
-  search: (query: string) => ipcRenderer.invoke('search:query', query),
+  search: (params: { query: string; tab?: string; book?: string; father?: string; offset?: number; limit?: number }) =>
+    ipcRenderer.invoke('search:query', params),
+  getFathers: () => ipcRenderer.invoke('search:getFathers'),
+  concordance: (word: string) => ipcRenderer.invoke('concordance:search', word),
   openExternal: (url: string) => ipcRenderer.invoke('shell:openExternal', url),
   launchUpdater: () => ipcRenderer.invoke('app:launchUpdater'),
   getReleases: () => ipcRenderer.invoke('app:getReleases'),
@@ -43,6 +46,36 @@ contextBridge.exposeInMainWorld('apocryphaApi', {
   getBooks: () => ipcRenderer.invoke('apocrypha:getBooks'),
   getChapters: (book: string) => ipcRenderer.invoke('apocrypha:getChapters', book),
   getVerses: (book: string, chapter: number) => ipcRenderer.invoke('apocrypha:getVerses', book, chapter),
+})
+
+contextBridge.exposeInMainWorld('navesApi', {
+  getForVerse: (book: string, chapter: number, verse: number) =>
+    ipcRenderer.invoke('naves:getForVerse', book, chapter, verse),
+  getTopicRefs: (topicId: number) =>
+    ipcRenderer.invoke('naves:getTopicRefs', topicId),
+  search: (query: string) =>
+    ipcRenderer.invoke('naves:search', query),
+})
+
+contextBridge.exposeInMainWorld('translationsApi', {
+  getList: () => ipcRenderer.invoke('translations:getList'),
+  getVerses: (translation: string, book: string, chapter: number) =>
+    ipcRenderer.invoke('translations:getVerses', translation, book, chapter),
+})
+
+contextBridge.exposeInMainWorld('bookmarksApi', {
+  getAll: () => ipcRenderer.invoke('bookmarks:getAll'),
+  add: (bm: any) => ipcRenderer.invoke('bookmarks:add', bm),
+  remove: (book: string, chapter: number, verse: number) =>
+    ipcRenderer.invoke('bookmarks:remove', book, chapter, verse),
+})
+
+contextBridge.exposeInMainWorld('highlightApi', {
+  get: (book: string, chapter: number) => ipcRenderer.invoke('highlights:get', book, chapter),
+  set: (book: string, chapter: number, verse: number, color: string) =>
+    ipcRenderer.invoke('highlights:set', book, chapter, verse, color),
+  clear: (book: string, chapter: number, verse: number) =>
+    ipcRenderer.invoke('highlights:clear', book, chapter, verse),
 })
 
 contextBridge.exposeInMainWorld('chatApi', {

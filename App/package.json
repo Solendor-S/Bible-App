@@ -1,6 +1,6 @@
 {
   "name": "bible-app",
-  "version": "1.5.2",
+  "version": "1.5.3",
   "description": "Catena-style Bible study app with Church Fathers commentary",
   "main": ".vite/build/main.js",
   "scripts": {
@@ -58,7 +58,10 @@
       "makers": [
         {
           "name": "@electron-forge/maker-squirrel",
-          "config": {}
+          "config": {
+            "authors": "Solendor",
+            "description": "Bible study app"
+          }
         },
         {
           "name": "@electron-forge/maker-zip",

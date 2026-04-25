@@ -7,9 +7,11 @@ import { WordStudyPanel } from './WordStudyPanel'
 import type { WordHighlight } from './WordStudyPanel'
 import { JosephusPanel } from './JosephusPanel'
 import { NotesPanel } from './NotesPanel'
-import type { CommentaryEntry, CommentarySearchResult, SelectedVerse } from '../types'
+import { TopicsPanel } from './TopicsPanel'
+import { BookmarksPanel } from './BookmarksPanel'
+import type { Bookmark, CommentaryEntry, CommentarySearchResult, SelectedVerse } from '../types'
 
-export type RightTab = 'commentary' | 'crossrefs' | 'wordstudy' | 'firstcentury' | 'notes'
+export type RightTab = 'commentary' | 'crossrefs' | 'wordstudy' | 'firstcentury' | 'notes' | 'topics' | 'bookmarks'
 
 interface Props {
   selected: SelectedVerse
@@ -20,6 +22,8 @@ interface Props {
   onTabChange: (tab: RightTab) => void
   onWordSelect?: (info: WordHighlight | null) => void
   notesRefreshToken?: number
+  bookmarks?: Bookmark[]
+  onBookmarkRemove?: (book: string, chapter: number, verse: number) => void
 }
 
 function EntryView({
@@ -95,13 +99,19 @@ function TabHeader({
         <button className={`panel-tab${rightTab === 'notes' ? ' panel-tab--active' : ''}`} onClick={() => onTabChange('notes')}>
           Notes
         </button>
+        <button className={`panel-tab${rightTab === 'topics' ? ' panel-tab--active' : ''}`} onClick={() => onTabChange('topics')}>
+          Topics
+        </button>
+        <button className={`panel-tab${rightTab === 'bookmarks' ? ' panel-tab--active' : ''}`} onClick={() => onTabChange('bookmarks')}>
+          Saved
+        </button>
       </div>
       <span className="panel-location">{location}</span>
     </div>
   )
 }
 
-export function CommentaryPanel({ selected, featuredEntry, onClearFeatured, onNavigate, rightTab, onTabChange, onWordSelect, notesRefreshToken }: Props) {
+export function CommentaryPanel({ selected, featuredEntry, onClearFeatured, onNavigate, rightTab, onTabChange, onWordSelect, notesRefreshToken, bookmarks = [], onBookmarkRemove }: Props) {
   const { entries, loading } = useCommentary(selected.book, selected.chapter, selected.verse)
   const [fatherSearch, setFatherSearch] = useState('')
 
@@ -134,7 +144,11 @@ export function CommentaryPanel({ selected, featuredEntry, onClearFeatured, onNa
   return (
     <div className="panel commentary-panel">
       <TabHeader rightTab={rightTab} onTabChange={onTabChange} location={location} />
-      {rightTab === 'notes' ? (
+      {rightTab === 'bookmarks' ? (
+        <BookmarksPanel bookmarks={bookmarks} onNavigate={onNavigate} onRemove={(b, c, v) => onBookmarkRemove?.(b, c, v)} />
+      ) : rightTab === 'topics' ? (
+        <TopicsPanel selected={selected} onNavigate={onNavigate} />
+      ) : rightTab === 'notes' ? (
         <NotesPanel onNavigate={onNavigate ?? (() => {})} refreshToken={notesRefreshToken} />
       ) : rightTab === 'crossrefs' ? (
         <CrossRefsPanel selected={selected} onNavigate={onNavigate} />

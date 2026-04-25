@@ -51,8 +51,10 @@ export interface CommentaryEntry {
 }
 
 export interface SearchResult {
-  verses: Array<{ book: string; chapter: number; verse: number; text: string; type: 'scripture' }>
-  commentary: Array<{ book: string; chapter: number; verse: number; father_name: string; text: string; type: 'commentary' }>
+  verses: Array<{ book: string; chapter: number; verse: number; text: string }>
+  commentary: Array<{ book: string; chapter: number; verse: number; father_name: string; text: string }>
+  totalVerses: number
+  totalCommentary: number
 }
 
 export interface SelectedVerse {
@@ -146,8 +148,43 @@ export interface Note {
   updatedAt: number
 }
 
+export interface Bookmark {
+  id: string
+  book: string
+  chapter: number
+  verse: number
+  verseText: string
+  createdAt: number
+}
+
+export interface NavesTopic {
+  id: number
+  name: string
+}
+
+export interface NavesRef {
+  book: string
+  chapter: number
+  verse: number
+  text: string | null
+}
+
 declare global {
   interface Window {
+    translationsApi: {
+      getList(): Promise<string[]>
+      getVerses(translation: string, book: string, chapter: number): Promise<BibleVerse[]>
+    }
+    bookmarksApi: {
+      getAll(): Promise<Bookmark[]>
+      add(bookmark: Bookmark): Promise<void>
+      remove(book: string, chapter: number, verse: number): Promise<void>
+    }
+    highlightApi: {
+      get(book: string, chapter: number): Promise<Array<{ verse: number; color: string }>>
+      set(book: string, chapter: number, verse: number, color: string): Promise<void>
+      clear(book: string, chapter: number, verse: number): Promise<void>
+    }
     notesApi: {
       getNotebooks(): Promise<Notebook[]>
       saveNotebook(notebook: Notebook): Promise<void>
@@ -155,6 +192,11 @@ declare global {
       getNotes(notebookId: string): Promise<Note[]>
       saveNote(note: Note): Promise<void>
       deleteNote(id: string): Promise<void>
+    }
+    navesApi: {
+      getForVerse(book: string, chapter: number, verse: number): Promise<NavesTopic[]>
+      getTopicRefs(topicId: number): Promise<NavesRef[]>
+      search(query: string): Promise<NavesTopic[]>
     }
     bibleApi: {
       getBooks(): Promise<Book[]>
@@ -169,7 +211,9 @@ declare global {
       getJosephusForVerse(book: string, chapter: number, verse: number): Promise<JosephusEntry[]>
       getHistoricalForVerse(book: string, chapter: number, verse: number): Promise<HistoricalEntry[]>
       getHistoricalAll(): Promise<HistoricalEntry[]>
-      search(query: string): Promise<SearchResult>
+      search(params: { query: string; tab?: string; book?: string; father?: string; offset?: number; limit?: number }): Promise<SearchResult>
+      getFathers(): Promise<string[]>
+      concordance(word: string): Promise<{ total: number; results: Array<{ book: string; chapter: number; verse: number; text: string }> }>
       openExternal(url: string): Promise<void>
       launchUpdater(): Promise<void>
       getReleases(): Promise<{ tag: string; name: string; date: string; body: string }[]>
