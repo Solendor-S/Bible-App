@@ -246,15 +246,17 @@ ipcMain.handle('bible:getVerses', async (_e, book: string, chapter: number) => {
   return rows(database, 'SELECT verse, text FROM bible_verses WHERE book = ? AND chapter = ? ORDER BY verse', [book, chapter])
 })
 
-ipcMain.handle('bible:getCrossRefs', async (_e, book: string, chapter: number, verse: number) => {
+ipcMain.handle('bible:getCrossRefs', async (_e, book: string, chapter: number, verse: number, translation = 'KJV') => {
   const database = await openDb()
   return rows(database, `
-    SELECT cr.to_book, cr.to_chapter, cr.to_verse, bv.text
+    SELECT cr.to_book, cr.to_chapter, cr.to_verse,
+      COALESCE(bt.text, bv.text) as text
     FROM cross_refs cr
-    JOIN bible_verses bv ON bv.book = cr.to_book AND bv.chapter = cr.to_chapter AND bv.verse = cr.to_verse
+    LEFT JOIN bible_translations bt ON bt.translation = ? AND bt.book = cr.to_book AND bt.chapter = cr.to_chapter AND bt.verse = cr.to_verse
+    LEFT JOIN bible_verses bv ON bv.book = cr.to_book AND bv.chapter = cr.to_chapter AND bv.verse = cr.to_verse
     WHERE cr.from_book = ? AND cr.from_chapter = ? AND cr.from_verse = ?
     ORDER BY cr.weight DESC LIMIT 8
-  `, [book, chapter, verse])
+  `, [translation, book, chapter, verse])
 })
 
 ipcMain.handle('bible:getGreekWords', async (_e, book: string, chapter: number, verse: number) => {
@@ -285,15 +287,17 @@ ipcMain.handle('bible:getStrongsEntry', async (_e, type: string, num: string) =>
   return r[0] ?? null
 })
 
-ipcMain.handle('bible:getCrossRefsFull', async (_e, book: string, chapter: number, verse: number) => {
+ipcMain.handle('bible:getCrossRefsFull', async (_e, book: string, chapter: number, verse: number, translation = 'KJV') => {
   const database = await openDb()
   return rows(database, `
-    SELECT cr.to_book, cr.to_chapter, cr.to_verse, bv.text
+    SELECT cr.to_book, cr.to_chapter, cr.to_verse,
+      COALESCE(bt.text, bv.text) as text
     FROM cross_refs cr
-    JOIN bible_verses bv ON bv.book = cr.to_book AND bv.chapter = cr.to_chapter AND bv.verse = cr.to_verse
+    LEFT JOIN bible_translations bt ON bt.translation = ? AND bt.book = cr.to_book AND bt.chapter = cr.to_chapter AND bt.verse = cr.to_verse
+    LEFT JOIN bible_verses bv ON bv.book = cr.to_book AND bv.chapter = cr.to_chapter AND bv.verse = cr.to_verse
     WHERE cr.from_book = ? AND cr.from_chapter = ? AND cr.from_verse = ?
     ORDER BY cr.weight DESC LIMIT 50
-  `, [book, chapter, verse])
+  `, [translation, book, chapter, verse])
 })
 
 ipcMain.handle('commentary:getForVerse', async (_e, book: string, chapter: number, verse: number) => {
@@ -364,9 +368,9 @@ ipcMain.handle('apocrypha:getVerses', async (_e, book: string, chapter: number) 
 
 ipcMain.handle('shell:openExternal', (_e, url: string) => shell.openExternal(url))
 
-ipcMain.handle('search:query', async (_e, params: { query: string; tab?: string; book?: string; father?: string; offset?: number; limit?: number }) => {
+ipcMain.handle('search:query', async (_e, params: { query: string; tab?: string; book?: string; father?: string; offset?: number; limit?: number; translation?: string }) => {
   const database = await openDb()
-  const { query, tab = 'all', book = '', father = '', offset = 0, limit = 20 } = params
+  const { query, tab = 'all', book = '', father = '', offset = 0, limit = 20, translation = 'KJV' } = params
 
   const words = query.trim().split(/\s+/).filter(Boolean)
   if (words.length === 0) return { verses: [], commentary: [], totalVerses: 0, totalCommentary: 0 }
@@ -380,9 +384,15 @@ ipcMain.handle('search:query', async (_e, params: { query: string; tab?: string;
     const wordClauses = words.map(() => 'text LIKE ?').join(' AND ')
     const wordArgs = words.map(w => `%${w}%`)
     const bookClause = book ? ' AND book = ?' : ''
-    const baseArgs = [...wordArgs, ...(book ? [book] : [])]
-    totalVerses = (rows(database, `SELECT COUNT(*) as n FROM bible_verses WHERE ${wordClauses}${bookClause}`, baseArgs)[0]?.n ?? 0) as number
-    verses = rows(database, `SELECT book, chapter, verse, text FROM bible_verses WHERE ${wordClauses}${bookClause} LIMIT ${limit} OFFSET ${offset}`, baseArgs)
+    if (translation === 'KJV') {
+      const baseArgs = [...wordArgs, ...(book ? [book] : [])]
+      totalVerses = (rows(database, `SELECT COUNT(*) as n FROM bible_verses WHERE ${wordClauses}${bookClause}`, baseArgs)[0]?.n ?? 0) as number
+      verses = rows(database, `SELECT book, chapter, verse, text FROM bible_verses WHERE ${wordClauses}${bookClause} LIMIT ${limit} OFFSET ${offset}`, baseArgs)
+    } else {
+      const baseArgs = [translation, ...wordArgs, ...(book ? [book] : [])]
+      totalVerses = (rows(database, `SELECT COUNT(*) as n FROM bible_translations WHERE translation = ? AND ${wordClauses}${bookClause}`, baseArgs)[0]?.n ?? 0) as number
+      verses = rows(database, `SELECT book, chapter, verse, text FROM bible_translations WHERE translation = ? AND ${wordClauses}${bookClause} LIMIT ${limit} OFFSET ${offset}`, baseArgs)
+    }
   }
 
   if (tab !== 'scripture') {
@@ -399,17 +409,26 @@ ipcMain.handle('search:query', async (_e, params: { query: string; tab?: string;
   return { verses, commentary, totalVerses, totalCommentary }
 })
 
-ipcMain.handle('concordance:search', async (_e, word: string) => {
+ipcMain.handle('concordance:search', async (_e, word: string, translation = 'KJV') => {
   const database = await openDb()
   const clean = word.trim().replace(/[^a-zA-Z'-]/g, '')
   if (!clean) return { total: 0, results: [] }
-  const candidates = rows(database,
-    `SELECT book, chapter, verse, text FROM bible_verses WHERE LOWER(text) LIKE LOWER(?)`,
-    [`%${clean}%`]
-  )
   const re = new RegExp(`\\b${clean.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i')
-  const matched = candidates.filter((r: any) => re.test(r.text))
-  return { total: matched.length, results: matched }
+  if (translation === 'KJV') {
+    const candidates = rows(database,
+      `SELECT book, chapter, verse, text FROM bible_verses WHERE LOWER(text) LIKE LOWER(?)`,
+      [`%${clean}%`]
+    )
+    const matched = candidates.filter((r: any) => re.test(r.text))
+    return { total: matched.length, results: matched }
+  } else {
+    const candidates = rows(database,
+      `SELECT book, chapter, verse, text FROM bible_translations WHERE translation = ? AND LOWER(text) LIKE LOWER(?)`,
+      [translation, `%${clean}%`]
+    )
+    const matched = candidates.filter((r: any) => re.test(r.text))
+    return { total: matched.length, results: matched }
+  }
 })
 
 ipcMain.handle('search:getFathers', async () => {
@@ -658,16 +677,17 @@ ipcMain.handle('naves:getForVerse', async (_e, book: string, chapter: number, ve
   )
 })
 
-ipcMain.handle('naves:getTopicRefs', async (_e, topicId: number) => {
+ipcMain.handle('naves:getTopicRefs', async (_e, topicId: number, translation = 'KJV') => {
   const database = await openDb()
   return rows(database,
-    `SELECT r.book, r.chapter, r.verse, bv.text
+    `SELECT r.book, r.chapter, r.verse,
+      COALESCE(bt.text, bv.text) as text
      FROM naves_refs r
-     LEFT JOIN bible_verses bv
-       ON bv.book = r.book AND bv.chapter = r.chapter AND bv.verse = r.verse
+     LEFT JOIN bible_translations bt ON bt.translation = ? AND bt.book = r.book AND bt.chapter = r.chapter AND bt.verse = r.verse
+     LEFT JOIN bible_verses bv ON bv.book = r.book AND bv.chapter = r.chapter AND bv.verse = r.verse
      WHERE r.topic_id = ?
      ORDER BY r.rowid`,
-    [topicId]
+    [translation, topicId]
   )
 })
 

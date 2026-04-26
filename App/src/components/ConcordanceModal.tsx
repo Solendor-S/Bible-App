@@ -5,6 +5,7 @@ interface Props {
   word: string
   onClose: () => void
   onNavigate: (loc: SelectedVerse) => void
+  translation?: string
 }
 
 const PAGE = 100
@@ -21,7 +22,7 @@ function highlight(text: string, word: string): React.ReactNode {
   )
 }
 
-export function ConcordanceModal({ word, onClose, onNavigate }: Props) {
+export function ConcordanceModal({ word, onClose, onNavigate, translation = 'KJV' }: Props) {
   const [allResults, setAllResults] = useState<Array<{ book: string; chapter: number; verse: number; text: string }>>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -37,7 +38,7 @@ export function ConcordanceModal({ word, onClose, onNavigate }: Props) {
     setFocusedIdx(-1)
     setFilterBook(null)
     setFilterOpen(false)
-    window.bibleApi.concordance(word).then(({ total, results }) => {
+    window.bibleApi.concordance(word, translation).then(({ total, results }) => {
       setTotal(total)
       setAllResults(results)
       setLoading(false)
@@ -101,7 +102,7 @@ export function ConcordanceModal({ word, onClose, onNavigate }: Props) {
             <div className="concordance-count">
               {filterBook
                 ? `${filtered.length.toLocaleString()} of ${total.toLocaleString()} in ${filterBook}`
-                : `${total.toLocaleString()} occurrence${total !== 1 ? 's' : ''} in the KJV`}
+                : `${total.toLocaleString()} occurrence${total !== 1 ? 's' : ''} in the ${translation}`}
             </div>
           )}
           {!loading && total > 0 && (

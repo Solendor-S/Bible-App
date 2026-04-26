@@ -4,10 +4,10 @@ contextBridge.exposeInMainWorld('bibleApi', {
   getBooks: () => ipcRenderer.invoke('bible:getBooks'),
   getChapters: (book: string) => ipcRenderer.invoke('bible:getChapters', book),
   getVerses: (book: string, chapter: number) => ipcRenderer.invoke('bible:getVerses', book, chapter),
-  getCrossRefs: (book: string, chapter: number, verse: number) =>
-    ipcRenderer.invoke('bible:getCrossRefs', book, chapter, verse),
-  getCrossRefsFull: (book: string, chapter: number, verse: number) =>
-    ipcRenderer.invoke('bible:getCrossRefsFull', book, chapter, verse),
+  getCrossRefs: (book: string, chapter: number, verse: number, translation?: string) =>
+    ipcRenderer.invoke('bible:getCrossRefs', book, chapter, verse, translation),
+  getCrossRefsFull: (book: string, chapter: number, verse: number, translation?: string) =>
+    ipcRenderer.invoke('bible:getCrossRefsFull', book, chapter, verse, translation),
   getGreekWords: (book: string, chapter: number, verse: number) =>
     ipcRenderer.invoke('bible:getGreekWords', book, chapter, verse),
   getHebrewWords: (book: string, chapter: number, verse: number) =>
@@ -21,10 +21,10 @@ contextBridge.exposeInMainWorld('bibleApi', {
   getHistoricalForVerse: (book: string, chapter: number, verse: number) =>
     ipcRenderer.invoke('historical:getForVerse', book, chapter, verse),
   getHistoricalAll: () => ipcRenderer.invoke('historical:getAll'),
-  search: (params: { query: string; tab?: string; book?: string; father?: string; offset?: number; limit?: number }) =>
+  search: (params: { query: string; tab?: string; book?: string; father?: string; offset?: number; limit?: number; translation?: string }) =>
     ipcRenderer.invoke('search:query', params),
   getFathers: () => ipcRenderer.invoke('search:getFathers'),
-  concordance: (word: string) => ipcRenderer.invoke('concordance:search', word),
+  concordance: (word: string, translation?: string) => ipcRenderer.invoke('concordance:search', word, translation),
   openExternal: (url: string) => ipcRenderer.invoke('shell:openExternal', url),
   launchUpdater: () => ipcRenderer.invoke('app:launchUpdater'),
   getReleases: () => ipcRenderer.invoke('app:getReleases'),
@@ -51,8 +51,8 @@ contextBridge.exposeInMainWorld('apocryphaApi', {
 contextBridge.exposeInMainWorld('navesApi', {
   getForVerse: (book: string, chapter: number, verse: number) =>
     ipcRenderer.invoke('naves:getForVerse', book, chapter, verse),
-  getTopicRefs: (topicId: number) =>
-    ipcRenderer.invoke('naves:getTopicRefs', topicId),
+  getTopicRefs: (topicId: number, translation?: string) =>
+    ipcRenderer.invoke('naves:getTopicRefs', topicId, translation),
   search: (query: string) =>
     ipcRenderer.invoke('naves:search', query),
 })

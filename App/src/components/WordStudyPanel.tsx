@@ -26,10 +26,9 @@ interface WordDef {
 }
 
 const GLOSS_STOPWORDS = new Set([
-  'be', 'is', 'are', 'was', 'were', 'am',
-  'the', 'a', 'an', 'to', 'of', 'in', 'at',
+  'the', 'a', 'an', 'to', 'of', 'at',
   'it', 'he', 'she', 'they', 'we', 'ye',
-  'as', 'so', 'no', 'on', 'do', 'did', 'not',
+  'as', 'so', 'no', 'on', 'not',
 ])
 
 // kjv_usage format: "the, this, that, one, he" or "word, saying, thing"

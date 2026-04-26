@@ -25,9 +25,10 @@ interface Props {
   open: boolean
   onClose: () => void
   onNavigate: (loc: SelectedVerse) => void
+  translation?: string
 }
 
-export function SearchModal({ open, onClose, onNavigate }: Props) {
+export function SearchModal({ open, onClose, onNavigate, translation = 'KJV' }: Props) {
   const [query, setQuery] = useState('')
   const [tab, setTab] = useState<Tab>('all')
   const [book, setBook] = useState('')
@@ -59,7 +60,7 @@ export function SearchModal({ open, onClose, onNavigate }: Props) {
     const timer = setTimeout(async () => {
       setLoading(true)
       setFocusedIdx(-1)
-      const r = await window.bibleApi.search({ query, tab, book, father, offset: 0, limit })
+      const r = await window.bibleApi.search({ query, tab, book, father, offset: 0, limit, translation })
       setResults(r)
       setLoading(false)
     }, 300)
@@ -109,7 +110,7 @@ export function SearchModal({ open, onClose, onNavigate }: Props) {
     if (!results || !query.trim() || tab === 'all') return
     const offset = tab === 'scripture' ? results.verses.length : results.commentary.length
     setLoadingMore(true)
-    const r = await window.bibleApi.search({ query, tab, book, father, offset, limit: PAGE_SECTION })
+    const r = await window.bibleApi.search({ query, tab, book, father, offset, limit: PAGE_SECTION, translation })
     setResults(prev => {
       if (!prev) return r
       return {

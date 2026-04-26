@@ -15,20 +15,50 @@ const HIGHLIGHT_COLORS = [
   { id: 'green',  label: 'Blessing',   hex: '#4ade80' },
 ]
 
-const clean = (s: string) => s.replace(/[^\w']/g, '').toLowerCase()
-const stem = (s: string) => { const r = s.replace(/(ing|tion|ed|es|ly|s)$/, ''); return r.length >= 3 ? r : s }
+// KJV archaic irregular forms → modern base
+const KJV_IRREG: Record<string, string> = {
+  // Copula (to be) — gloss "to be" maps to these KJV forms
+  was: 'be', were: 'be', is: 'be', am: 'be', been: 'be',
+  // Archaic 2nd-person copula
+  art: 'be', wast: 'be',
+  // Common -eth forms
+  saith: 'say', hath: 'have', doth: 'do', doeth: 'do', goeth: 'go',
+  seeth: 'see', cometh: 'come', knoweth: 'know', giveth: 'give',
+  // Short -est forms (< 6 chars, can't be caught by suffix rule below)
+  doest: 'do', goest: 'go',
+  // Other archaics
+  hast: 'have', wilt: 'will', shalt: 'shall',
+  canst: 'can', wouldst: 'would', shouldst: 'should',
+}
+
+// Normalize a word for matching: handles KJV archaic forms, standard stemming, silent 'e'
+function normalizeForMatch(s: string): string {
+  let w = s.replace(/[^\w']/g, '').toLowerCase()
+  if (KJV_IRREG[w]) return KJV_IRREG[w]
+  // Strip KJV -eth suffix: maketh→mak, loveth→lov, speaketh→speak
+  if (w.endsWith('eth') && w.length >= 5) w = w.slice(0, -3)
+  // Strip KJV -est suffix (2nd person singular): makest→mak, knowest→know, sayest→say
+  // Guard length >= 6 to avoid words like "chest", "best", "west"
+  if (w.endsWith('est') && w.length >= 6) w = w.slice(0, -3)
+  // Standard stemming
+  const r = w.replace(/(ing|tion|ed|es|ly|s)$/, '')
+  if (r.length >= 3) w = r
+  // Strip trailing silent 'e' for consistent comparison: make→mak, love→lov
+  if (w.endsWith('e') && w.length >= 4) w = w.slice(0, -1)
+  return w
+}
 
 // Pronoun prefixes common in TAHOT verbal glosses ("he created", "she said", "they went")
 const VERBAL_PREFIXES = new Set(['he', 'she', 'it', 'they', 'we', 'i', 'you', 'ye'])
 
 // Phase 1: match a single specific gloss term (OpenGNT / TAHOT context-sensitive)
 function resolveHighlightIndices(tokens: string[], hl: WordHighlight): Set<number> {
-  const cleaned = tokens.map(clean)
+  const normalized = tokens.map(normalizeForMatch)
 
   if (hl.gloss) {
     // Try gloss words from most specific (longest) to least, skipping verbal pronoun prefixes.
     // This handles both single-word NT glosses ("beginning") and multi-word OT glosses ("he created").
-    const glossWords = hl.gloss.split(/\s+/).map(clean).filter(w => w.length >= 2)
+    const glossWords = hl.gloss.split(/\s+/).map(normalizeForMatch).filter(w => w.length >= 2)
     const target = hl.positionRatio * (tokens.length - 1)
 
     // Sort: skip pronoun prefixes first, then prefer longer words
@@ -39,8 +69,7 @@ function resolveHighlightIndices(tokens: string[], hl: WordHighlight): Set<numbe
     const tryWords = candidates.length > 0 ? candidates : glossWords
 
     for (const g of tryWords) {
-      const gStem = stem(g)
-      const hits = cleaned.map((_, i) => i).filter(i => cleaned[i] === g || stem(cleaned[i]) === gStem)
+      const hits = normalized.map((_, i) => i).filter(i => normalized[i] === g)
       if (hits.length === 1) return new Set(hits)
       if (hits.length > 1) {
         hits.sort((a, b) => Math.abs(a - target) - Math.abs(b - target))
@@ -50,12 +79,12 @@ function resolveHighlightIndices(tokens: string[], hl: WordHighlight): Set<numbe
     // Gloss not found (KJV/Berean divergence) — fall through to Phase 2
   }
 
-  return resolveHighlightIndicesFuzzy(cleaned, hl.glossTerms, hl.positionRatio, tokens.length)
+  return resolveHighlightIndicesFuzzy(normalized, hl.glossTerms, hl.positionRatio, tokens.length)
 }
 
 // Phase 2: improved fuzzy fallback used for OT and NT cases where gloss is null/unmatched
 function resolveHighlightIndicesFuzzy(
-  cleaned: string[],
+  normalized: string[],
   glossTerms: string[],
   positionRatio: number,
   tokenCount: number
@@ -67,26 +96,20 @@ function resolveHighlightIndicesFuzzy(
 
   for (let termIdx = 0; termIdx < glossTerms.length; termIdx++) {
     const termWeight = 1 / (termIdx + 1)
-    const term = glossTerms[termIdx]
-    const termParts = term.split(/\s+/)
+    const termParts = glossTerms[termIdx].split(/\s+/).map(normalizeForMatch)
 
     if (termParts.length === 1) {
       const t = termParts[0]
-      const tStem = t.length >= 4 ? stem(t) : null
-      for (let i = 0; i < cleaned.length; i++) {
-        const w = cleaned[i]
+      for (let i = 0; i < normalized.length; i++) {
+        const w = normalized[i]
         if (!w) continue
-        if (w === t) {
-          scores.set(i, (scores.get(i) ?? 0) + termWeight * 2)         // exact match bonus
-        } else if (tStem && (w === tStem || stem(w) === tStem)) {
-          scores.set(i, (scores.get(i) ?? 0) + termWeight * 0.8)       // stem match penalty
-        }
+        if (w === t) scores.set(i, (scores.get(i) ?? 0) + termWeight * 2)
       }
     } else {
       // Multi-word phrase
-      outer: for (let i = 0; i <= cleaned.length - termParts.length; i++) {
+      outer: for (let i = 0; i <= normalized.length - termParts.length; i++) {
         for (let j = 0; j < termParts.length; j++) {
-          if (cleaned[i + j] !== termParts[j]) continue outer
+          if (normalized[i + j] !== termParts[j]) continue outer
         }
         scores.set(i, (scores.get(i) ?? 0) + termWeight * 2)
       }
@@ -117,6 +140,7 @@ interface VerseRowProps {
   wordHighlight?: WordHighlight | null
   redLetterOn: boolean
   isBookmarked: boolean
+  translation: string
   onSelect: () => void
   onContextMenu: (verseNum: number, rect: DOMRect, text: string) => void
   onNavigate: (book: string, chapter: number, verse: number) => void
@@ -124,8 +148,8 @@ interface VerseRowProps {
   onBookmarkToggle: () => void
 }
 
-function VerseRow({ book, chapter, verseNum, text, compareText, selected, highlightColor, wordHighlight, redLetterOn, isBookmarked, onSelect, onContextMenu, onNavigate, onWordClick, onBookmarkToggle }: VerseRowProps) {
-  const refs = useCrossRefs(book, chapter, selected ? verseNum : 0)
+function VerseRow({ book, chapter, verseNum, text, compareText, selected, highlightColor, wordHighlight, redLetterOn, isBookmarked, translation, onSelect, onContextMenu, onNavigate, onWordClick, onBookmarkToggle }: VerseRowProps) {
+  const refs = useCrossRefs(book, chapter, selected ? verseNum : 0, translation)
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -306,6 +330,7 @@ function PassageSection({ passage, activeVerse, wordHighlight, redLetterOn, prim
           compareText={compareTrans ? compareMap.get(v.verse) : undefined}
           redLetterOn={redLetterOn}
           isBookmarked={bookmarkedKeys.has(`${passage.book}|${passage.chapter}|${v.verse}`)}
+          translation={primaryTrans}
           onSelect={() => onVerseClick(passage.book, passage.chapter, v.verse)}
           onContextMenu={(verse, rect, text) => setContextTarget({ verse, rect, text })}
           onNavigate={onNavigate}

@@ -231,6 +231,7 @@ export default function App() {
           notesRefreshToken={notesRefreshToken}
           bookmarks={bookmarks}
           onBookmarkRemove={handleBookmarkRemove}
+          translation={primaryTrans}
         />
       </div>
       {aiPanelHeight > 0 && (
@@ -246,6 +247,7 @@ export default function App() {
         open={searchOpen}
         onClose={() => setSearchOpen(false)}
         onNavigate={loc => handleNavigate(loc.book, loc.chapter, loc.verse)}
+        translation={primaryTrans}
       />
       <ChangelogModal open={changelogOpen} onClose={() => setChangelogOpen(false)} />
       {concordanceWord && (
@@ -253,6 +255,7 @@ export default function App() {
           word={concordanceWord}
           onClose={() => setConcordanceWord(null)}
           onNavigate={loc => handleNavigate(loc.book, loc.chapter, loc.verse)}
+          translation={primaryTrans}
         />
       )}
       {parallelVerse && (

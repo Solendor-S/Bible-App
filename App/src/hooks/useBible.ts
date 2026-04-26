@@ -69,11 +69,11 @@ export function useHighlights(book: string, chapter: number) {
   return { highlights, setHighlight }
 }
 
-export function useCrossRefs(book: string, chapter: number, verse: number) {
+export function useCrossRefs(book: string, chapter: number, verse: number, translation = 'KJV') {
   const [refs, setRefs] = useState<CrossRef[]>([])
   useEffect(() => {
     if (!book || !chapter || !verse) { setRefs([]); return }
-    window.bibleApi.getCrossRefs(book, chapter, verse).then(setRefs)
-  }, [book, chapter, verse])
+    window.bibleApi.getCrossRefs(book, chapter, verse, translation).then(setRefs)
+  }, [book, chapter, verse, translation])
   return refs
 }

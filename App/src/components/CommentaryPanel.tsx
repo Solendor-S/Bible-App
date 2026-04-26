@@ -24,6 +24,7 @@ interface Props {
   notesRefreshToken?: number
   bookmarks?: Bookmark[]
   onBookmarkRemove?: (book: string, chapter: number, verse: number) => void
+  translation?: string
 }
 
 function EntryView({
@@ -111,7 +112,7 @@ function TabHeader({
   )
 }
 
-export function CommentaryPanel({ selected, featuredEntry, onClearFeatured, onNavigate, rightTab, onTabChange, onWordSelect, notesRefreshToken, bookmarks = [], onBookmarkRemove }: Props) {
+export function CommentaryPanel({ selected, featuredEntry, onClearFeatured, onNavigate, rightTab, onTabChange, onWordSelect, notesRefreshToken, bookmarks = [], onBookmarkRemove, translation = 'KJV' }: Props) {
   const { entries, loading } = useCommentary(selected.book, selected.chapter, selected.verse)
   const [fatherSearch, setFatherSearch] = useState('')
 
@@ -147,11 +148,11 @@ export function CommentaryPanel({ selected, featuredEntry, onClearFeatured, onNa
       {rightTab === 'bookmarks' ? (
         <BookmarksPanel bookmarks={bookmarks} onNavigate={onNavigate} onRemove={(b, c, v) => onBookmarkRemove?.(b, c, v)} />
       ) : rightTab === 'topics' ? (
-        <TopicsPanel selected={selected} onNavigate={onNavigate} />
+        <TopicsPanel selected={selected} onNavigate={onNavigate} translation={translation} />
       ) : rightTab === 'notes' ? (
         <NotesPanel onNavigate={onNavigate ?? (() => {})} refreshToken={notesRefreshToken} />
       ) : rightTab === 'crossrefs' ? (
-        <CrossRefsPanel selected={selected} onNavigate={onNavigate} />
+        <CrossRefsPanel selected={selected} onNavigate={onNavigate} translation={translation} />
       ) : rightTab === 'wordstudy' ? (
         <WordStudyPanel selected={selected} onWordSelect={onWordSelect} />
       ) : rightTab === 'firstcentury' ? (

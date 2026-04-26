@@ -195,15 +195,15 @@ declare global {
     }
     navesApi: {
       getForVerse(book: string, chapter: number, verse: number): Promise<NavesTopic[]>
-      getTopicRefs(topicId: number): Promise<NavesRef[]>
+      getTopicRefs(topicId: number, translation?: string): Promise<NavesRef[]>
       search(query: string): Promise<NavesTopic[]>
     }
     bibleApi: {
       getBooks(): Promise<Book[]>
       getChapters(book: string): Promise<number[]>
       getVerses(book: string, chapter: number): Promise<BibleVerse[]>
-      getCrossRefs(book: string, chapter: number, verse: number): Promise<CrossRef[]>
-      getCrossRefsFull(book: string, chapter: number, verse: number): Promise<CrossRef[]>
+      getCrossRefs(book: string, chapter: number, verse: number, translation?: string): Promise<CrossRef[]>
+      getCrossRefsFull(book: string, chapter: number, verse: number, translation?: string): Promise<CrossRef[]>
       getGreekWords(book: string, chapter: number, verse: number): Promise<GreekWord[]>
       getHebrewWords(book: string, chapter: number, verse: number): Promise<HebrewWord[]>
       getStrongsEntry(type: string, num: string): Promise<StrongsEntry | null>
@@ -211,9 +211,9 @@ declare global {
       getJosephusForVerse(book: string, chapter: number, verse: number): Promise<JosephusEntry[]>
       getHistoricalForVerse(book: string, chapter: number, verse: number): Promise<HistoricalEntry[]>
       getHistoricalAll(): Promise<HistoricalEntry[]>
-      search(params: { query: string; tab?: string; book?: string; father?: string; offset?: number; limit?: number }): Promise<SearchResult>
+      search(params: { query: string; tab?: string; book?: string; father?: string; offset?: number; limit?: number; translation?: string }): Promise<SearchResult>
       getFathers(): Promise<string[]>
-      concordance(word: string): Promise<{ total: number; results: Array<{ book: string; chapter: number; verse: number; text: string }> }>
+      concordance(word: string, translation?: string): Promise<{ total: number; results: Array<{ book: string; chapter: number; verse: number; text: string }> }>
       openExternal(url: string): Promise<void>
       launchUpdater(): Promise<void>
       getReleases(): Promise<{ tag: string; name: string; date: string; body: string }[]>

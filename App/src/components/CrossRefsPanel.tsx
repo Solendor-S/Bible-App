@@ -4,19 +4,20 @@ import type { CrossRef, SelectedVerse } from '../types'
 interface Props {
   selected: SelectedVerse
   onNavigate?: (book: string, chapter: number, verse: number) => void
+  translation?: string
 }
 
-export function CrossRefsPanel({ selected, onNavigate }: Props) {
+export function CrossRefsPanel({ selected, onNavigate, translation = 'KJV' }: Props) {
   const [refs, setRefs] = useState<CrossRef[]>([])
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
     if (!selected?.book || !selected?.verse) { setRefs([]); return }
     setLoading(true)
-    window.bibleApi.getCrossRefsFull(selected.book, selected.chapter, selected.verse)
+    window.bibleApi.getCrossRefsFull(selected.book, selected.chapter, selected.verse, translation)
       .then(r => { setRefs(r); setLoading(false) })
       .catch(() => setLoading(false))
-  }, [selected?.book, selected?.chapter, selected?.verse])
+  }, [selected?.book, selected?.chapter, selected?.verse, translation])
 
   if (!selected?.verse) {
     return <div className="panel-empty">Select a verse to see cross-references.</div>

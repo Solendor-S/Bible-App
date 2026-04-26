@@ -4,9 +4,10 @@ import type { NavesTopic, NavesRef, SelectedVerse } from '../types'
 interface Props {
   selected: SelectedVerse
   onNavigate?: (book: string, chapter: number, verse: number) => void
+  translation?: string
 }
 
-export function TopicsPanel({ selected, onNavigate }: Props) {
+export function TopicsPanel({ selected, onNavigate, translation = 'KJV' }: Props) {
   const [verseTopics, setVerseTopics] = useState<NavesTopic[]>([])
   const [loadingVerse, setLoadingVerse] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -45,10 +46,10 @@ export function TopicsPanel({ selected, onNavigate }: Props) {
   useEffect(() => {
     if (expandedId === null) { setRefs([]); return }
     setLoadingRefs(true)
-    window.navesApi.getTopicRefs(expandedId)
+    window.navesApi.getTopicRefs(expandedId, translation)
       .then(r => { setRefs(r); setLoadingRefs(false) })
       .catch(() => setLoadingRefs(false))
-  }, [expandedId])
+  }, [expandedId, translation])
 
   function toggleTopic(id: number) {
     setExpandedId(prev => prev === id ? null : id)
