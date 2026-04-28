@@ -268,6 +268,12 @@ interface PassageSectionProps {
   onBookmarkToggle: (book: string, chapter: number, verse: number, text: string) => void
 }
 
+function passageLabel(p: PassageRef): string {
+  if (!p.verseStart) return `${p.book} ${p.chapter}`
+  const end = p.verseEnd && p.verseEnd < 999 ? `–${p.verseEnd}` : ''
+  return `${p.book} ${p.chapter}:${p.verseStart}${end}`
+}
+
 function PassageSection({ passage, activeVerse, wordHighlight, redLetterOn, primaryTrans, compareTrans, bookmarkedKeys, onVerseClick, onNavigate, onAddNote, onWordClick, onViewParallels, onBookmarkToggle }: PassageSectionProps) {
   const { verses, loading } = useTranslationVerses(primaryTrans, passage.book, passage.chapter)
   const { verses: compareVerses } = useTranslationVerses(compareTrans ?? '', passage.book, passage.chapter)
@@ -304,7 +310,7 @@ function PassageSection({ passage, activeVerse, wordHighlight, redLetterOn, prim
 
   return (
     <div className="passage-section">
-      <div className="passage-section-header">{passage.raw}</div>
+      <div className="passage-section-header">{passageLabel(passage)}</div>
       {loading && <div className="panel-loading">Loading...</div>}
       {!loading && displayed.length === 0 && (
         <div className="panel-empty">No verses found.</div>

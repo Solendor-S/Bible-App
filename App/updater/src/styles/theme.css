@@ -293,6 +293,18 @@ body {
   background: #3a3a18;
 }
 
+.fallback-steps {
+  font-family: 'Consolas', 'Courier New', monospace;
+  font-size: 11px;
+  color: #9a9878;
+  white-space: pre-wrap;
+  line-height: 1.7;
+  background: #0f0f0a;
+  border: 1px solid #3a3a1a;
+  border-radius: 4px;
+  padding: 6px 8px;
+}
+
 .fallback-hint {
   font-size: 11px;
   color: #5a5a3a;

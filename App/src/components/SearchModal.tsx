@@ -25,10 +25,11 @@ interface Props {
   open: boolean
   onClose: () => void
   onNavigate: (loc: SelectedVerse) => void
+  onAdd?: (book: string, chapter: number, verse: number) => void
   translation?: string
 }
 
-export function SearchModal({ open, onClose, onNavigate, translation = 'KJV' }: Props) {
+export function SearchModal({ open, onClose, onNavigate, onAdd, translation = 'KJV' }: Props) {
   const [query, setQuery] = useState('')
   const [tab, setTab] = useState<Tab>('all')
   const [book, setBook] = useState('')
@@ -39,6 +40,7 @@ export function SearchModal({ open, onClose, onNavigate, translation = 'KJV' }: 
   const [focusedIdx, setFocusedIdx] = useState(-1)
   const [books, setBooks] = useState<string[]>([])
   const [fathers, setFathers] = useState<string[]>([])
+  const [added, setAdded] = useState<Set<string>>(new Set())
 
   const inputRef = useRef<HTMLInputElement>(null)
   const resultsRef = useRef<HTMLDivElement>(null)
@@ -60,6 +62,7 @@ export function SearchModal({ open, onClose, onNavigate, translation = 'KJV' }: 
     const timer = setTimeout(async () => {
       setLoading(true)
       setFocusedIdx(-1)
+      setAdded(new Set())
       const r = await window.bibleApi.search({ query, tab, book, father, offset: 0, limit, translation })
       setResults(r)
       setLoading(false)
@@ -212,17 +215,32 @@ export function SearchModal({ open, onClose, onNavigate, translation = 'KJV' }: 
                   {results.verses.map((v, i) => {
                     globalIdx++
                     const idx = globalIdx
+                    const addKey = `v:${v.book}:${v.chapter}:${v.verse}`
                     return (
-                      <button
-                        key={i}
-                        data-idx={idx}
-                        className={`result-item${focusedIdx === idx ? ' result-item--focused' : ''}`}
-                        onMouseEnter={() => setFocusedIdx(idx)}
-                        onClick={() => navigate(v)}
-                      >
-                        <span className="result-ref">{v.book} {v.chapter}:{v.verse}</span>
-                        <span className="result-text">{highlight(v.text, query)}</span>
-                      </button>
+                      <div key={i} className="parallel-row">
+                        <button
+                          data-idx={idx}
+                          className={`result-item parallel-row-main${focusedIdx === idx ? ' result-item--focused' : ''}`}
+                          onMouseEnter={() => setFocusedIdx(idx)}
+                          onClick={() => navigate(v)}
+                        >
+                          <span className="result-ref">{v.book} {v.chapter}:{v.verse}</span>
+                          <span className="result-text">{highlight(v.text, query)}</span>
+                        </button>
+                        {onAdd && (
+                          <button
+                            className={`parallel-add-btn${added.has(addKey) ? ' parallel-add-btn--done' : ''}`}
+                            title={added.has(addKey) ? 'Added' : 'Add to scripture panel'}
+                            onClick={() => {
+                              if (added.has(addKey)) return
+                              onAdd(v.book, v.chapter, v.verse)
+                              setAdded(s => new Set([...s, addKey]))
+                            }}
+                          >
+                            {added.has(addKey) ? '✓' : '+'}
+                          </button>
+                        )}
+                      </div>
                     )
                   })}
                 </div>
@@ -242,17 +260,32 @@ export function SearchModal({ open, onClose, onNavigate, translation = 'KJV' }: 
                   {results.commentary.map((c, i) => {
                     globalIdx++
                     const idx = globalIdx
+                    const addKey = `c:${c.book}:${c.chapter}:${c.verse}:${i}`
                     return (
-                      <button
-                        key={i}
-                        data-idx={idx}
-                        className={`result-item${focusedIdx === idx ? ' result-item--focused' : ''}`}
-                        onMouseEnter={() => setFocusedIdx(idx)}
-                        onClick={() => navigate(c)}
-                      >
-                        <span className="result-ref">{c.book} {c.chapter}:{c.verse} — {c.father_name}</span>
-                        <span className="result-text">{highlight(c.text, query)}</span>
-                      </button>
+                      <div key={i} className="parallel-row">
+                        <button
+                          data-idx={idx}
+                          className={`result-item parallel-row-main${focusedIdx === idx ? ' result-item--focused' : ''}`}
+                          onMouseEnter={() => setFocusedIdx(idx)}
+                          onClick={() => navigate(c)}
+                        >
+                          <span className="result-ref">{c.book} {c.chapter}:{c.verse} — {c.father_name}</span>
+                          <span className="result-text">{highlight(c.text, query)}</span>
+                        </button>
+                        {onAdd && (
+                          <button
+                            className={`parallel-add-btn${added.has(addKey) ? ' parallel-add-btn--done' : ''}`}
+                            title={added.has(addKey) ? 'Added' : 'Add to scripture panel'}
+                            onClick={() => {
+                              if (added.has(addKey)) return
+                              onAdd(c.book, c.chapter, c.verse)
+                              setAdded(s => new Set([...s, addKey]))
+                            }}
+                          >
+                            {added.has(addKey) ? '✓' : '+'}
+                          </button>
+                        )}
+                      </div>
                     )
                   })}
                 </div>

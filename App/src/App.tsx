@@ -247,6 +247,11 @@ export default function App() {
         open={searchOpen}
         onClose={() => setSearchOpen(false)}
         onNavigate={loc => handleNavigate(loc.book, loc.chapter, loc.verse)}
+        onAdd={(book, chapter, verse) => {
+          const start = Math.max(1, verse - 2)
+          const end = verse + 4
+          setPassages(p => [...p, { book, chapter, verseStart: start, verseEnd: end, raw: `${book} ${chapter}:${verse}` }])
+        }}
         translation={primaryTrans}
       />
       <ChangelogModal open={changelogOpen} onClose={() => setChangelogOpen(false)} />

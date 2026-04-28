@@ -157,34 +157,106 @@ function resolveBook(raw: string): string {
 
 // Regex: optional number prefix + book word(s) + chapter + optional :verse[-verse]
 const PASSAGE_RE = /^([1-3]?\s*[a-z]+(?:\s+[a-z]+)*)\s+(\d+)(?::(\d+)(?:-(\d+))?)?$/i
+// Cross-chapter range with book: "1 thes 4:10-5:2"
+const CROSS_CHAPTER_RE = /^([1-3]?\s*[a-z]+(?:\s+[a-z]+)*)\s+(\d+):(\d+)-(\d+):(\d+)$/i
+// Orphan chapter/verse (no book): "5" / "5:10" / "5:10-15"
+const ORPHAN_RE = /^(\d+)(?::(\d+)(?:-(\d+))?)?$/
+// Orphan cross-chapter (no book): "5:10-6:2"
+const ORPHAN_CROSS_RE = /^(\d+):(\d+)-(\d+):(\d+)$/
 // Book-only: optional number prefix + book name, nothing else
 const BOOK_ONLY_RE = /^([1-3]?\s*[a-z]+(?:\s+[a-z]+)*)$/i
 
+// Expands a cross-chapter range into PassageRefs, inserting whole chapters in between.
+// ch1:v1 → ch2:v2  (v2=undefined means include whole last chapter)
+function expandCrossChapter(book: string, ch1: number, v1: number, ch2: number, v2: number | undefined, raw: string): PassageRef[] {
+  const refs: PassageRef[] = []
+  refs.push({ book, chapter: ch1, verseStart: v1, verseEnd: 999, raw })
+  for (let ch = ch1 + 1; ch < ch2; ch++) {
+    refs.push({ book, chapter: ch, raw: '' })
+  }
+  if (v2 !== undefined) {
+    refs.push({ book, chapter: ch2, verseStart: 1, verseEnd: v2, raw: '' })
+  } else {
+    refs.push({ book, chapter: ch2, raw: '' })
+  }
+  return refs
+}
+
 export function parsePassage(input: string): PassageRef[] {
-  return input
-    .split(';')
-    .map(s => s.trim())
-    .filter(Boolean)
-    .flatMap(token => {
-      const m = token.match(PASSAGE_RE)
-      if (m) {
-        const book = resolveBook(m[1].trim())
-        const chapter = parseInt(m[2], 10)
-        const verseStart = m[3] ? parseInt(m[3], 10) : undefined
-        const verseEnd = m[4] ? parseInt(m[4], 10) : undefined
-        return [{ book, chapter, verseStart, verseEnd, raw: token.trim() }]
+  const tokens = input.split(/[;,]/).map(s => s.trim()).filter(Boolean)
+  const results: PassageRef[] = []
+  let prevBook: string | null = null
+
+  for (const token of tokens) {
+    // Cross-chapter range with explicit book: "1 thes 4:10-5:2" / "john 1:45-3:1"
+    const cross = token.match(CROSS_CHAPTER_RE)
+    if (cross) {
+      const book = resolveBook(cross[1].trim())
+      const ch1 = parseInt(cross[2], 10), v1 = parseInt(cross[3], 10)
+      const ch2 = parseInt(cross[4], 10), v2 = parseInt(cross[5], 10)
+      results.push(...expandCrossChapter(book, ch1, v1, ch2, v2, token))
+      prevBook = book
+      continue
+    }
+
+    // Normal passage with explicit book: "1 thes 4" / "4:10" / "4:10-15"
+    const m = token.match(PASSAGE_RE)
+    if (m) {
+      const book = resolveBook(m[1].trim())
+      const chapter = parseInt(m[2], 10)
+      const verseStart = m[3] ? parseInt(m[3], 10) : undefined
+      const verseEnd = m[4] ? parseInt(m[4], 10) : undefined
+      // "john 1:45-2" / "john 1:45-3" — verseEnd < verseStart means it's a chapter, not a verse
+      if (verseStart !== undefined && verseEnd !== undefined && verseEnd < verseStart) {
+        results.push(...expandCrossChapter(book, chapter, verseStart, verseEnd, undefined, token))
+        prevBook = book
+        continue
       }
-      // Book-only input (e.g. "John", "1 Peter", "Dan")
-      if (BOOK_ONLY_RE.test(token)) {
-        const book = resolveBook(token.trim())
-        if (CANONICAL_BOOKS.includes(book)) {
-          return [{ book, chapter: 1, raw: token.trim(), bookOnly: true }]
+      results.push({ book, chapter, verseStart, verseEnd, raw: token })
+      prevBook = book
+      continue
+    }
+
+    if (prevBook) {
+      // Orphan cross-chapter (carry-forward book): "5:10-6:2" / "5:10-7:3"
+      const oc = token.match(ORPHAN_CROSS_RE)
+      if (oc) {
+        const ch1 = parseInt(oc[1], 10), v1 = parseInt(oc[2], 10)
+        const ch2 = parseInt(oc[3], 10), v2 = parseInt(oc[4], 10)
+        results.push(...expandCrossChapter(prevBook, ch1, v1, ch2, v2, token))
+        continue
+      }
+
+      // Orphan chapter/verse (carry-forward book): "5" / "5:10" / "5:10-15"
+      const ov = token.match(ORPHAN_RE)
+      if (ov) {
+        const chapter = parseInt(ov[1], 10)
+        const verseStart = ov[2] ? parseInt(ov[2], 10) : undefined
+        const verseEnd = ov[3] ? parseInt(ov[3], 10) : undefined
+        // "1:45-2" / "1:45-3" orphan — verseEnd < verseStart means it's a chapter
+        if (verseStart !== undefined && verseEnd !== undefined && verseEnd < verseStart) {
+          results.push(...expandCrossChapter(prevBook, chapter, verseStart, verseEnd, undefined, token))
+          continue
         }
+        results.push({ book: prevBook, chapter, verseStart, verseEnd, raw: token })
+        continue
       }
-      return []
-    })
+    }
+
+    // Book-only input (e.g. "John", "1 Peter", "Dan")
+    if (BOOK_ONLY_RE.test(token)) {
+      const book = resolveBook(token)
+      if (CANONICAL_BOOKS.includes(book)) {
+        results.push({ book, chapter: 1, raw: token, bookOnly: true })
+        prevBook = book
+        continue
+      }
+    }
+  }
+
+  return results
 }
 
 export function passagesToString(passages: PassageRef[]): string {
-  return passages.map(p => p.raw).join('; ')
+  return passages.map(p => p.raw).filter(Boolean).join('; ')
 }

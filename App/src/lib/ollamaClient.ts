@@ -8,7 +8,8 @@ export interface OllamaModel {
 
 export const OLLAMA_MODELS: OllamaModel[] = [
   { id: 'gemma4',      label: 'Gemma 4 (best quality)', ram: '~12GB' },
-  { id: 'gemma3:4b',   label: 'Gemma 3 4B (balanced)',  ram: '~3GB'  },
+  { id: 'gemma4:e2b',  label: 'Gemma 4 E2B (balanced)', ram: '~6GB'  },
+  { id: 'gemma3:4b',   label: 'Gemma 3 4B (fast)',      ram: '~3GB'  },
   { id: 'qwen3:4b',    label: 'Qwen 3 4B (fast)',       ram: '~3GB'  },
   { id: 'phi4-mini',   label: 'Phi-4 Mini (lightest)',  ram: '~2.5GB'},
 ]

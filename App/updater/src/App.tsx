@@ -34,12 +34,14 @@ export default function App() {
     return () => window.updaterApi.removeProgressListeners()
   }, [])
 
-  const fallbackCommand = platform === 'darwin'
-    ? 'cd ~/BibleApp && git fetch origin main && git reset --hard origin/main && cd App && rm -rf node_modules && npm install'
-    : 'cd "$env:USERPROFILE\\BibleApp"; git fetch origin main; git reset --hard origin/main; cd App; if (Test-Path node_modules) { Remove-Item -Recurse -Force node_modules }; npm install'
+  const releasesUrl = 'https://github.com/Solendor-S/Bible-App/releases/latest'
+
+  const fallbackSteps = platform === 'darwin'
+    ? '1. Download source.zip from the releases page\n2. Extract and copy contents to ~/BibleApp/\n3. cd ~/BibleApp/App && rm -rf node_modules && npm install'
+    : '1. Download source.zip from the releases page\n2. Extract and copy contents to %USERPROFILE%\\BibleApp\\\n3. cd /d %USERPROFILE%\\BibleApp\\App && rmdir /s /q node_modules && npm install'
 
   function copyFallback() {
-    navigator.clipboard.writeText(fallbackCommand).then(() => {
+    navigator.clipboard.writeText(releasesUrl).then(() => {
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     })
@@ -150,16 +152,17 @@ export default function App() {
         {updateError && (
           <div className="fallback-box">
             <div className="fallback-title">
-              Manual fallback — run this in {platform === 'darwin' ? 'Terminal' : 'PowerShell'}:
+              Manual fallback
             </div>
             <div className="fallback-command-row">
-              <code className="fallback-command">{fallbackCommand}</code>
+              <code className="fallback-command">{releasesUrl}</code>
               <button className="btn-copy" onClick={copyFallback}>
-                {copied ? 'Copied!' : 'Copy'}
+                {copied ? 'Copied!' : 'Copy URL'}
               </button>
             </div>
+            <div className="fallback-steps">{fallbackSteps}</div>
             <div className="fallback-hint">
-              After it finishes, restart the Bible App.
+              After step 3 finishes, restart the Bible App.
             </div>
           </div>
         )}
