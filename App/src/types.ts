@@ -160,6 +160,7 @@ export interface Bookmark {
 export interface NavesTopic {
   id: number
   name: string
+  refCount: number
 }
 
 export interface NavesRef {

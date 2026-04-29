@@ -668,7 +668,8 @@ ipcMain.handle('commentary:searchByFatherAndVerse', async (_e, fatherName: strin
 ipcMain.handle('naves:getForVerse', async (_e, book: string, chapter: number, verse: number) => {
   const database = await openDb()
   return rows(database,
-    `SELECT DISTINCT t.id, t.name
+    `SELECT DISTINCT t.id, t.name,
+       (SELECT COUNT(*) FROM naves_refs r2 WHERE r2.topic_id = t.id) AS refCount
      FROM naves_topics t
      JOIN naves_refs r ON r.topic_id = t.id
      WHERE r.book = ? AND r.chapter = ? AND r.verse = ?
@@ -680,14 +681,17 @@ ipcMain.handle('naves:getForVerse', async (_e, book: string, chapter: number, ve
 ipcMain.handle('naves:getTopicRefs', async (_e, topicId: number, translation = 'KJV') => {
   const database = await openDb()
   return rows(database,
-    `SELECT r.book, r.chapter, r.verse,
-      COALESCE(bt.text, bv.text) as text
-     FROM naves_refs r
-     LEFT JOIN bible_translations bt ON bt.translation = ? AND bt.book = r.book AND bt.chapter = r.chapter AND bt.verse = r.verse
-     LEFT JOIN bible_verses bv ON bv.book = r.book AND bv.chapter = r.chapter AND bv.verse = r.verse
-     WHERE r.topic_id = ?
-     ORDER BY r.rowid`,
-    [translation, topicId]
+    `SELECT d.book, d.chapter, d.verse,
+      COALESCE(bt.text, bv.text) as text,
+      (SELECT COUNT(DISTINCT r2.topic_id)
+       FROM naves_refs r2
+       WHERE r2.book = d.book AND r2.chapter = d.chapter AND r2.verse = d.verse
+      ) as cross_count
+     FROM (SELECT DISTINCT book, chapter, verse FROM naves_refs WHERE topic_id = ?) d
+     LEFT JOIN bible_translations bt ON bt.translation = ? AND bt.book = d.book AND bt.chapter = d.chapter AND bt.verse = d.verse
+     LEFT JOIN bible_verses bv ON bv.book = d.book AND bv.chapter = d.chapter AND bv.verse = d.verse
+     ORDER BY cross_count DESC`,
+    [topicId, translation]
   )
 })
 
