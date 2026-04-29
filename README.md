@@ -60,6 +60,11 @@ The app checks for updates on launch and shows a toast if a new version is avail
 cd ~/BibleApp && git fetch --no-tags origin main && git reset --hard origin/main && git lfs pull && rm -rf App/node_modules && npm install --prefix App
 ```
 
+**Windows manual update** (run from anywhere in PowerShell):
+```powershell
+cd "$env:USERPROFILE\BibleApp"; git fetch --no-tags origin main; git reset --hard origin/main; git lfs pull; if (Test-Path App\node_modules) { Remove-Item -Recurse -Force App\node_modules }; npm install --prefix App
+```
+
 ## AI Scholar (optional)
 
 The AI panel uses Ollama running locally. Install [Ollama](https://ollama.com), then pull one of the supported models:
