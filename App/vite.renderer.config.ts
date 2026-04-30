@@ -8,5 +8,8 @@ export default defineConfig({
     alias: {
       '@renderer': resolve(__dirname, 'src')
     }
-  }
+  },
+  optimizeDeps: {
+    include: ['leaflet', 'react-leaflet'],
+  },
 })
