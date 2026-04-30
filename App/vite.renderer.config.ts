@@ -10,6 +10,6 @@ export default defineConfig({
     }
   },
   optimizeDeps: {
-    include: ['leaflet', 'react-leaflet'],
+    include: ['leaflet'],
   },
 })
