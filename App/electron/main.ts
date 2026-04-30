@@ -176,6 +176,9 @@ async function openDb(): Promise<Database> {
     refStmt.free()
     const data = db.export()
     writeFileSync(userDbPath, Buffer.from(data))
+  } else {
+    // Ensure idx_naves_refs_topic_id exists for DBs seeded before it was added
+    db.run('CREATE INDEX IF NOT EXISTS idx_naves_refs_topic_id ON naves_refs(topic_id)')
   }
 
   return db
@@ -681,16 +684,23 @@ ipcMain.handle('naves:getForVerse', async (_e, book: string, chapter: number, ve
 ipcMain.handle('naves:getTopicRefs', async (_e, topicId: number, translation = 'KJV') => {
   const database = await openDb()
   return rows(database,
-    `SELECT d.book, d.chapter, d.verse,
-      COALESCE(bt.text, bv.text) as text,
-      (SELECT COUNT(DISTINCT r2.topic_id)
-       FROM naves_refs r2
-       WHERE r2.book = d.book AND r2.chapter = d.chapter AND r2.verse = d.verse
-      ) as cross_count
-     FROM (SELECT DISTINCT book, chapter, verse FROM naves_refs WHERE topic_id = ?) d
-     LEFT JOIN bible_translations bt ON bt.translation = ? AND bt.book = d.book AND bt.chapter = d.chapter AND bt.verse = d.verse
-     LEFT JOIN bible_verses bv ON bv.book = d.book AND bv.chapter = d.chapter AND bv.verse = d.verse
-     ORDER BY cross_count DESC`,
+    `WITH topic_verses AS (
+       SELECT DISTINCT book, chapter, verse FROM naves_refs WHERE topic_id = ?
+     ),
+     cross_counts AS (
+       SELECT r.book, r.chapter, r.verse, COUNT(DISTINCT r.topic_id) AS cross_count
+       FROM naves_refs r
+       INNER JOIN topic_verses tv ON r.book = tv.book AND r.chapter = tv.chapter AND r.verse = tv.verse
+       GROUP BY r.book, r.chapter, r.verse
+     )
+     SELECT tv.book, tv.chapter, tv.verse,
+       COALESCE(bt.text, bv.text) AS text,
+       cc.cross_count
+     FROM topic_verses tv
+     JOIN cross_counts cc ON cc.book = tv.book AND cc.chapter = tv.chapter AND cc.verse = tv.verse
+     LEFT JOIN bible_translations bt ON bt.translation = ? AND bt.book = tv.book AND bt.chapter = tv.chapter AND bt.verse = tv.verse
+     LEFT JOIN bible_verses bv ON bv.book = tv.book AND bv.chapter = tv.chapter AND bv.verse = tv.verse
+     ORDER BY cc.cross_count DESC`,
     [topicId, translation]
   )
 })

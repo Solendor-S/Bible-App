@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo, useRef } from 'react'
 import { NavigationBar } from './components/NavigationBar'
 import { BiblePanel } from './components/BiblePanel'
 import { CommentaryPanel } from './components/CommentaryPanel'
@@ -40,8 +40,15 @@ export default function App() {
   const [parallelVerse, setParallelVerse] = useState<SelectedVerse | null>(null)
   const [navHistory, setNavHistory] = useState<NavEntry[]>([DEFAULT_ACTIVE])
   const [navIdx, setNavIdx] = useState(0)
+  const navIdxRef = useRef(navIdx)
+  const navHistoryRef = useRef(navHistory)
+  useEffect(() => { navIdxRef.current = navIdx }, [navIdx])
+  useEffect(() => { navHistoryRef.current = navHistory }, [navHistory])
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([])
-  const bookmarkedKeys = new Set(bookmarks.map(b => `${b.book}|${b.chapter}|${b.verse}`))
+  const bookmarkedKeys = useMemo(
+    () => new Set(bookmarks.map(b => `${b.book}|${b.chapter}|${b.verse}`)),
+    [bookmarks]
+  )
   const [primaryTrans, setPrimaryTrans] = useState('KJV')
   const [compareTrans, setCompareTrans] = useState<string | null>(null)
   const [availableTranslations, setAvailableTranslations] = useState<string[]>(['KJV'])
@@ -53,11 +60,15 @@ export default function App() {
     })
   }, [])
 
+  function bookmarkFilter(book: string, chapter: number, verse: number) {
+    return (b: Bookmark) => !(b.book === book && b.chapter === chapter && b.verse === verse)
+  }
+
   async function handleBookmarkToggle(book: string, chapter: number, verse: number, text: string) {
     const key = `${book}|${chapter}|${verse}`
     if (bookmarkedKeys.has(key)) {
       await window.bookmarksApi.remove(book, chapter, verse)
-      setBookmarks(bs => bs.filter(b => !(b.book === book && b.chapter === chapter && b.verse === verse)))
+      setBookmarks(bs => bs.filter(bookmarkFilter(book, chapter, verse)))
     } else {
       const bm: Bookmark = {
         id: `${book}|${chapter}|${verse}`,
@@ -72,7 +83,7 @@ export default function App() {
 
   async function handleBookmarkRemove(book: string, chapter: number, verse: number) {
     await window.bookmarksApi.remove(book, chapter, verse)
-    setBookmarks(bs => bs.filter(b => !(b.book === book && b.chapter === chapter && b.verse === verse)))
+    setBookmarks(bs => bs.filter(bookmarkFilter(book, chapter, verse)))
   }
 
   useEffect(() => {
@@ -81,23 +92,14 @@ export default function App() {
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
-        e.preventDefault()
-        setSearchOpen(true)
-      }
-    }
-    window.addEventListener('keydown', handler)
-    return () => window.removeEventListener('keydown', handler)
-  }, [])
-
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'f') { e.preventDefault(); setSearchOpen(true) }
       if (e.altKey && e.key === 'ArrowLeft') { e.preventDefault(); goBack() }
       if (e.altKey && e.key === 'ArrowRight') { e.preventDefault(); goForward() }
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [navIdx, navHistory])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   function applyLocation(book: string, chapter: number, verse: number) {
     setPassages(parsePassage(`${book} ${chapter}`))
@@ -114,17 +116,41 @@ export default function App() {
   }
 
   function goBack() {
-    if (navIdx <= 0) return
-    const entry = navHistory[navIdx - 1]
+    const idx = navIdxRef.current
+    const history = navHistoryRef.current
+    if (idx <= 0) return
+    const entry = history[idx - 1]
     setNavIdx(i => i - 1)
     applyLocation(entry.book, entry.chapter, entry.verse)
   }
 
   function goForward() {
-    if (navIdx >= navHistory.length - 1) return
-    const entry = navHistory[navIdx + 1]
+    const idx = navIdxRef.current
+    const history = navHistoryRef.current
+    if (idx >= history.length - 1) return
+    const entry = history[idx + 1]
     setNavIdx(i => i + 1)
     applyLocation(entry.book, entry.chapter, entry.verse)
+  }
+
+  function handleNavigatePassages(p: PassageRef[]) {
+    setPassages(p)
+    if (p.length > 0) {
+      const book = p[0].book
+      const chapter = p[0].chapter
+      const verse = p[0].verseStart ?? 1
+      setActiveVerse({ book, chapter, verse })
+      setFeaturedEntry(null)
+      setWordHighlight(null)
+      setNavHistory(h => [...h.slice(0, navIdxRef.current + 1), { book, chapter, verse }])
+      setNavIdx(i => i + 1)
+    }
+  }
+
+  function handleAddContext(book: string, chapter: number, verse: number) {
+    const start = Math.max(1, verse - 2)
+    const end = verse + 4
+    setPassages(p => [...p, { book, chapter, verseStart: start, verseEnd: end, raw: `${book} ${chapter}:${verse}` }])
   }
 
   function handleViewParallels(book: string, chapter: number, verse: number) {
@@ -164,17 +190,7 @@ export default function App() {
         canForward={navIdx < navHistory.length - 1}
         onBack={goBack}
         onForward={goForward}
-        onPassagesChange={p => {
-          setPassages(p)
-          if (p.length > 0) {
-            const book = p[0].book
-            const chapter = p[0].chapter
-            const verse = p[0].verseStart ?? 1
-            setActiveVerse({ book, chapter, verse })
-            setNavHistory(h => [...h.slice(0, navIdx + 1), { book, chapter, verse }])
-            setNavIdx(i => i + 1)
-          }
-        }}
+        onPassagesChange={handleNavigatePassages}
         onSearchOpen={() => setSearchOpen(true)}
         onChangelogOpen={() => setChangelogOpen(true)}
         aiOpen={aiPanelHeight > 0}
@@ -247,11 +263,7 @@ export default function App() {
         open={searchOpen}
         onClose={() => setSearchOpen(false)}
         onNavigate={loc => handleNavigate(loc.book, loc.chapter, loc.verse)}
-        onAdd={(book, chapter, verse) => {
-          const start = Math.max(1, verse - 2)
-          const end = verse + 4
-          setPassages(p => [...p, { book, chapter, verseStart: start, verseEnd: end, raw: `${book} ${chapter}:${verse}` }])
-        }}
+        onAdd={handleAddContext}
         translation={primaryTrans}
       />
       <ChangelogModal open={changelogOpen} onClose={() => setChangelogOpen(false)} />
@@ -268,11 +280,7 @@ export default function App() {
           verse={parallelVerse}
           onClose={() => setParallelVerse(null)}
           onNavigate={loc => handleNavigate(loc.book, loc.chapter, loc.verse)}
-          onAdd={(book, chapter, verse) => {
-            const start = Math.max(1, verse - 2)
-            const end = verse + 4
-            setPassages(p => [...p, { book, chapter, verseStart: start, verseEnd: end, raw: `${book} ${chapter}:${verse}` }])
-          }}
+          onAdd={handleAddContext}
         />
       )}
       {noteTarget && (

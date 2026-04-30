@@ -32,7 +32,11 @@ export function AiPanel({ height, activeVerse, onHeightChange, onNavigate, onSho
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, streamingContent])
+  }, [messages])
+
+  useEffect(() => {
+    if (streaming) messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [streaming])
 
   function handleResizeMouseDown(e: React.MouseEvent) {
     e.preventDefault()

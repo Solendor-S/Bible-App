@@ -244,6 +244,8 @@ function TopicRow({ topic, expanded, refs, loadingRefs, onToggle, onNavigate }: 
         setSummary('⚠️ Ollama is not installed. Download it from https://ollama.com')
       } else if (msg.includes('not found') || msg.includes('404') || msg.includes('pull')) {
         setSummary('⚠️ Model not found. Run: ollama pull gemma4')
+      } else if (msg.includes('20 seconds')) {
+        setSummary('⚠️ Ollama took too long to start. Open Ollama manually and try again.')
       } else {
         setSummary('⚠️ Could not rank verses — try again.')
       }
@@ -291,18 +293,18 @@ function TopicRow({ topic, expanded, refs, loadingRefs, onToggle, onNavigate }: 
               <button className="topics-show-more" onClick={() => setVisibleCount(c => c + STEP)}>
                 Show more
               </button>
-              <button className="topics-show-all" onClick={() => setVisibleCount(refs.length)}>
-                Show all {refs.length}
+              <button className="topics-show-all" onClick={() => setVisibleCount(displayRefs.length)}>
+                Show all {displayRefs.length}
               </button>
             </div>
           )}
 
-          {!loadingRefs && !ranking && displayRefs.length > 0 && (
+          {!loadingRefs && displayRefs.length > 0 && (
             <div className="topics-ai-row">
               {!summarising && !summary && (
-                <button className="topics-ai-btn" onClick={handleSummarise}>✦ Summarise</button>
+                <button className="topics-ai-btn" onClick={handleSummarise} disabled={ranking}>✦ Summarise</button>
               )}
-              {!ranked && (
+              {!ranked && !ranking && (
                 <button className="topics-ai-btn" onClick={handleRank}>⟳ Rank</button>
               )}
             </div>

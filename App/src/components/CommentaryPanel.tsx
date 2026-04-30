@@ -145,50 +145,48 @@ export function CommentaryPanel({ selected, featuredEntry, onClearFeatured, onNa
   return (
     <div className="panel commentary-panel">
       <TabHeader rightTab={rightTab} onTabChange={onTabChange} location={location} />
-      {rightTab === 'bookmarks' ? (
-        <BookmarksPanel bookmarks={bookmarks} onNavigate={onNavigate} onRemove={(b, c, v) => onBookmarkRemove?.(b, c, v)} />
-      ) : rightTab === 'topics' ? (
-        <TopicsPanel selected={selected} onNavigate={onNavigate} translation={translation} />
-      ) : rightTab === 'notes' ? (
-        <NotesPanel onNavigate={onNavigate ?? (() => {})} refreshToken={notesRefreshToken} />
-      ) : rightTab === 'crossrefs' ? (
-        <CrossRefsPanel selected={selected} onNavigate={onNavigate} translation={translation} />
-      ) : rightTab === 'wordstudy' ? (
-        <WordStudyPanel selected={selected} onWordSelect={onWordSelect} />
-      ) : rightTab === 'firstcentury' ? (
-        <JosephusPanel selected={selected} />
-      ) : (
-        <div className="panel-body">
-          {!selected.verse && (
-            <div className="panel-empty">Select a verse to see commentary.</div>
-          )}
-          {selected.verse && (
-            <input
-              className="commentary-father-search"
-              placeholder="Filter by father name…"
-              value={fatherSearch}
-              onChange={e => setFatherSearch(e.target.value)}
-              spellCheck={false}
-            />
-          )}
-          {selected.verse && loading && <div className="panel-loading">Loading...</div>}
-          {selected.verse && !loading && entries.length === 0 && (
-            <div className="panel-empty">No commentary found for this verse.</div>
-          )}
-          {(() => {
+      {(() => {
+        switch (rightTab) {
+          case 'bookmarks':
+            return <BookmarksPanel bookmarks={bookmarks} onNavigate={onNavigate} onRemove={(b, c, v) => onBookmarkRemove?.(b, c, v)} />
+          case 'topics':
+            return <TopicsPanel selected={selected} onNavigate={onNavigate} translation={translation} />
+          case 'notes':
+            return <NotesPanel onNavigate={onNavigate ?? (() => {})} refreshToken={notesRefreshToken} />
+          case 'crossrefs':
+            return <CrossRefsPanel selected={selected} onNavigate={onNavigate} translation={translation} />
+          case 'wordstudy':
+            return <WordStudyPanel selected={selected} onWordSelect={onWordSelect} />
+          case 'firstcentury':
+            return <JosephusPanel selected={selected} />
+          default: {
             const q = fatherSearch.trim().toLowerCase()
             const filtered = [...entries]
               .sort((a, b) => getFatherSortYear(a.father_name, a.father_era) - getFatherSortYear(b.father_name, b.father_era))
               .filter(e => !q || e.father_name.toLowerCase().includes(q))
-            if (selected.verse && !loading && q && filtered.length === 0) {
-              return <div className="panel-empty">No results for "{fatherSearch}".</div>
-            }
-            return filtered.map(entry => (
-              <EntryView key={entry.id} entry={entry} book={selected.book} chapter={selected.chapter} />
-            ))
-          })()}
-        </div>
-      )}
+            return (
+              <div className="panel-body">
+                {!selected.verse && <div className="panel-empty">Select a verse to see commentary.</div>}
+                {selected.verse && (
+                  <input
+                    className="commentary-father-search"
+                    placeholder="Filter by father name…"
+                    value={fatherSearch}
+                    onChange={e => setFatherSearch(e.target.value)}
+                    spellCheck={false}
+                  />
+                )}
+                {selected.verse && loading && <div className="panel-loading">Loading...</div>}
+                {selected.verse && !loading && entries.length === 0 && <div className="panel-empty">No commentary found for this verse.</div>}
+                {selected.verse && !loading && q && filtered.length === 0 && <div className="panel-empty">No results for "{fatherSearch}".</div>}
+                {filtered.map(entry => (
+                  <EntryView key={entry.id} entry={entry} book={selected.book} chapter={selected.chapter} />
+                ))}
+              </div>
+            )
+          }
+        }
+      })()}
     </div>
   )
 }

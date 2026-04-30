@@ -84,7 +84,6 @@ export function WordStudyPanel({ selected, onWordSelect }: Props) {
     fetch.then(w => { setWords(w); setLoading(false) }).catch(() => setLoading(false))
   }, [selected?.book, selected?.chapter, selected?.verse])
 
-  // Emit highlight whenever the active word or its definition changes
   useEffect(() => {
     if (!activeKey || !words.length) return
     const word = words.find(w => w.strongs === activeKey.strongs && w.position === activeKey.position)
@@ -92,7 +91,7 @@ export function WordStudyPanel({ selected, onWordSelect }: Props) {
     const positionRatio = words.length > 1 ? (word.position - 1) / (words.length - 1) : 0
     const glossTerms = def?.strongs === activeKey.strongs ? extractGlossTerms(def.entry) : []
     onWordSelect?.({ gloss: word.gloss ?? null, glossTerms, positionRatio })
-  }, [activeKey, def])
+  }, [activeKey, def, words, onWordSelect])
 
   function handleWordClick(strongs: string, position: number) {
     if (activeKey?.strongs === strongs && activeKey?.position === position) {
