@@ -8,7 +8,7 @@ import type { Segment } from '../data/redLetter'
 import type { WordHighlight } from './WordStudyPanel'
 import type { SelectedVerse, PassageRef } from '../types'
 
-const HIGHLIGHT_COLORS = [
+export const HIGHLIGHT_COLORS = [
   { id: 'yellow', label: 'Important',  hex: '#eab308' },
   { id: 'red',    label: 'Conviction', hex: '#ef4444' },
   { id: 'blue',   label: 'Promise',    hex: '#60a5fa' },

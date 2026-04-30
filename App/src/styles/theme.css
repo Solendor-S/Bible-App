@@ -25,6 +25,7 @@
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
+button { color: inherit; font-family: inherit; font-size: inherit; }
 
 body {
   background: var(--bg-primary);
@@ -545,6 +546,9 @@ body {
 .panel-location {
   font-size: 12px;
   color: var(--text-accent);
+  flex-shrink: 0;
+  padding-right: 12px;
+  white-space: nowrap;
 }
 
 .panel-body {
@@ -573,15 +577,20 @@ body {
 /* ── Panel tab switcher ────────────────────── */
 
 .panel-header--tabs {
-  padding: 0 16px 0 0;
+  padding: 0;
   gap: 0;
+  overflow: hidden;
 }
 
 .panel-tabs {
   display: flex;
   align-items: stretch;
   gap: 0;
+  flex: 1;
+  overflow-x: auto;
+  scrollbar-width: none;
 }
+.panel-tabs::-webkit-scrollbar { display: none; }
 
 .panel-tab {
   font-size: 11px;
@@ -889,6 +898,64 @@ body {
   border-left: 2px solid var(--border);
 }
 
+/* ── Highlights panel ───────────────────────── */
+.highlights-panel { overflow-y: auto; flex: 1; }
+.highlights-group { margin-bottom: 4px; }
+.highlights-group-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 10px 4px;
+  font-size: 10px;
+  font-weight: 700;
+  opacity: 0.6;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  position: sticky;
+  top: 0;
+  background: var(--bg-primary);
+  z-index: 1;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  color: inherit;
+  transition: opacity 0.15s;
+}
+.highlights-group-header:hover { opacity: 0.9; }
+.highlights-color-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.highlights-group-count { margin-left: auto; font-weight: 400; }
+.highlights-group-chevron { font-size: 8px; margin-left: 4px; }
+.highlights-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: 100%;
+  padding: 5px 10px 5px 13px;
+  text-align: left;
+  border: none;
+  background: none;
+  cursor: pointer;
+  border-left: 3px solid transparent;
+  transition: background 0.1s;
+}
+.highlights-item:hover { background: var(--bg-hover); }
+.highlights-item--yellow { border-left-color: #eab308; }
+.highlights-item--red    { border-left-color: #ef4444; }
+.highlights-item--blue   { border-left-color: #60a5fa; }
+.highlights-item--green  { border-left-color: #4ade80; }
+.highlights-item-ref { font-size: 11px; font-weight: 600; color: var(--text-secondary); }
+.highlights-item-text {
+  font-size: 12px;
+  color: var(--text-primary);
+  margin-top: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  font-family: var(--font-serif);
+}
+
 /* ── Bookmark button (in verse rows) ────────── */
 .verse-bookmark-btn {
   flex-shrink: 0;
@@ -938,7 +1005,7 @@ body {
 .bookmark-item-ref {
   font-size: 11px;
   font-weight: 700;
-  color: var(--accent);
+  color: var(--text-accent);
   letter-spacing: 0.02em;
 }
 

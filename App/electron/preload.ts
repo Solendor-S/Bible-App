@@ -76,6 +76,7 @@ contextBridge.exposeInMainWorld('highlightApi', {
     ipcRenderer.invoke('highlights:set', book, chapter, verse, color),
   clear: (book: string, chapter: number, verse: number) =>
     ipcRenderer.invoke('highlights:clear', book, chapter, verse),
+  getAll: (translation?: string) => ipcRenderer.invoke('highlights:getAll', translation),
 })
 
 contextBridge.exposeInMainWorld('chatApi', {

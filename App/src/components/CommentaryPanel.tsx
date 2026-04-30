@@ -9,9 +9,10 @@ import { JosephusPanel } from './JosephusPanel'
 import { NotesPanel } from './NotesPanel'
 import { TopicsPanel } from './TopicsPanel'
 import { BookmarksPanel } from './BookmarksPanel'
+import { HighlightsPanel } from './HighlightsPanel'
 import type { Bookmark, CommentaryEntry, CommentarySearchResult, SelectedVerse } from '../types'
 
-export type RightTab = 'commentary' | 'crossrefs' | 'wordstudy' | 'firstcentury' | 'notes' | 'topics' | 'bookmarks'
+export type RightTab = 'commentary' | 'crossrefs' | 'wordstudy' | 'firstcentury' | 'notes' | 'topics' | 'bookmarks' | 'highlights'
 
 interface Props {
   selected: SelectedVerse
@@ -76,11 +77,9 @@ function EntryView({
 function TabHeader({
   rightTab,
   onTabChange,
-  location,
 }: {
   rightTab: RightTab
   onTabChange: (tab: RightTab) => void
-  location: string
 }) {
   return (
     <div className="panel-header panel-header--tabs">
@@ -106,8 +105,10 @@ function TabHeader({
         <button className={`panel-tab${rightTab === 'bookmarks' ? ' panel-tab--active' : ''}`} onClick={() => onTabChange('bookmarks')}>
           Saved
         </button>
+        <button className={`panel-tab${rightTab === 'highlights' ? ' panel-tab--active' : ''}`} onClick={() => onTabChange('highlights')}>
+          Highlights
+        </button>
       </div>
-      <span className="panel-location">{location}</span>
     </div>
   )
 }
@@ -116,15 +117,11 @@ export function CommentaryPanel({ selected, featuredEntry, onClearFeatured, onNa
   const { entries, loading } = useCommentary(selected.book, selected.chapter, selected.verse)
   const [fatherSearch, setFatherSearch] = useState('')
 
-  const location = selected.verse
-    ? `${selected.book} ${selected.chapter}:${selected.verse}`
-    : `${selected.book} ${selected.chapter}`
-
   if (featuredEntry && rightTab === 'commentary') {
     const verseLabel = `${featuredEntry.book} ${featuredEntry.chapter}:${featuredEntry.verse}`
     return (
       <div className="panel commentary-panel">
-        <TabHeader rightTab={rightTab} onTabChange={onTabChange} location={location} />
+        <TabHeader rightTab={rightTab} onTabChange={onTabChange} />
         <div className="panel-body">
           <div className="commentary-featured-header">
             <button className="commentary-back-btn" onClick={onClearFeatured}>← All</button>
@@ -147,6 +144,8 @@ export function CommentaryPanel({ selected, featuredEntry, onClearFeatured, onNa
       <TabHeader rightTab={rightTab} onTabChange={onTabChange} location={location} />
       {(() => {
         switch (rightTab) {
+          case 'highlights':
+            return <HighlightsPanel onNavigate={onNavigate} translation={translation} />
           case 'bookmarks':
             return <BookmarksPanel bookmarks={bookmarks} onNavigate={onNavigate} onRemove={(b, c, v) => onBookmarkRemove?.(b, c, v)} />
           case 'topics':

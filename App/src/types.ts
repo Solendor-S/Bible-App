@@ -170,6 +170,14 @@ export interface NavesRef {
   text: string | null
 }
 
+export interface Highlight {
+  book: string
+  chapter: number
+  verse: number
+  color: string
+  text: string | null
+}
+
 declare global {
   interface Window {
     translationsApi: {
@@ -185,6 +193,7 @@ declare global {
       get(book: string, chapter: number): Promise<Array<{ verse: number; color: string }>>
       set(book: string, chapter: number, verse: number, color: string): Promise<void>
       clear(book: string, chapter: number, verse: number): Promise<void>
+      getAll(translation?: string): Promise<Highlight[]>
     }
     notesApi: {
       getNotebooks(): Promise<Notebook[]>

@@ -614,6 +614,40 @@ ipcMain.handle('highlights:clear', (_e, book: string, chapter: number, verse: nu
   writeFileSync(highlightsPath(), JSON.stringify(data))
 })
 
+ipcMain.handle('highlights:getAll', async (_e, translation = 'KJV') => {
+  const data = loadHighlights()
+  const entries: Array<{ book: string; chapter: number; verse: number; color: string }> = []
+  for (const [k, color] of Object.entries(data)) {
+    if (!color) continue
+    const [book, ch, v] = k.split('|')
+    entries.push({ book, chapter: parseInt(ch, 10), verse: parseInt(v, 10), color })
+  }
+  if (!entries.length) return []
+
+  const database = await openDb()
+  const textMap = new Map<string, string>()
+  const groups = new Map<string, { book: string; chapter: number; verses: number[] }>()
+  for (const e of entries) {
+    const key = `${e.book}|${e.chapter}`
+    if (!groups.has(key)) groups.set(key, { book: e.book, chapter: e.chapter, verses: [] })
+    groups.get(key)!.verses.push(e.verse)
+  }
+  for (const { book, chapter, verses } of groups.values()) {
+    const ph = verses.map(() => '?').join(',')
+    const chRows = rows(database,
+      `SELECT bv.verse, COALESCE(bt.text, bv.text) AS text
+       FROM bible_verses bv
+       LEFT JOIN bible_translations bt
+         ON bt.translation = ? AND bt.book = bv.book AND bt.chapter = bv.chapter AND bt.verse = bv.verse
+       WHERE bv.book = ? AND bv.chapter = ? AND bv.verse IN (${ph})`,
+      [translation, book, chapter, ...verses]
+    )
+    for (const row of chRows) textMap.set(`${book}|${chapter}|${row.verse}`, row.text)
+  }
+
+  return entries.map(e => ({ ...e, text: textMap.get(`${e.book}|${e.chapter}|${e.verse}`) ?? null }))
+})
+
 ipcMain.handle('commentary:search', async (_e, query: string) => {
   const database = await openDb()
   const term = `%${query.trim()}%`
