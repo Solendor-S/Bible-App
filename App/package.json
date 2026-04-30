@@ -20,6 +20,9 @@
     "fetch-all": "npm run fetch-ccel && npm run fetch-catenabible-api && npm run build-db"
   },
   "dependencies": {
+    "@types/leaflet": "^1.9.21",
+    "leaflet": "^1.9.4",
+    "react-leaflet": "^5.0.0",
     "sql.js": "^1.12.0"
   },
   "devDependencies": {

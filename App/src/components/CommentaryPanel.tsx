@@ -10,9 +10,10 @@ import { NotesPanel } from './NotesPanel'
 import { TopicsPanel } from './TopicsPanel'
 import { BookmarksPanel } from './BookmarksPanel'
 import { HighlightsPanel } from './HighlightsPanel'
+import { MapPanel } from './MapPanel'
 import type { Bookmark, CommentaryEntry, CommentarySearchResult, SelectedVerse } from '../types'
 
-export type RightTab = 'commentary' | 'crossrefs' | 'wordstudy' | 'firstcentury' | 'notes' | 'topics' | 'bookmarks' | 'highlights'
+export type RightTab = 'commentary' | 'crossrefs' | 'wordstudy' | 'firstcentury' | 'notes' | 'topics' | 'bookmarks' | 'highlights' | 'map'
 
 interface Props {
   selected: SelectedVerse
@@ -108,6 +109,9 @@ function TabHeader({
         <button className={`panel-tab${rightTab === 'highlights' ? ' panel-tab--active' : ''}`} onClick={() => onTabChange('highlights')}>
           Highlights
         </button>
+        <button className={`panel-tab${rightTab === 'map' ? ' panel-tab--active' : ''}`} onClick={() => onTabChange('map')}>
+          Map
+        </button>
       </div>
     </div>
   )
@@ -146,6 +150,8 @@ export function CommentaryPanel({ selected, featuredEntry, onClearFeatured, onNa
         switch (rightTab) {
           case 'highlights':
             return <HighlightsPanel onNavigate={onNavigate} translation={translation} />
+          case 'map':
+            return <MapPanel selected={selected} />
           case 'bookmarks':
             return <BookmarksPanel bookmarks={bookmarks} onNavigate={onNavigate} onRemove={(b, c, v) => onBookmarkRemove?.(b, c, v)} />
           case 'topics':
