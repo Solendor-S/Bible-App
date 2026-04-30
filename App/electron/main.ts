@@ -778,7 +778,24 @@ function isOllamaRunning(): Promise<boolean> {
 }
 
 function findOllamaExe(): string | null {
-  // Check known install locations first (full path = no shell needed)
+  if (process.platform === 'darwin') {
+    const macPaths = [
+      '/usr/local/bin/ollama',
+      '/opt/homebrew/bin/ollama',
+      join(homedir(), '.ollama', 'ollama'),
+    ]
+    for (const p of macPaths) {
+      if (existsSync(p)) return p
+    }
+    try {
+      const { execFileSync } = require('child_process')
+      const result = execFileSync('which', ['ollama'], { encoding: 'utf-8' })
+      const line = (result as string).trim()
+      if (line && existsSync(line)) return line
+    } catch {}
+    return null
+  }
+  // Windows: check known install locations first (full path = no shell needed)
   const knownPaths = [
     join(homedir(), 'AppData', 'Local', 'Programs', 'Ollama', 'ollama.exe'),
     'C:\\Program Files\\Ollama\\ollama.exe',
@@ -786,7 +803,6 @@ function findOllamaExe(): string | null {
   for (const p of knownPaths) {
     if (existsSync(p)) return p
   }
-  // Fall back to resolving via PATH using 'where' (synchronous, hidden)
   try {
     const { execFileSync } = require('child_process')
     const result = execFileSync('where', ['ollama'], { windowsHide: true, encoding: 'utf-8' } as any)
@@ -817,12 +833,16 @@ ipcMain.handle('ollama:ensureRunning', async () => {
   if (!exe) return { success: false, error: 'Ollama not found. Install it from https://ollama.com' }
 
   try {
-    // WScript.Shell.Run with window style 0 (SW_HIDE) is the most reliable
-    // way to launch a hidden process on Windows — unaffected by execution policy
-    const vbsPath = join(tmpdir(), 'ollama-start.vbs')
-    const safePath = exe.replace(/"/g, '""')
-    writeFileSync(vbsPath, `Set sh = CreateObject("WScript.Shell")\nsh.Run """${safePath}"" serve", 0, False\n`)
-    spawn('wscript.exe', [vbsPath], { detached: true, stdio: 'ignore', windowsHide: true }).unref()
+    if (process.platform === 'darwin') {
+      spawn(exe, ['serve'], { detached: true, stdio: 'ignore' }).unref()
+    } else {
+      // WScript.Shell.Run with window style 0 (SW_HIDE) is the most reliable
+      // way to launch a hidden process on Windows — unaffected by execution policy
+      const vbsPath = join(tmpdir(), 'ollama-start.vbs')
+      const safePath = exe.replace(/"/g, '""')
+      writeFileSync(vbsPath, `Set sh = CreateObject("WScript.Shell")\nsh.Run """${safePath}"" serve", 0, False\n`)
+      spawn('wscript.exe', [vbsPath], { detached: true, stdio: 'ignore', windowsHide: true }).unref()
+    }
   } catch (e: any) {
     return { success: false, error: `Failed to start Ollama: ${e.message}` }
   }
@@ -938,7 +958,11 @@ app.on('window-all-closed', () => {
   if (ollamaStartedByUs) {
     try {
       const { execFileSync } = require('child_process')
-      execFileSync('taskkill', ['/F', '/IM', 'ollama.exe', '/T'], { windowsHide: true } as any)
+      if (process.platform === 'win32') {
+        execFileSync('taskkill', ['/F', '/IM', 'ollama.exe', '/T'], { windowsHide: true } as any)
+      } else {
+        execFileSync('pkill', ['-f', 'ollama serve'])
+      }
     } catch {}
   }
   if (process.platform !== 'darwin') app.quit()
