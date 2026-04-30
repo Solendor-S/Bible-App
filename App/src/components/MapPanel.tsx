@@ -78,7 +78,7 @@ export function MapPanel({ selected }: Props) {
         />
         {journey && (
           <>
-            <BoundsFitter positions={journey.cities.map(c => [c.lat, c.lng])} />
+            <BoundsFitter positions={journey.cities.map(c => [c.lat, c.lng] as [number, number])} />
             <Polyline
               positions={journey.route}
               pathOptions={{ color: journey.color, weight: 2.5, opacity: 0.85, dashArray: undefined }}
