@@ -195,6 +195,45 @@ function rows(database: Database, sql: string, params: any[] = []): any[] {
   return results
 }
 
+function createSplash(): BrowserWindow {
+  const iconPath = join(__dirname, '../../../resources/icon.png')
+  let iconSrc = ''
+  try { iconSrc = `data:image/png;base64,${readFileSync(iconPath).toString('base64')}` } catch {}
+
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{display:flex;flex-direction:column;align-items:center;justify-content:center;
+         height:100vh;background:#1a1a1a;
+         font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#e5e7eb;
+         user-select:none;-webkit-app-region:drag}
+    img{width:72px;height:72px;border-radius:14px;margin-bottom:18px;box-shadow:0 4px 20px rgba(0,0,0,0.5)}
+    h1{font-size:17px;font-weight:600;margin-bottom:5px;letter-spacing:0.01em}
+    p{font-size:11px;color:#6b7280;margin-bottom:28px}
+    .dots{display:flex;gap:7px}
+    .dot{width:6px;height:6px;border-radius:50%;background:#4b5563;animation:pulse 1.4s ease-in-out infinite}
+    .dot:nth-child(2){animation-delay:0.2s}.dot:nth-child(3){animation-delay:0.4s}
+    @keyframes pulse{0%,100%{opacity:0.25;transform:scale(0.75)}50%{opacity:1;transform:scale(1)}}
+  </style></head><body>
+    ${iconSrc ? `<img src="${iconSrc}" />` : ''}
+    <h1>Bible Study</h1>
+    <p>Church Fathers · Commentary · History</p>
+    <div class="dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+  </body></html>`
+
+  const splash = new BrowserWindow({
+    width: 380,
+    height: 240,
+    frame: false,
+    resizable: false,
+    center: true,
+    alwaysOnTop: true,
+    backgroundColor: '#1a1a1a',
+    webPreferences: { nodeIntegration: false, contextIsolation: true },
+  })
+  splash.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`)
+  return splash
+}
+
 function createWindow(): BrowserWindow {
   const isMac = process.platform === 'darwin'
   const win = new BrowserWindow({
@@ -202,6 +241,7 @@ function createWindow(): BrowserWindow {
     height: 900,
     minWidth: 900,
     minHeight: 600,
+    show: false,
     backgroundColor: '#1a1a1a',
     icon: join(__dirname, isMac ? '../../../resources/icon.png' : '../../../resources/icon.ico'),
     titleBarStyle: isMac ? 'hiddenInset' : 'hidden',
@@ -943,8 +983,13 @@ ipcMain.handle('app:launchUpdater', () => {
 })
 
 app.whenReady().then(async () => {
+  const splash = createSplash()
   await openDb()
   const win = createWindow()
+  win.once('ready-to-show', () => {
+    splash.close()
+    win.show()
+  })
   win.webContents.once('did-finish-load', () => {
     checkForUpdateAndNotify(win)
   })
