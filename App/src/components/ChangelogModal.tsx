@@ -16,6 +16,11 @@ export function ChangelogModal({ open, onClose }: Props) {
   const [releases, setReleases] = useState<Release[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(false)
+  const [currentVersion, setCurrentVersion] = useState<string>('')
+
+  useEffect(() => {
+    window.bibleApi.getVersion().then(setCurrentVersion)
+  }, [])
 
   useEffect(() => {
     if (!open || releases.length > 0) return
@@ -42,6 +47,11 @@ export function ChangelogModal({ open, onClose }: Props) {
           <button className="modal-close" onClick={onClose}>✕</button>
         </div>
         <div className="changelog-body">
+          {currentVersion && (
+            <div className="changelog-installed">
+              Installed: <strong>v{currentVersion}</strong>
+            </div>
+          )}
           {loading && <div className="modal-status">Loading releases...</div>}
           {error && <div className="modal-status">Could not load releases. Check your connection.</div>}
           {!loading && !error && releases.length === 0 && (

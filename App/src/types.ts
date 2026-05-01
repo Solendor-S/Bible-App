@@ -226,6 +226,7 @@ declare global {
       concordance(word: string, translation?: string): Promise<{ total: number; results: Array<{ book: string; chapter: number; verse: number; text: string }> }>
       openExternal(url: string): Promise<void>
       launchUpdater(): Promise<void>
+      getVersion(): Promise<string>
       getReleases(): Promise<{ tag: string; name: string; date: string; body: string }[]>
       onUpdateAvailable(cb: (info: { current: string; latest: string }) => void): void
       ensureOllama(): Promise<{ success: boolean; alreadyRunning?: boolean; error?: string }>

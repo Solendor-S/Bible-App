@@ -935,6 +935,8 @@ async function checkForUpdateAndNotify(win: BrowserWindow): Promise<void> {
   }
 }
 
+ipcMain.handle('app:getVersion', () => getCurrentVersion())
+
 ipcMain.handle('app:getReleases', (): Promise<{ tag: string; name: string; date: string; body: string }[]> => {
   return new Promise((resolve) => {
     https.get(

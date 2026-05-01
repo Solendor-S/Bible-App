@@ -27,6 +27,7 @@ contextBridge.exposeInMainWorld('bibleApi', {
   concordance: (word: string, translation?: string) => ipcRenderer.invoke('concordance:search', word, translation),
   openExternal: (url: string) => ipcRenderer.invoke('shell:openExternal', url),
   launchUpdater: () => ipcRenderer.invoke('app:launchUpdater'),
+  getVersion: () => ipcRenderer.invoke('app:getVersion'),
   getReleases: () => ipcRenderer.invoke('app:getReleases'),
   onUpdateAvailable: (cb: (info: { current: string; latest: string }) => void) =>
     ipcRenderer.on('app:updateAvailable', (_e, info) => cb(info)),

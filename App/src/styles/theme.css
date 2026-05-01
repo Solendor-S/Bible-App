@@ -1807,6 +1807,18 @@ body {
   letter-spacing: 0.07em;
 }
 
+.changelog-installed {
+  padding: 8px 20px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-secondary);
+}
+.changelog-installed strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
 .changelog-body {
   overflow-y: auto;
   flex: 1;
