@@ -2,11 +2,12 @@ import { app, BrowserWindow, ipcMain } from 'electron'
 import { join, dirname } from 'path'
 import {
   existsSync, readFileSync, rmSync, mkdirSync,
-  createWriteStream, copyFileSync, readdirSync,
+  createWriteStream, createReadStream, copyFileSync, readdirSync,
   openSync, readSync, closeSync
 } from 'fs'
 import { homedir, tmpdir } from 'os'
 import { spawn } from 'child_process'
+import { createHash } from 'crypto'
 import https from 'https'
 import http from 'http'
 
@@ -209,6 +210,18 @@ async function downloadLfsObject(
   await httpsDownload(href, destPath, onProgress)
 }
 
+function fileMatchesOid(filePath: string, oid: string): Promise<boolean> {
+  return new Promise(resolve => {
+    try {
+      const hash = createHash('sha256')
+      const stream = createReadStream(filePath)
+      stream.on('data', (chunk: Buffer) => hash.update(chunk))
+      stream.on('end', () => resolve(hash.digest('hex') === oid))
+      stream.on('error', () => resolve(false))
+    } catch { resolve(false) }
+  })
+}
+
 // Recursively copy srcDir → destDir, resolving LFS pointers along the way
 async function copyExtracted(
   srcDir: string,
@@ -226,19 +239,23 @@ async function copyExtracted(
     } else {
       const lfs = isLfsPointer(srcPath)
       if (lfs) {
-        const mb = (lfs.size / 1024 / 1024).toFixed(1)
-        send(`  Downloading ${entry.name} (${mb} MB via LFS)...\n`, 'info')
-        let lastPct = -1
-        await downloadLfsObject(lfs.oid, lfs.size, destPath, (received, total) => {
-          if (total > 0) {
-            const pct = Math.floor(received / total * 100)
-            if (pct >= lastPct + 10) {
-              lastPct = pct
-              send(`  ${entry.name}: ${pct}%\n`)
+        if (existsSync(destPath) && await fileMatchesOid(destPath, lfs.oid)) {
+          send(`  ${entry.name} unchanged — skipped.\n`, 'info')
+        } else {
+          const mb = (lfs.size / 1024 / 1024).toFixed(1)
+          send(`  Downloading ${entry.name} (${mb} MB via LFS)...\n`, 'info')
+          let lastPct = -1
+          await downloadLfsObject(lfs.oid, lfs.size, destPath, (received, total) => {
+            if (total > 0) {
+              const pct = Math.floor(received / total * 100)
+              if (pct >= lastPct + 10) {
+                lastPct = pct
+                send(`  ${entry.name}: ${pct}%\n`)
+              }
             }
-          }
-        })
-        send(`  ${entry.name} done.\n`)
+          })
+          send(`  ${entry.name} done.\n`)
+        }
       } else {
         mkdirSync(dirname(destPath), { recursive: true })
         copyFileSync(srcPath, destPath)
