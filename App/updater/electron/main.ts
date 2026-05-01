@@ -349,7 +349,14 @@ ipcMain.handle('update:apply', async () => {
       npm.on('close', code => code === 0 ? resolve() : reject(new Error(`npm install failed (code ${code})`)))
     })
 
-    // 8. Clean up temp files
+    // 8. Remove stale updater binary so next launch falls back to npm run start
+    //    with the freshly-copied source — prevents old git-pull binaries surviving
+    const updaterOut = join(APP_DIR, 'updater', 'out')
+    if (existsSync(updaterOut)) {
+      try { rmSync(updaterOut, { recursive: true, force: true }) } catch {}
+    }
+
+    // 9. Clean up temp files
     rmSync(tmpBase, { recursive: true, force: true })
 
     send('\nUpdate complete!\n', 'success')
