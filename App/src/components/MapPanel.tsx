@@ -81,6 +81,30 @@ export function MapPanel({ selected }: Props) {
 
       L.polyline(journey.route, { color: journey.color, weight: 2.5, opacity: 0.85 }).addTo(layers)
 
+      // Directional arrows at midpoint between consecutive cities
+      for (let i = 0; i < journey.cities.length - 1; i++) {
+        const a = journey.cities[i]
+        const b = journey.cities[i + 1]
+        const midLat = (a.lat + b.lat) / 2
+        const midLng = (a.lng + b.lng) / 2
+
+        const dLng = (b.lng - a.lng) * Math.PI / 180
+        const lat1R = a.lat * Math.PI / 180
+        const lat2R = b.lat * Math.PI / 180
+        const y = Math.sin(dLng) * Math.cos(lat2R)
+        const x = Math.cos(lat1R) * Math.sin(lat2R) - Math.sin(lat1R) * Math.cos(lat2R) * Math.cos(dLng)
+        const bearing = Math.atan2(y, x) * 180 / Math.PI
+        const rotateDeg = bearing - 90
+
+        const arrowIcon = L.divIcon({
+          html: `<div style="transform:rotate(${rotateDeg}deg);color:${journey.color};font-size:13px;line-height:1;text-shadow:0 0 3px rgba(0,0,0,0.7);opacity:0.95">▶</div>`,
+          className: '',
+          iconSize: [13, 13],
+          iconAnchor: [6, 7],
+        })
+        L.marker([midLat, midLng], { icon: arrowIcon, interactive: false }).addTo(layers)
+      }
+
       journey.cities.forEach(city => {
         L.marker([city.lat, city.lng], { icon })
           .bindPopup(`<strong>${city.name}</strong><p style="margin:4px 0 0;font-size:12px;color:#888">${city.description}</p>`)
