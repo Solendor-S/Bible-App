@@ -1,4 +1,20 @@
-import React, { useState } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
+import {
+  DndContext,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragOverlay,
+  closestCenter,
+} from '@dnd-kit/core'
+import type { DragEndEvent, DragStartEvent } from '@dnd-kit/core'
+import {
+  SortableContext,
+  useSortable,
+  horizontalListSortingStrategy,
+  arrayMove,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import { useCommentary } from '../hooks/useCommentary'
 import { getFatherDates, getFatherSortYear } from '../lib/fatherDates'
 import { getSourceUrl } from '../lib/sourceLinks'
@@ -11,9 +27,11 @@ import { TopicsPanel } from './TopicsPanel'
 import { BookmarksPanel } from './BookmarksPanel'
 import { HighlightsPanel } from './HighlightsPanel'
 import { MapPanel } from './MapPanel'
+import { CouncilsPanel } from './CouncilsPanel'
+import { HeresiesPanel } from './HeresiesPanel'
 import type { Bookmark, CommentaryEntry, CommentarySearchResult, SelectedVerse } from '../types'
 
-export type RightTab = 'commentary' | 'crossrefs' | 'wordstudy' | 'firstcentury' | 'notes' | 'topics' | 'bookmarks' | 'highlights' | 'map'
+export type RightTab = 'commentary' | 'crossrefs' | 'wordstudy' | 'firstcentury' | 'notes' | 'topics' | 'bookmarks' | 'highlights' | 'map' | 'councils' | 'heresies'
 
 interface Props {
   selected: SelectedVerse
@@ -75,6 +93,62 @@ function EntryView({
   )
 }
 
+const DEFAULT_TABS: { id: RightTab; label: string }[] = [
+  { id: 'commentary', label: 'Fathers' },
+  { id: 'crossrefs',  label: 'Cross-Refs' },
+  { id: 'wordstudy',  label: 'Words' },
+  { id: 'firstcentury', label: 'History' },
+  { id: 'notes',      label: 'Notes' },
+  { id: 'topics',     label: 'Topics' },
+  { id: 'bookmarks',  label: 'Saved' },
+  { id: 'highlights', label: 'Highlights' },
+  { id: 'map',        label: 'Map' },
+  { id: 'councils',   label: 'Councils' },
+  { id: 'heresies',   label: 'Heresies' },
+]
+
+const STORAGE_KEY = 'panel-tab-order'
+
+function loadTabOrder(): { id: RightTab; label: string }[] {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY)
+    if (!saved) return DEFAULT_TABS
+    const ids: RightTab[] = JSON.parse(saved)
+    const map = Object.fromEntries(DEFAULT_TABS.map(t => [t.id, t]))
+    const restored = ids.filter(id => id in map).map(id => map[id])
+    const missing = DEFAULT_TABS.filter(t => !ids.includes(t.id))
+    return [...restored, ...missing]
+  } catch {
+    return DEFAULT_TABS
+  }
+}
+
+function SortableTab({
+  tab,
+  isActive,
+  isDragging,
+  onClick,
+}: {
+  tab: { id: RightTab; label: string }
+  isActive: boolean
+  isDragging: boolean
+  onClick: () => void
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: tab.id })
+  return (
+    <button
+      ref={setNodeRef}
+      className={`panel-tab${isActive ? ' panel-tab--active' : ''}${isDragging ? ' panel-tab--dragging' : ''}`}
+      style={{ transform: CSS.Transform.toString(transform), transition, touchAction: 'none' }}
+      onClick={onClick}
+      {...attributes}
+      {...listeners}
+    >
+      {tab.label}
+    </button>
+  )
+}
+
 function TabHeader({
   rightTab,
   onTabChange,
@@ -82,38 +156,94 @@ function TabHeader({
   rightTab: RightTab
   onTabChange: (tab: RightTab) => void
 }) {
+  const [tabs, setTabs] = useState(loadTabOrder)
+  const [activeId, setActiveId] = useState<RightTab | null>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const [canScrollLeft, setCanScrollLeft] = useState(false)
+  const [canScrollRight, setCanScrollRight] = useState(false)
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } })
+  )
+
+  const checkScroll = () => {
+    const el = scrollRef.current
+    if (!el) return
+    setCanScrollLeft(el.scrollLeft > 0)
+    setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 1)
+  }
+
+  useEffect(() => {
+    checkScroll()
+    const el = scrollRef.current
+    if (!el) return
+    el.addEventListener('scroll', checkScroll, { passive: true })
+    const ro = new ResizeObserver(checkScroll)
+    ro.observe(el)
+    return () => { el.removeEventListener('scroll', checkScroll); ro.disconnect() }
+  }, [])
+
+  const scroll = (dir: 'left' | 'right') => {
+    const el = scrollRef.current
+    if (!el) return
+    el.scrollBy({ left: dir === 'left' ? -120 : 120, behavior: 'smooth' })
+  }
+
+  const handleDragStart = (e: DragStartEvent) => {
+    setActiveId(e.active.id as RightTab)
+  }
+
+  const handleDragEnd = (e: DragEndEvent) => {
+    setActiveId(null)
+    const { active, over } = e
+    if (!over || active.id === over.id) return
+    setTabs(prev => {
+      const oldIndex = prev.findIndex(t => t.id === active.id)
+      const newIndex = prev.findIndex(t => t.id === over.id)
+      const next = arrayMove(prev, oldIndex, newIndex)
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(next.map(t => t.id)))
+      return next
+    })
+  }
+
+  const activeTab = activeId ? tabs.find(t => t.id === activeId) : null
+
   return (
-    <div className="panel-header panel-header--tabs">
-      <div className="panel-tabs">
-        <button className={`panel-tab${rightTab === 'commentary' ? ' panel-tab--active' : ''}`} onClick={() => onTabChange('commentary')}>
-          Fathers
-        </button>
-        <button className={`panel-tab${rightTab === 'crossrefs' ? ' panel-tab--active' : ''}`} onClick={() => onTabChange('crossrefs')}>
-          Cross-Refs
-        </button>
-        <button className={`panel-tab${rightTab === 'wordstudy' ? ' panel-tab--active' : ''}`} onClick={() => onTabChange('wordstudy')}>
-          Words
-        </button>
-        <button className={`panel-tab${rightTab === 'firstcentury' ? ' panel-tab--active' : ''}`} onClick={() => onTabChange('firstcentury')}>
-          History
-        </button>
-        <button className={`panel-tab${rightTab === 'notes' ? ' panel-tab--active' : ''}`} onClick={() => onTabChange('notes')}>
-          Notes
-        </button>
-        <button className={`panel-tab${rightTab === 'topics' ? ' panel-tab--active' : ''}`} onClick={() => onTabChange('topics')}>
-          Topics
-        </button>
-        <button className={`panel-tab${rightTab === 'bookmarks' ? ' panel-tab--active' : ''}`} onClick={() => onTabChange('bookmarks')}>
-          Saved
-        </button>
-        <button className={`panel-tab${rightTab === 'highlights' ? ' panel-tab--active' : ''}`} onClick={() => onTabChange('highlights')}>
-          Highlights
-        </button>
-        <button className={`panel-tab${rightTab === 'map' ? ' panel-tab--active' : ''}`} onClick={() => onTabChange('map')}>
-          Map
-        </button>
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+    >
+      <div className="panel-header panel-header--tabs">
+        {canScrollLeft && (
+          <button className="panel-tabs-arrow panel-tabs-arrow--left" onClick={() => scroll('left')} aria-label="Scroll tabs left">‹</button>
+        )}
+        <SortableContext items={tabs.map(t => t.id)} strategy={horizontalListSortingStrategy}>
+          <div className="panel-tabs" ref={scrollRef}>
+            {tabs.map(tab => (
+              <SortableTab
+                key={tab.id}
+                tab={tab}
+                isActive={rightTab === tab.id}
+                isDragging={activeId === tab.id}
+                onClick={() => onTabChange(tab.id)}
+              />
+            ))}
+          </div>
+        </SortableContext>
+        {canScrollRight && (
+          <button className="panel-tabs-arrow panel-tabs-arrow--right" onClick={() => scroll('right')} aria-label="Scroll tabs right">›</button>
+        )}
       </div>
-    </div>
+      <DragOverlay>
+        {activeTab && (
+          <button className="panel-tab panel-tab--drag-overlay">
+            {activeTab.label}
+          </button>
+        )}
+      </DragOverlay>
+    </DndContext>
   )
 }
 
@@ -164,6 +294,10 @@ export function CommentaryPanel({ selected, featuredEntry, onClearFeatured, onNa
             return <WordStudyPanel selected={selected} onWordSelect={onWordSelect} />
           case 'firstcentury':
             return <JosephusPanel selected={selected} />
+          case 'councils':
+            return <CouncilsPanel />
+          case 'heresies':
+            return <HeresiesPanel />
           default: {
             const q = fatherSearch.trim().toLowerCase()
             const filtered = [...entries]

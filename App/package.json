@@ -1,7 +1,9 @@
 {
   "name": "bible-app",
-  "version": "1.8.0",
+  "version": "1.9.0",
   "description": "Catena-style Bible study app with Church Fathers commentary",
+  "author": "Sargon Shlimon",
+  "copyright": "Copyright © 2026 Sargon Shlimon. All rights reserved.",
   "main": ".vite/build/main.js",
   "scripts": {
     "start": "electron-forge start",
@@ -20,6 +22,9 @@
     "fetch-all": "npm run fetch-ccel && npm run fetch-catenabible-api && npm run build-db"
   },
   "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
     "@types/leaflet": "^1.9.21",
     "leaflet": "^1.9.4",
     "sql.js": "^1.12.0"
@@ -61,7 +66,7 @@
         {
           "name": "@electron-forge/maker-squirrel",
           "config": {
-            "authors": "Solendor",
+            "authors": "Sargon Shlimon",
             "description": "Bible study app"
           }
         },
