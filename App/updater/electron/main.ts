@@ -299,15 +299,7 @@ ipcMain.handle('update:apply', async () => {
     rmSync(tmpBase, { recursive: true, force: true })
     mkdirSync(extractDir, { recursive: true })
 
-    // 3. Delete node_modules BEFORE touching anything (eliminates Windows file locks)
-    const nodeModules = join(APP_DIR, 'node_modules')
-    if (existsSync(nodeModules)) {
-      send('\nClearing node_modules...\n', 'info')
-      rmSync(nodeModules, { recursive: true, force: true })
-      send('node_modules cleared.\n')
-    }
-
-    // 4. Download zipball
+    // 3. Download zipball
     send('\nDownloading update...\n', 'info')
     let lastMb = 0
     await httpsDownload(zipball, zipPath, (received, total) => {
@@ -320,7 +312,7 @@ ipcMain.handle('update:apply', async () => {
     })
     send('Download complete.\n')
 
-    // 5. Extract zip
+    // 4. Extract zip
     send('\nExtracting archive...\n', 'info')
     await extractZip(zipPath, extractDir)
 
@@ -331,12 +323,12 @@ ipcMain.handle('update:apply', async () => {
     const srcRoot = join(extractDir, rootEntry.name)
     send(`Extracted ${rootEntry.name}.\n`)
 
-    // 6. Copy files into INSTALL_ROOT, resolving LFS pointers along the way
+    // 5. Copy files into INSTALL_ROOT, resolving LFS pointers along the way
     send('\nCopying files...\n', 'info')
     await copyExtracted(srcRoot, INSTALL_ROOT, send)
     send('Files copied.\n')
 
-    // 7. Install updated dependencies
+    // 6. Install updated dependencies
     send('\nInstalling dependencies...\n', 'info')
     await new Promise<void>((resolve, reject) => {
       const npm = spawn('npm', ['install', '--no-progress'], {
@@ -349,14 +341,14 @@ ipcMain.handle('update:apply', async () => {
       npm.on('close', code => code === 0 ? resolve() : reject(new Error(`npm install failed (code ${code})`)))
     })
 
-    // 8. Remove stale updater binary so next launch falls back to npm run start
+    // 7. Remove stale updater binary so next launch falls back to npm run start
     //    with the freshly-copied source — prevents old git-pull binaries surviving
     const updaterOut = join(APP_DIR, 'updater', 'out')
     if (existsSync(updaterOut)) {
       try { rmSync(updaterOut, { recursive: true, force: true }) } catch {}
     }
 
-    // 9. Clean up temp files
+    // 8. Clean up temp files
     rmSync(tmpBase, { recursive: true, force: true })
 
     send('\nUpdate complete!\n', 'success')
