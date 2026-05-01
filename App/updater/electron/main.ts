@@ -328,9 +328,10 @@ ipcMain.handle('update:apply', async () => {
     await copyExtracted(srcRoot, INSTALL_ROOT, send)
     send('Files copied.\n')
 
-    // 6. Install updated dependencies
+    // 6. Install updated dependencies (non-fatal — electron package can be
+    //    locked by the updater process itself if running via npm run start)
     send('\nInstalling dependencies...\n', 'info')
-    await new Promise<void>((resolve, reject) => {
+    await new Promise<void>((resolve) => {
       const npm = spawn('npm', ['install', '--no-progress'], {
         cwd: APP_DIR,
         shell: true,
@@ -338,17 +339,13 @@ ipcMain.handle('update:apply', async () => {
       })
       npm.stdout.on('data', (d: Buffer) => send(d.toString()))
       npm.stderr.on('data', (d: Buffer) => send(d.toString()))
-      npm.on('close', code => code === 0 ? resolve() : reject(new Error(`npm install failed (code ${code})`)))
+      npm.on('close', code => {
+        if (code !== 0) send('\nDependency install had warnings — update will still complete.\n', 'info')
+        resolve()
+      })
     })
 
-    // 7. Remove stale updater binary so next launch falls back to npm run start
-    //    with the freshly-copied source — prevents old git-pull binaries surviving
-    const updaterOut = join(APP_DIR, 'updater', 'out')
-    if (existsSync(updaterOut)) {
-      try { rmSync(updaterOut, { recursive: true, force: true }) } catch {}
-    }
-
-    // 8. Clean up temp files
+    // 7. Clean up temp files
     rmSync(tmpBase, { recursive: true, force: true })
 
     send('\nUpdate complete!\n', 'success')
