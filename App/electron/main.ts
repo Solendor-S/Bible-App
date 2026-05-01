@@ -965,6 +965,7 @@ ipcMain.handle('app:launchUpdater', () => {
     const exe = join(outDir, 'BibleAppUpdater-win32-x64', 'BibleAppUpdater.exe')
     if (existsSync(exe)) {
       spawn(exe, [], { detached: true, stdio: 'ignore' }).unref()
+      app.quit()
       return
     }
   } else if (process.platform === 'darwin') {
@@ -972,6 +973,7 @@ ipcMain.handle('app:launchUpdater', () => {
       const appBundle = join(outDir, `BibleAppUpdater-darwin-${arch}`, 'BibleAppUpdater.app')
       if (existsSync(appBundle)) {
         spawn('open', [appBundle], { detached: true, stdio: 'ignore' }).unref()
+        app.quit()
         return
       }
     }
@@ -980,6 +982,7 @@ ipcMain.handle('app:launchUpdater', () => {
   // Fallback: run via npm (binary not found — rebuilds from source)
   const updaterDir = join(homedir(), 'BibleApp', 'App', 'updater')
   spawn('npm', ['run', 'start'], { cwd: updaterDir, detached: true, stdio: 'ignore', shell: true }).unref()
+  app.quit()
 })
 
 app.whenReady().then(async () => {
