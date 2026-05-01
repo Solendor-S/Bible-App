@@ -977,8 +977,8 @@ ipcMain.handle('app:launchUpdater', () => {
     }
   }
 
-  // Fallback: run via npm (dev mode or binary not found)
-  const updaterDir = join(__dirname, '../../../updater')
+  // Fallback: run via npm (binary not found — rebuilds from source)
+  const updaterDir = join(homedir(), 'BibleApp', 'App', 'updater')
   spawn('npm', ['run', 'start'], { cwd: updaterDir, detached: true, stdio: 'ignore', shell: true }).unref()
 })
 
