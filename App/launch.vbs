@@ -1,2 +1,4 @@
+Dim scriptDir, shell
+scriptDir = CreateObject("Scripting.FileSystemObject").GetParentFolderName(WScript.ScriptFullName)
 Set shell = CreateObject("WScript.Shell")
-shell.Run "cmd /c cd /d ""C:\Projects\BibleApp\App"" && npm run dev", 0, False
+shell.Run "powershell.exe -WindowStyle Hidden -ExecutionPolicy Bypass -NonInteractive -NoProfile -File """ & scriptDir & "\launch.ps1""", 0, False
