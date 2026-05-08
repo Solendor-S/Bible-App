@@ -1,6 +1,6 @@
 {
   "name": "bible-app",
-  "version": "1.9.1",
+  "version": "1.9.6",
   "description": "Catena-style Bible study app with Church Fathers commentary",
   "author": "Sargon Shlimon",
   "copyright": "Copyright © 2026 Sargon Shlimon. All rights reserved.",
@@ -18,6 +18,7 @@
     "fetch-gaps": "node -r ts-node/register scripts/fetch-gaps.ts",
     "fetch-strongs": "node -r ts-node/register scripts/fetch-strongs.ts",
     "fetch-josephus": "node -r ts-node/register scripts/fetch-josephus.ts",
+    "fetch-translations": "node -r ts-node/register scripts/fetch-translations.ts",
     "fetch-apocrypha": "node -r ts-node/register data/fetch-apocrypha.ts",
     "fetch-all": "npm run fetch-ccel && npm run fetch-catenabible-api && npm run build-db"
   },

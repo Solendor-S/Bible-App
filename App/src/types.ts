@@ -21,6 +21,7 @@ export interface GreekWord {
   translit: string
   strongs: string
   gloss: string | null
+  morph: string | null
 }
 
 export interface HebrewWord {
@@ -29,6 +30,7 @@ export interface HebrewWord {
   translit: string
   strongs: string
   gloss: string | null
+  morph: string | null
 }
 
 export interface StrongsEntry {
@@ -99,6 +101,20 @@ export interface HistoricalEntry {
   citation: string
   testament: 'ot' | 'nt'
   sort_year: number
+}
+
+export interface TextualVariant {
+  id: number
+  testament: 'ot' | 'nt'
+  word_ref: string
+  main_type: string
+  main_english: string
+  main_hebrew: string
+  variant_source: string
+  variant_source_label: string
+  variant_english: string
+  variant_hebrew: string
+  description: string
 }
 
 export interface JosephusEntry {

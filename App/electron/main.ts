@@ -59,8 +59,45 @@ async function openDb(): Promise<Database> {
   const installedVersion = existsSync(versionPath) ? readFileSync(versionPath, 'utf-8').trim() : ''
   if (existsSync(seedPath) && (!existsSync(userDbPath) || installedVersion !== currentVersion)) {
     mkdirSync(app.getPath('userData'), { recursive: true })
+    // Preserve user-fetched translations from the old DB before overwriting
+    let savedTranslations: any[][] = []
+    if (existsSync(userDbPath) && installedVersion !== currentVersion) {
+      try {
+        const oldBuf = readFileSync(userDbPath)
+        const OldSQL = await initSqlJs({
+          locateFile: (file: string) => {
+            if (app.isPackaged) return join(process.resourcesPath, file)
+            return join(__dirname, '../../node_modules/sql.js/dist', file)
+          }
+        })
+        const oldDb = new OldSQL.Database(oldBuf)
+        const hasTrans = oldDb.exec("SELECT name FROM sqlite_master WHERE type='table' AND name='bible_translations'")
+        if (hasTrans.length && hasTrans[0].values.length) {
+          const res = oldDb.exec('SELECT translation, book, chapter, verse, text FROM bible_translations')
+          if (res.length) savedTranslations = res[0].values as any[][]
+        }
+        oldDb.close()
+      } catch { /* ignore — translations just need to be re-downloaded */ }
+    }
     copyFileSync(seedPath, userDbPath)
     writeFileSync(versionPath, currentVersion)
+    // Re-insert preserved translations into the new DB
+    if (savedTranslations.length) {
+      const tmpBuf = readFileSync(userDbPath)
+      const TmpSQL = await initSqlJs({
+        locateFile: (file: string) => {
+          if (app.isPackaged) return join(process.resourcesPath, file)
+          return join(__dirname, '../../node_modules/sql.js/dist', file)
+        }
+      })
+      const tmpDb = new TmpSQL.Database(tmpBuf)
+      const stmt = tmpDb.prepare('INSERT OR IGNORE INTO bible_translations (translation, book, chapter, verse, text) VALUES (?, ?, ?, ?, ?)')
+      for (const row of savedTranslations) stmt.run(row as any[])
+      stmt.free()
+      const data = tmpDb.export()
+      writeFileSync(userDbPath, Buffer.from(data))
+      tmpDb.close()
+    }
   }
 
   if (!existsSync(userDbPath)) {
@@ -179,6 +216,58 @@ async function openDb(): Promise<Database> {
   } else {
     // Ensure idx_naves_refs_topic_id exists for DBs seeded before it was added
     db.run('CREATE INDEX IF NOT EXISTS idx_naves_refs_topic_id ON naves_refs(topic_id)')
+  }
+
+  // Migrate: create textual_variants table if not present and load from seed DB
+  const hasVariants = db.exec("SELECT name FROM sqlite_master WHERE type='table' AND name='textual_variants'")
+  if (!hasVariants.length || !hasVariants[0].values.length) {
+    db.run(`
+      CREATE TABLE IF NOT EXISTS textual_variants (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        book TEXT NOT NULL,
+        chapter INTEGER NOT NULL,
+        verse INTEGER NOT NULL,
+        testament TEXT NOT NULL,
+        word_ref TEXT DEFAULT '',
+        main_type TEXT DEFAULT '',
+        main_english TEXT DEFAULT '',
+        main_hebrew TEXT DEFAULT '',
+        variant_source TEXT NOT NULL,
+        variant_source_label TEXT NOT NULL,
+        variant_english TEXT DEFAULT '',
+        variant_hebrew TEXT DEFAULT '',
+        description TEXT DEFAULT ''
+      )
+    `)
+    db.run('CREATE INDEX IF NOT EXISTS idx_variants_loc ON textual_variants(book, chapter, verse)')
+    // Load variant data from seed DB
+    const seedPath = getDbSeedPath()
+    if (existsSync(seedPath)) {
+      const SQL2 = await initSqlJs({
+        locateFile: (file: string) => {
+          if (app.isPackaged) return join(process.resourcesPath, file)
+          return join(__dirname, '../../node_modules/sql.js/dist', file)
+        }
+      })
+      const seedBuf = readFileSync(seedPath)
+      const seedDb = new SQL2.Database(seedBuf)
+      const variantRows = seedDb.exec('SELECT book, chapter, verse, testament, word_ref, main_type, main_english, main_hebrew, variant_source, variant_source_label, variant_english, variant_hebrew, description FROM textual_variants')
+      seedDb.close()
+      if (variantRows.length && variantRows[0].values.length) {
+        const stmt = db.prepare(`
+          INSERT INTO textual_variants
+            (book, chapter, verse, testament, word_ref, main_type, main_english, main_hebrew,
+             variant_source, variant_source_label, variant_english, variant_hebrew, description)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `)
+        for (const row of variantRows[0].values) {
+          stmt.run(row as any[])
+        }
+        stmt.free()
+      }
+    }
+    const data = db.export()
+    writeFileSync(userDbPath, Buffer.from(data))
   }
 
   return db
@@ -304,12 +393,12 @@ ipcMain.handle('bible:getCrossRefs', async (_e, book: string, chapter: number, v
 
 ipcMain.handle('bible:getGreekWords', async (_e, book: string, chapter: number, verse: number) => {
   const database = await openDb()
-  return rows(database, `SELECT position, greek, translit, strongs, gloss FROM greek_words WHERE book = ? AND chapter = ? AND verse = ? ORDER BY position`, [book, chapter, verse])
+  return rows(database, `SELECT position, greek, translit, strongs, gloss, morph FROM greek_words WHERE book = ? AND chapter = ? AND verse = ? ORDER BY position`, [book, chapter, verse])
 })
 
 ipcMain.handle('bible:getHebrewWords', async (_e, book: string, chapter: number, verse: number) => {
   const database = await openDb()
-  return rows(database, `SELECT position, hebrew, translit, strongs, gloss FROM hebrew_words WHERE book = ? AND chapter = ? AND verse = ? ORDER BY position`, [book, chapter, verse])
+  return rows(database, `SELECT position, hebrew, translit, strongs, gloss, morph FROM hebrew_words WHERE book = ? AND chapter = ? AND verse = ? ORDER BY position`, [book, chapter, verse])
 })
 
 ipcMain.handle('bible:getStrongsEntry', async (_e, type: string, num: string) => {
@@ -385,6 +474,17 @@ ipcMain.handle('historical:getAll', async () => {
   `)
 })
 
+ipcMain.handle('variants:getForVerse', async (_e, book: string, chapter: number, verse: number) => {
+  const database = await openDb()
+  return rows(database, `
+    SELECT id, testament, word_ref, main_type, main_english, main_hebrew,
+           variant_source, variant_source_label, variant_english, variant_hebrew, description
+    FROM textual_variants
+    WHERE book = ? AND chapter = ? AND verse = ?
+    ORDER BY id
+  `, [book, chapter, verse])
+})
+
 ipcMain.handle('apocrypha:getBooks', async () => {
   const database = await openDb()
   return rows(database, 'SELECT id, book, book_order, group_label, chapter_count FROM apocrypha_books ORDER BY book_order')
@@ -424,29 +524,32 @@ ipcMain.handle('search:query', async (_e, params: { query: string; tab?: string;
   let totalCommentary = 0
 
   if (tab !== 'commentary') {
-    const wordClauses = words.map(() => 'text LIKE ?').join(' AND ')
-    const wordArgs = words.map(w => `%${w}%`)
+    const likeArgs = words.map(w => `%${w}%`)
+    const whereExpr = words.map(() => 'text LIKE ?').join(' OR ')
+    const scoreExpr = words.map(() => 'CASE WHEN text LIKE ? THEN 1 ELSE 0 END').join(' + ')
     const bookClause = book ? ' AND book = ?' : ''
+    const bookArgs = book ? [book] : []
     if (translation === 'KJV') {
-      const baseArgs = [...wordArgs, ...(book ? [book] : [])]
-      totalVerses = (rows(database, `SELECT COUNT(*) as n FROM bible_verses WHERE ${wordClauses}${bookClause}`, baseArgs)[0]?.n ?? 0) as number
-      verses = rows(database, `SELECT book, chapter, verse, text FROM bible_verses WHERE ${wordClauses}${bookClause} LIMIT ${limit} OFFSET ${offset}`, baseArgs)
+      const whereArgs = [...likeArgs, ...bookArgs]
+      totalVerses = (rows(database, `SELECT COUNT(*) as n FROM bible_verses WHERE (${whereExpr})${bookClause}`, whereArgs)[0]?.n ?? 0) as number
+      verses = rows(database, `SELECT book, chapter, verse, text FROM bible_verses WHERE (${whereExpr})${bookClause} ORDER BY (${scoreExpr}) DESC LIMIT ${limit} OFFSET ${offset}`, [...whereArgs, ...likeArgs])
     } else {
-      const baseArgs = [translation, ...wordArgs, ...(book ? [book] : [])]
-      totalVerses = (rows(database, `SELECT COUNT(*) as n FROM bible_translations WHERE translation = ? AND ${wordClauses}${bookClause}`, baseArgs)[0]?.n ?? 0) as number
-      verses = rows(database, `SELECT book, chapter, verse, text FROM bible_translations WHERE translation = ? AND ${wordClauses}${bookClause} LIMIT ${limit} OFFSET ${offset}`, baseArgs)
+      const whereArgs = [translation, ...likeArgs, ...bookArgs]
+      totalVerses = (rows(database, `SELECT COUNT(*) as n FROM bible_translations WHERE translation = ? AND (${whereExpr})${bookClause}`, whereArgs)[0]?.n ?? 0) as number
+      verses = rows(database, `SELECT book, chapter, verse, text FROM bible_translations WHERE translation = ? AND (${whereExpr})${bookClause} ORDER BY (${scoreExpr}) DESC LIMIT ${limit} OFFSET ${offset}`, [...whereArgs, ...likeArgs])
     }
   }
 
   if (tab !== 'scripture') {
-    const wordClauses = words.map(() => '(full_text LIKE ? OR excerpt LIKE ?)').join(' AND ')
-    const wordArgs = words.flatMap(w => [`%${w}%`, `%${w}%`])
+    const likeArgs = words.flatMap(w => [`%${w}%`, `%${w}%`])
+    const whereExpr = words.map(() => '(full_text LIKE ? OR excerpt LIKE ?)').join(' OR ')
+    const scoreExpr = words.map(() => 'CASE WHEN (full_text LIKE ? OR excerpt LIKE ?) THEN 1 ELSE 0 END').join(' + ')
     const bookClause = book ? ' AND book = ?' : ''
     const fatherClause = father ? ' AND father_name = ?' : ''
     const filterArgs: any[] = [...(book ? [book] : []), ...(father ? [father] : [])]
-    const baseArgs = [...wordArgs, ...filterArgs]
-    totalCommentary = (rows(database, `SELECT COUNT(*) as n FROM commentary WHERE ${wordClauses}${bookClause}${fatherClause}`, baseArgs)[0]?.n ?? 0) as number
-    commentary = rows(database, `SELECT book, chapter, verse, father_name, excerpt as text FROM commentary WHERE ${wordClauses}${bookClause}${fatherClause} LIMIT ${limit} OFFSET ${offset}`, baseArgs)
+    const whereArgs = [...likeArgs, ...filterArgs]
+    totalCommentary = (rows(database, `SELECT COUNT(*) as n FROM commentary WHERE (${whereExpr})${bookClause}${fatherClause}`, whereArgs)[0]?.n ?? 0) as number
+    commentary = rows(database, `SELECT book, chapter, verse, father_name, excerpt as text FROM commentary WHERE (${whereExpr})${bookClause}${fatherClause} ORDER BY (${scoreExpr}) DESC LIMIT ${limit} OFFSET ${offset}`, [...whereArgs, ...likeArgs])
   }
 
   return { verses, commentary, totalVerses, totalCommentary }

@@ -59,7 +59,8 @@ async function main() {
       greek TEXT NOT NULL,
       translit TEXT NOT NULL,
       strongs TEXT NOT NULL,
-      gloss TEXT
+      gloss TEXT,
+      morph TEXT
     );
     CREATE TABLE IF NOT EXISTS hebrew_words (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -70,7 +71,8 @@ async function main() {
       hebrew TEXT NOT NULL,
       translit TEXT NOT NULL,
       strongs TEXT NOT NULL,
-      gloss TEXT
+      gloss TEXT,
+      morph TEXT
     );
     CREATE TABLE IF NOT EXISTS strongs_greek (
       number TEXT PRIMARY KEY,
@@ -116,6 +118,23 @@ async function main() {
       note TEXT NOT NULL DEFAULT ''
     );
     CREATE INDEX IF NOT EXISTS idx_josephus_refs_loc ON josephus_refs(bible_book, bible_chapter, bible_verse);
+    CREATE TABLE IF NOT EXISTS textual_variants (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      book TEXT NOT NULL,
+      chapter INTEGER NOT NULL,
+      verse INTEGER NOT NULL,
+      testament TEXT NOT NULL,
+      word_ref TEXT DEFAULT '',
+      main_type TEXT DEFAULT '',
+      main_english TEXT DEFAULT '',
+      main_hebrew TEXT DEFAULT '',
+      variant_source TEXT NOT NULL,
+      variant_source_label TEXT NOT NULL,
+      variant_english TEXT DEFAULT '',
+      variant_hebrew TEXT DEFAULT '',
+      description TEXT DEFAULT ''
+    );
+    CREATE INDEX IF NOT EXISTS idx_variants_loc ON textual_variants(book, chapter, verse);
   `)
 
   // Bible text
@@ -267,9 +286,9 @@ async function main() {
   if (existsSync(ntWordsPath)) {
     console.log('Inserting Greek NT words...')
     const words = JSON.parse(readFileSync(ntWordsPath, 'utf-8'))
-    const stmt = db.prepare('INSERT INTO greek_words (book, chapter, verse, position, greek, translit, strongs) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    const stmt = db.prepare('INSERT INTO greek_words (book, chapter, verse, position, greek, translit, strongs, morph) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
     for (const w of words) {
-      stmt.run([w.book, w.chapter, w.verse, w.position, w.greek, w.translit, w.strongs])
+      stmt.run([w.book, w.chapter, w.verse, w.position, w.greek, w.translit, w.strongs, w.morph ?? ''])
     }
     stmt.free()
     console.log(`  Inserted ${words.length} words`)
@@ -295,9 +314,9 @@ async function main() {
   if (existsSync(otWordsPath)) {
     console.log('Inserting Hebrew OT words...')
     const words = JSON.parse(readFileSync(otWordsPath, 'utf-8'))
-    const stmt = db.prepare('INSERT INTO hebrew_words (book, chapter, verse, position, hebrew, translit, strongs) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    const stmt = db.prepare('INSERT INTO hebrew_words (book, chapter, verse, position, hebrew, translit, strongs, morph) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
     for (const w of words) {
-      stmt.run([w.book, w.chapter, w.verse, w.position, w.hebrew, w.translit, w.strongs])
+      stmt.run([w.book, w.chapter, w.verse, w.position, w.hebrew, w.translit, w.strongs, w.morph ?? ''])
     }
     stmt.free()
     console.log(`  Inserted ${words.length} words`)
@@ -316,6 +335,56 @@ async function main() {
     }
     stmt.free()
     console.log(`  Updated ${count} word glosses`)
+  }
+
+  // OT textual variants (from TAHOT Qere/Ketiv, DSS, LXX, etc.)
+  const otVariantsPath = join(RAW_DIR, 'ot-variants.json')
+  if (existsSync(otVariantsPath)) {
+    console.log('Inserting OT textual variants...')
+    const variants = JSON.parse(readFileSync(otVariantsPath, 'utf-8'))
+    const stmt = db.prepare(`
+      INSERT INTO textual_variants
+        (book, chapter, verse, testament, word_ref, main_type, main_english, main_hebrew,
+         variant_source, variant_source_label, variant_english, variant_hebrew, description)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `)
+    for (const v of variants) {
+      stmt.run([
+        v.book, v.chapter, v.verse, 'ot',
+        v.word_ref ?? '', v.main_type ?? '', v.main_english ?? '', v.main_hebrew ?? '',
+        v.variant_source, v.variant_source_label,
+        v.variant_english ?? '', v.variant_hebrew ?? '', v.description ?? ''
+      ])
+    }
+    stmt.free()
+    console.log(`  Inserted ${variants.length} OT variants`)
+  } else {
+    console.warn('  ot-variants.json not found — run scripts/extract-tahot-variants.py')
+  }
+
+  // NT textual variants (from SBLGNT apparatus: WH, Treg, NIV, RP comparisons)
+  const ntVariantsPath = join(RAW_DIR, 'nt-variants.json')
+  if (existsSync(ntVariantsPath)) {
+    console.log('Inserting NT textual variants...')
+    const variants = JSON.parse(readFileSync(ntVariantsPath, 'utf-8'))
+    const stmt = db.prepare(`
+      INSERT INTO textual_variants
+        (book, chapter, verse, testament, word_ref, main_type, main_english, main_hebrew,
+         variant_source, variant_source_label, variant_english, variant_hebrew, description)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `)
+    for (const v of variants) {
+      stmt.run([
+        v.book, v.chapter, v.verse, 'nt',
+        v.word_ref ?? '', v.main_type ?? '', v.main_english ?? '', v.main_hebrew ?? '',
+        v.variant_source, v.variant_source_label,
+        v.variant_english ?? '', v.variant_hebrew ?? '', v.description ?? ''
+      ])
+    }
+    stmt.free()
+    console.log(`  Inserted ${variants.length} NT variants`)
+  } else {
+    console.warn('  nt-variants.json not found — run scripts/fetch-sblgnt-apparatus.py')
   }
 
   // Josephus sections

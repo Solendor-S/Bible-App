@@ -66,6 +66,11 @@ function extractGreekStrongsNum(col3: string): string {
   return m ? m[1] : ''
 }
 
+function extractGreekMorph(col3: string): string {
+  const m = col3.match(/^[GH]\d+[A-Za-z]?=(.+)$/)
+  return m ? m[1].trim() : ''
+}
+
 function extractHebrewStrongsNum(col4: string): string {
   // col4 like "{H1254A}" or "H9003/{H7225G}" or "H9009/{H8064}"
   // Priority: number inside {} that is NOT H9000-H9030 (grammatical prefixes)
@@ -101,8 +106,9 @@ function parseTagnt(text: string): any[] {
     const greek = greekMatch ? greekMatch[1].trim() : cols[1].trim()
     const translit = greekMatch ? greekMatch[2].trim() : ''
     const strongs = extractGreekStrongsNum(cols[3] || '')
+    const morph = extractGreekMorph(cols[3] || '')
     if (!strongs) continue
-    words.push({ book, chapter, verse, position, greek, translit, strongs })
+    words.push({ book, chapter, verse, position, greek, translit, strongs, morph })
   }
   return words
 }
@@ -127,8 +133,9 @@ function parseTahot(text: string): any[] {
     const translit = cols[2].trim()
     // col4: Strong's numbers
     const strongs = extractHebrewStrongsNum(cols[4] || '')
+    const morph = cols[5]?.trim() ?? ''
     if (!strongs || !hebrew) continue
-    words.push({ book, chapter, verse, position, hebrew, translit, strongs })
+    words.push({ book, chapter, verse, position, hebrew, translit, strongs, morph })
   }
   return words
 }

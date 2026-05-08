@@ -13,7 +13,9 @@ const BOOK_NAMES = [
 ]
 
 // Strip BOM and parse
-let raw = fs.readFileSync('C:/Projects/BibleApp/data/raw/kjv_raw.json', 'utf-8')
+const path = require('path')
+const dataDir = path.join(__dirname, '..', 'data', 'raw')
+let raw = fs.readFileSync(path.join(dataDir, 'kjv_raw.json'), 'utf-8')
 if (raw.charCodeAt(0) === 0xFEFF) raw = raw.slice(1)
 const books = JSON.parse(raw)
 
@@ -23,12 +25,18 @@ for (let bi = 0; bi < books.length; bi++) {
   const bookName = BOOK_NAMES[bi] || book.abbrev
   for (let ci = 0; ci < book.chapters.length; ci++) {
     for (let vi = 0; vi < book.chapters[ci].length; vi++) {
-      // Strip Hebrew/marginal annotations in {curly braces}
-      const text = book.chapters[ci][vi].replace(/\s*\{[^}]*\}/g, '').trim()
+      // Curly braces in KJV serve two purposes:
+      // 1. Supplied words (no colon): {That}, {was}, {it was} — keep the word, strip braces
+      // 2. Translator notes (colon inside): {Heb. expansion}, {grass: Heb. tender grass} — strip entirely
+      const text = book.chapters[ci][vi]
+        .replace(/\{([^}:]+)\}/g, '$1')   // keep supplied words
+        .replace(/\s*\{[^}]*\}/g, '')      // strip remaining notes
+        .replace(/\s+/g, ' ')
+        .trim()
       verses.push({ book: bookName, book_order: bi + 1, chapter: ci + 1, verse: vi + 1, text })
     }
   }
 }
 
-fs.writeFileSync('C:/Projects/BibleApp/data/raw/kjv.json', JSON.stringify(verses))
+fs.writeFileSync(path.join(dataDir, 'kjv.json'), JSON.stringify(verses))
 console.log(`Books: ${books.length} | Verses: ${verses.length}`)

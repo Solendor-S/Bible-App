@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import type { HistoricalEntry, JosephusEntry, SelectedVerse } from '../types'
+import type { HistoricalEntry, JosephusEntry, SelectedVerse, TextualVariant } from '../types'
 
 interface Props {
   selected: SelectedVerse
@@ -83,6 +83,106 @@ function HistoricalEntryView({ entry }: { entry: HistoricalEntry }) {
   )
 }
 
+const VARIANT_SOURCE_BADGE: Record<string, string> = {
+  K: 'ketiv',
+  D: 'dss',
+  A: 'aleppo',
+  B: 'bhs',
+  C: 'cairo',
+  H: 'ben-chaim',
+  S: 'scribal',
+  X: 'lxx',
+  E: 'emendation',
+  R: 'restored',
+  L: 'leningrad',
+  WH: 'wh',
+  Treg: 'treg',
+  NIV: 'niv',
+  RP: 'rp',
+}
+
+function VariantSourceBadge({ source }: { source: string }) {
+  const cls = VARIANT_SOURCE_BADGE[source] ?? 'manuscript'
+  return (
+    <span className={`variant-source-badge variant-source-badge--${cls}`}>
+      {source}
+    </span>
+  )
+}
+
+function TextualVariantView({ variant }: { variant: TextualVariant }) {
+  const isOT = variant.testament === 'ot'
+  const hasReading = variant.variant_english || variant.variant_hebrew
+
+  return (
+    <div className="textual-variant-entry">
+      <div className="textual-variant-header">
+        <VariantSourceBadge source={variant.variant_source} />
+        <span className="textual-variant-source-label">{variant.variant_source_label}</span>
+        {variant.word_ref && (
+          <span className="textual-variant-ref">{variant.word_ref}</span>
+        )}
+      </div>
+
+      {variant.description && (
+        <p className="textual-variant-description">{variant.description}</p>
+      )}
+
+      {hasReading && (
+        <div className="textual-variant-readings">
+          {variant.main_english && (
+            <div className="textual-variant-reading textual-variant-reading--main">
+              <span className="textual-variant-reading-label">Standard</span>
+              <span className="textual-variant-reading-text">
+                {isOT && variant.main_hebrew && (
+                  <span className="textual-variant-hebrew" dir="rtl">{variant.main_hebrew}</span>
+                )}
+                {variant.main_english && (
+                  <span className="textual-variant-english">{variant.main_english}</span>
+                )}
+              </span>
+            </div>
+          )}
+          {(variant.variant_english || variant.variant_hebrew) && (
+            <div className="textual-variant-reading textual-variant-reading--alt">
+              <span className="textual-variant-reading-label">Variant</span>
+              <span className="textual-variant-reading-text">
+                {isOT && variant.variant_hebrew && (
+                  <span className="textual-variant-hebrew" dir="rtl">{variant.variant_hebrew}</span>
+                )}
+                {variant.variant_english && (
+                  <span className="textual-variant-english">{variant.variant_english}</span>
+                )}
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function TextualVariantsSection({ variants }: { variants: TextualVariant[] }) {
+  const [open, setOpen] = useState(true)
+  if (variants.length === 0) return null
+  return (
+    <div className="textual-variants-section">
+      <button className="textual-variants-heading" onClick={() => setOpen(o => !o)}>
+        <span className={`history-browse-chevron${open ? '' : ' history-browse-chevron--closed'}`}>▾</span>
+        Textual Variants
+        <span className="history-browse-count">{variants.length} variant{variants.length !== 1 ? 's' : ''}</span>
+      </button>
+      {open && (
+        <div className="textual-variants-list">
+          {variants.map(v => (
+            <TextualVariantView key={v.id} variant={v} />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function BrowseSection({ title, count, children }: { title: string; count: string; children: React.ReactNode }) {
   const [open, setOpen] = useState(true)
   return (
@@ -132,19 +232,26 @@ export function JosephusPanel({ selected }: Props) {
   const [mode, setMode] = useState<'verse' | 'browse'>('verse')
   const [josephusEntries, setJosephusEntries] = useState<JosephusEntry[]>([])
   const [historicalEntries, setHistoricalEntries] = useState<HistoricalEntry[]>([])
+  const [variants, setVariants] = useState<TextualVariant[]>([])
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
     setJosephusEntries([])
     setHistoricalEntries([])
+    setVariants([])
     if (mode !== 'verse' || !selected?.verse) return
     setLoading(true)
+    const variantsFetch = typeof window.bibleApi.getVariantsForVerse === 'function'
+      ? window.bibleApi.getVariantsForVerse(selected.book, selected.chapter, selected.verse).catch(() => [] as TextualVariant[])
+      : Promise.resolve([] as TextualVariant[])
     Promise.all([
       window.bibleApi.getJosephusForVerse(selected.book, selected.chapter, selected.verse),
       window.bibleApi.getHistoricalForVerse(selected.book, selected.chapter, selected.verse),
-    ]).then(([jos, hist]) => {
+      variantsFetch,
+    ]).then(([jos, hist, vars]) => {
       setJosephusEntries(jos)
       setHistoricalEntries(hist)
+      setVariants(vars)
       setLoading(false)
     }).catch(() => setLoading(false))
   }, [mode, selected?.book, selected?.chapter, selected?.verse])
@@ -176,13 +283,14 @@ export function JosephusPanel({ selected }: Props) {
             <div className="panel-empty">Select a verse to see historical sources.</div>
           )}
           {selected?.verse && loading && <div className="panel-loading">Loading…</div>}
-          {selected?.verse && !loading && total === 0 && (
+          {selected?.verse && !loading && total === 0 && variants.length === 0 && (
             <div className="panel-body">
               <div className="panel-empty">No historical sources for this verse.</div>
             </div>
           )}
-          {selected?.verse && !loading && total > 0 && (
+          {selected?.verse && !loading && (total > 0 || variants.length > 0) && (
             <div className="panel-body">
+              <TextualVariantsSection variants={variants} />
               {josephusEntries.map((e, i) => <JosephusEntryView key={`jos-${i}`} entry={e} />)}
               {historicalEntries.map(e => <HistoricalEntryView key={e.source_key} entry={e} />)}
             </div>

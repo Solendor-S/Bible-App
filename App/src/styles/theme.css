@@ -758,6 +758,61 @@ body {
   color: var(--text-secondary);
 }
 
+.strongs-morph {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  background: var(--bg-tertiary);
+  border-radius: 6px;
+}
+
+.strongs-morph-pos {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+}
+
+.strongs-morph-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.morph-chip {
+  padding: 3px 9px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.morph-chip:hover {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.morph-chip--active {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.morph-chip-def {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  padding: 4px 2px 0;
+  border-top: 1px solid var(--border);
+}
+
 /* ── Topical Bible panel ───────────────────── */
 
 .topics-panel {
@@ -2989,6 +3044,150 @@ body {
   line-height: 1.5;
 }
 .history-josephus-note-icon { flex-shrink: 0; }
+
+/* ── Textual Variants Section ─────────────────── */
+
+.textual-variants-section {
+  border-bottom: 1px solid var(--border-subtle);
+  margin-bottom: 4px;
+}
+
+.textual-variants-heading {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-accent);
+  padding: 12px 14px 8px;
+  margin-bottom: 4px;
+  cursor: pointer;
+  text-align: left;
+}
+.textual-variants-heading:hover { color: var(--text-gold); }
+
+.textual-variants-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.textual-variant-entry {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.textual-variant-entry:last-child { border-bottom: none; }
+
+.textual-variant-header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+.variant-source-badge {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+/* OT variant types */
+.variant-source-badge--ketiv   { background: rgba(200, 120, 60, 0.18);  color: #d4845a; }
+.variant-source-badge--dss     { background: rgba(80, 160, 220, 0.18);  color: #5fa8d4; }
+.variant-source-badge--lxx     { background: rgba(140, 80, 200, 0.18);  color: #a07ed4; }
+.variant-source-badge--aleppo  { background: rgba(180, 160, 60, 0.18);  color: #c4b04a; }
+.variant-source-badge--bhs     { background: rgba(80, 140, 100, 0.18);  color: #5ba07a; }
+.variant-source-badge--scribal { background: rgba(160, 80, 80, 0.18);   color: #c47a7a; }
+.variant-source-badge--emendation { background: rgba(120, 120, 120, 0.18); color: #909090; }
+.variant-source-badge--restored   { background: rgba(100, 160, 80, 0.18);  color: #7ab05a; }
+.variant-source-badge--leningrad  { background: rgba(80, 120, 200, 0.18);  color: #6a9ad4; }
+.variant-source-badge--cairo      { background: rgba(160, 120, 60, 0.18);  color: #c4904a; }
+.variant-source-badge--ben-chaim  { background: rgba(180, 80, 120, 0.18);  color: #d47aa0; }
+/* NT edition badges */
+.variant-source-badge--wh   { background: rgba(100, 160, 100, 0.18);  color: #6ab06a; }
+.variant-source-badge--treg { background: rgba(80, 140, 180, 0.18);   color: #5a9ab4; }
+.variant-source-badge--niv  { background: rgba(160, 100, 60, 0.18);   color: #c4804a; }
+.variant-source-badge--rp   { background: rgba(140, 80, 160, 0.18);   color: #a46ab4; }
+.variant-source-badge--manuscript { background: rgba(120, 120, 120, 0.18); color: #909090; }
+
+.textual-variant-source-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  flex: 1;
+}
+
+.textual-variant-ref {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  font-family: var(--font-mono, monospace);
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.textual-variant-description {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  line-height: 1.55;
+  margin: 0;
+}
+
+.textual-variant-readings {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: var(--bg-secondary);
+  border-radius: var(--radius);
+  padding: 7px 10px;
+}
+
+.textual-variant-reading {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.textual-variant-reading-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  flex-shrink: 0;
+  width: 52px;
+}
+.textual-variant-reading--main .textual-variant-reading-label { color: var(--text-muted); }
+.textual-variant-reading--alt  .textual-variant-reading-label { color: var(--text-accent); }
+
+.textual-variant-reading-text {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.textual-variant-hebrew {
+  font-size: 14px;
+  color: var(--text-gold);
+  font-family: var(--font-serif);
+  letter-spacing: 0.03em;
+}
+
+.textual-variant-english {
+  font-size: 12.5px;
+  color: var(--text-primary);
+  font-style: italic;
+}
 
 /* ── Canon / Apocrypha tab bar ────────────────────────────────────── */
 .left-panel-wrap {

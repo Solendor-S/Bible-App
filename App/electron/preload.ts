@@ -21,6 +21,8 @@ contextBridge.exposeInMainWorld('bibleApi', {
   getHistoricalForVerse: (book: string, chapter: number, verse: number) =>
     ipcRenderer.invoke('historical:getForVerse', book, chapter, verse),
   getHistoricalAll: () => ipcRenderer.invoke('historical:getAll'),
+  getVariantsForVerse: (book: string, chapter: number, verse: number) =>
+    ipcRenderer.invoke('variants:getForVerse', book, chapter, verse),
   search: (params: { query: string; tab?: string; book?: string; father?: string; offset?: number; limit?: number; translation?: string }) =>
     ipcRenderer.invoke('search:query', params),
   getFathers: () => ipcRenderer.invoke('search:getFathers'),

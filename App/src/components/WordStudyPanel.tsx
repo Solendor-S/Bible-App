@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import type { GreekWord, HebrewWord, StrongsEntry, SelectedVerse } from '../types'
+import { decodeMorphology, TAG_DEFINITIONS } from '../utils/morphology'
 
 const NT_BOOKS = new Set([
   'Matthew', 'Mark', 'Luke', 'John', 'Acts', 'Romans',
@@ -70,6 +71,7 @@ export function WordStudyPanel({ selected, onWordSelect }: Props) {
   const [activeKey, setActiveKey] = useState<{ strongs: string; position: number } | null>(null)
   const [def, setDef] = useState<WordDef | null>(null)
   const [defLoading, setDefLoading] = useState(false)
+  const [activeTag, setActiveTag] = useState<string | null>(null)
 
   useEffect(() => {
     setWords([])
@@ -95,9 +97,10 @@ export function WordStudyPanel({ selected, onWordSelect }: Props) {
 
   function handleWordClick(strongs: string, position: number) {
     if (activeKey?.strongs === strongs && activeKey?.position === position) {
-      setActiveKey(null); setDef(null); onWordSelect?.(null); return
+      setActiveKey(null); setDef(null); setActiveTag(null); onWordSelect?.(null); return
     }
     setActiveKey({ strongs, position })
+    setActiveTag(null)
     setDefLoading(true)
     window.bibleApi.getStrongsEntry(isNT ? 'greek' : 'hebrew', strongs)
       .then(e => { setDef({ strongs, entry: e }); setDefLoading(false) })
@@ -140,6 +143,32 @@ export function WordStudyPanel({ selected, onWordSelect }: Props) {
                   <span className="strongs-lemma">{def.entry.lemma}</span>
                   <span className="strongs-translit">({def.entry.translit}{def.entry.pronunciation ? ` · ${def.entry.pronunciation}` : ''})</span>
                 </div>
+                {(() => {
+                  const activeWord = words.find(w => w.strongs === activeKey!.strongs && w.position === activeKey!.position)
+                  const morph = activeWord ? decodeMorphology((activeWord as any).morph ?? '', isNT ? 'greek' : 'hebrew') : null
+                  if (!morph) return null
+                  return (
+                    <div className="strongs-morph">
+                      <span className="strongs-morph-pos">{morph.partOfSpeech}</span>
+                      {morph.tags.length > 0 && (
+                        <div className="strongs-morph-chips">
+                          {morph.tags.map(tag => (
+                            <button
+                              key={tag}
+                              className={`morph-chip${activeTag === tag ? ' morph-chip--active' : ''}`}
+                              onClick={() => setActiveTag(prev => prev === tag ? null : tag)}
+                            >
+                              {tag}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      {activeTag && TAG_DEFINITIONS[activeTag] && (
+                        <div className="morph-chip-def">{TAG_DEFINITIONS[activeTag]}</div>
+                      )}
+                    </div>
+                  )
+                })()}
                 {def.entry.definition && <p className="strongs-def">{def.entry.definition.trim()}</p>}
                 {def.entry.kjv_usage && (
                   <p className="strongs-kjv"><span className="strongs-kjv-label">KJV uses:</span> {def.entry.kjv_usage}</p>
