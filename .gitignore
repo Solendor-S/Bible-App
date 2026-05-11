@@ -11,6 +11,14 @@ release/
 App/data/raw/catenabible-api-progress.json
 App/data/raw/scrape-progress.json
 App/data/raw/fetch-gaps-progress.json
+App/data/raw/bibleref-progress.json
+App/data/raw/bibleref-verses.json
+App/data/raw/bibleref-chapters.json
+App/data/raw/blb-scrape-progress.json
+
+# Python cache
+**/__pycache__/
+*.pyc
 
 # Backup files
 *.bak
@@ -31,6 +39,9 @@ graphify-out/
 .graphify_*.json
 .graphify_*.txt
 .graphify_python
+
+# Local dev experiments — never commit, tag, or release
+journey-animations/
 
 # Claude Code local config
 CLAUDE.md

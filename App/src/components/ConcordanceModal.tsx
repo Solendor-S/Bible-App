@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import type { SelectedVerse } from '../types'
+import { escapeRegex } from '../utils/regex'
 
 interface Props {
   word: string
@@ -10,9 +11,6 @@ interface Props {
 
 const PAGE = 100
 
-function escapeRegex(s: string) {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
 
 function highlight(text: string, word: string): React.ReactNode {
   const parts = text.split(new RegExp(`(\\b${escapeRegex(word)}\\b)`, 'gi'))

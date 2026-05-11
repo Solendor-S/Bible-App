@@ -1,14 +1,12 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import type { SearchResult, SelectedVerse } from '../types'
+import { escapeRegex } from '../utils/regex'
 
 type Tab = 'all' | 'scripture' | 'commentary'
 
 const PAGE_ALL = 10
 const PAGE_SECTION = 20
 
-function escapeRegex(s: string) {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
 
 function highlight(text: string, query: string): React.ReactNode {
   const words = query.trim().split(/\s+/).filter(Boolean)

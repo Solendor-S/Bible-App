@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react'
-import type { GreekWord, HebrewWord, StrongsEntry, SelectedVerse } from '../types'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
+import type { BibleVerse, GreekWord, HebrewWord, Language, LexiconEntry, StrongsEntry, SelectedVerse } from '../types'
 import { decodeMorphology, TAG_DEFINITIONS } from '../utils/morphology'
+import { escapeRegex } from '../utils/regex'
 
 const NT_BOOKS = new Set([
   'Matthew', 'Mark', 'Luke', 'John', 'Acts', 'Romans',
@@ -11,19 +12,32 @@ const NT_BOOKS = new Set([
 ])
 
 export interface WordHighlight {
-  gloss: string | null    // context-specific term from OpenGNT (primary)
-  glossTerms: string[]    // kjv_usage candidates (fallback)
-  positionRatio: number   // clicked word's position (0–1) within the verse
+  gloss: string | null
+  glossTerms: string[]
+  positionRatio: number
 }
 
 interface Props {
   selected: SelectedVerse
   onWordSelect?: (info: WordHighlight | null) => void
+  onNavigate?: (book: string, chapter: number, verse: number) => void
 }
 
 interface WordDef {
   strongs: string
   entry: StrongsEntry | null
+  lexicon: LexiconEntry | null
+}
+
+interface ScriptureRef {
+  book: string
+  refs: Array<{ chapter: number; verse: number | null; raw: string }>
+}
+
+interface ClickedVerse {
+  book: string
+  chapter: number
+  verse: number
 }
 
 const GLOSS_STOPWORDS = new Set([
@@ -32,46 +46,100 @@ const GLOSS_STOPWORDS = new Set([
   'as', 'so', 'no', 'on', 'not',
 ])
 
-// kjv_usage format: "the, this, that, one, he" or "word, saying, thing"
-// Some entries have "X word" (grammatical marker – skip), or "word(-ly)" (strip parens)
 function extractGlossTerms(entry: StrongsEntry | null): string[] {
   if (!entry?.kjv_usage) return []
+  const seen = new Set<string>()
   const terms: string[] = []
   for (const raw of entry.kjv_usage.split(',')) {
     let t = raw.trim()
-    if (/^[X+]\s/i.test(t)) continue                 // skip "X concerning", "+ reckon" etc.
-    // Expand parenthetical suffixes: "strong(-er)" → ["strong", "stronger"]
+    if (/^[X+]\s/i.test(t)) continue
     const parenMatch = t.match(/^(\w[\w\s]*)\((-\w+)\)/)
     if (parenMatch) {
       const base = parenMatch[1].trim().toLowerCase()
       const variant = (parenMatch[1].trim() + parenMatch[2].slice(1)).toLowerCase()
-      if (!GLOSS_STOPWORDS.has(base) && base.length >= 2) {
-        if (!terms.includes(base)) terms.push(base)
-      }
-      if (!GLOSS_STOPWORDS.has(variant) && variant.length >= 2) {
-        if (!terms.includes(variant)) terms.push(variant)
-      }
+      if (!GLOSS_STOPWORDS.has(base) && base.length >= 2 && !seen.has(base)) { seen.add(base); terms.push(base) }
+      if (!GLOSS_STOPWORDS.has(variant) && variant.length >= 2 && !seen.has(variant)) { seen.add(variant); terms.push(variant) }
       continue
     }
-    t = t.replace(/\s*\(.*?\)/g, '').trim()          // strip remaining parens
-    t = t.toLowerCase()
+    t = t.replace(/\s*\(.*?\)/g, '').trim().toLowerCase()
     if (!t || t === 'etc' || t.length < 2 || /^\d+$/.test(t)) continue
-    if (GLOSS_STOPWORDS.has(t)) continue
-    if (!terms.includes(t)) terms.push(t)
-    if (terms.length >= 10) break                     // cap at 10 terms
+    if (GLOSS_STOPWORDS.has(t) || seen.has(t)) continue
+    seen.add(t); terms.push(t)
+    if (terms.length >= 10) break
   }
   return terms
 }
 
-export function WordStudyPanel({ selected, onWordSelect }: Props) {
+function highlightVerseRefs(text: string, book: string, chapter: number, verse: number): React.ReactNode[] {
+  // Match "Book chapter:verse" — Thayer's uses full book names
+  const pattern = new RegExp(escapeRegex(`${book} ${chapter}:${verse}`) + '(?!\\d)', 'g')
+  const parts: React.ReactNode[] = []
+  let last = 0
+  let m: RegExpExecArray | null
+  while ((m = pattern.exec(text)) !== null) {
+    if (m.index > last) parts.push(text.slice(last, m.index))
+    parts.push(<mark key={m.index} className="lexicon-verse-highlight">{m[0]}</mark>)
+    last = m.index + m[0].length
+  }
+  if (last < text.length) parts.push(text.slice(last))
+  return parts.length > 1 ? parts : [text]
+}
+
+function processThayersText(raw: string): { mainText: string; indexRaw: string } {
+  const marker = 'BLB Scripture Index'
+  const idx = raw.indexOf(marker)
+  let mainText = idx >= 0 ? raw.slice(0, idx) : raw
+  const indexRaw = idx >= 0 ? raw.slice(idx) : ''
+  // Strip "STRONGS G####:\n \n \n..." header
+  mainText = mainText.replace(/^STRONGS\s+[GH]\d+:\s*[\n\r](\s*[\n\r])+/, '')
+  // Collapse multiple blank lines (possibly with spaces) into a single newline
+  mainText = mainText.replace(/(\n[ \t]*){2,}/g, '\n').trim()
+  return { mainText, indexRaw }
+}
+
+function parseScriptureIndex(raw: string): ScriptureRef[] {
+  const body = raw.replace(/^[^\n]*\n/, '')
+  const lines = body
+    .replace(/(\n[ \t]*){2,}/g, '\n')
+    .split('\n')
+    .map(l => l.trim())
+    .filter(Boolean)
+
+  const map = new Map<string, ScriptureRef>()
+  const order: string[] = []
+  let currentBook = ''
+
+  for (const line of lines) {
+    if ((/^[A-Za-z]/.test(line) || /^\d\s+[A-Za-z]/.test(line)) && !line.includes(':') && !line.includes(';')) {
+      currentBook = line
+    } else if (currentBook) {
+      const parsed = line.split(/[;,]/).map(r => r.trim()).filter(Boolean).flatMap(r => {
+        const m = r.match(/^(\d+):(\d+)/)
+        if (m) return [{ chapter: parseInt(m[1]), verse: parseInt(m[2]), raw: r }]
+        const c = r.match(/^(\d+)$/)
+        if (c) return [{ chapter: parseInt(c[1]), verse: null, raw: r }]
+        return []
+      })
+      if (parsed.length > 0) {
+        if (!map.has(currentBook)) { map.set(currentBook, { book: currentBook, refs: [] }); order.push(currentBook) }
+        map.get(currentBook)!.refs.push(...parsed)
+      }
+    }
+  }
+  return order.map(b => map.get(b)!)
+}
+
+export function WordStudyPanel({ selected, onWordSelect, onNavigate }: Props) {
   const isNT = NT_BOOKS.has(selected?.book)
   const [words, setWords] = useState<(GreekWord | HebrewWord)[]>([])
   const [loading, setLoading] = useState(false)
-  // Use {strongs, position} so duplicate-strongs words are tracked independently
   const [activeKey, setActiveKey] = useState<{ strongs: string; position: number } | null>(null)
   const [def, setDef] = useState<WordDef | null>(null)
   const [defLoading, setDefLoading] = useState(false)
   const [activeTag, setActiveTag] = useState<string | null>(null)
+  const [clickedVerse, setClickedVerse] = useState<ClickedVerse | null>(null)
+  const [versePreview, setVersePreview] = useState<{ text: string; loading: boolean } | null>(null)
+  const verseCache = useRef<Map<string, string>>(new Map())
 
   useEffect(() => {
     setWords([])
@@ -95,6 +163,24 @@ export function WordStudyPanel({ selected, onWordSelect }: Props) {
     onWordSelect?.({ gloss: word.gloss ?? null, glossTerms, positionRatio })
   }, [activeKey, def, words, onWordSelect])
 
+  useEffect(() => {
+    if (!clickedVerse) { setVersePreview(null); return }
+    const key = `${clickedVerse.book}:${clickedVerse.chapter}:${clickedVerse.verse}`
+    if (verseCache.current.has(key)) {
+      setVersePreview({ text: verseCache.current.get(key)!, loading: false })
+      return
+    }
+    setVersePreview({ text: '', loading: true })
+    window.bibleApi.getVerses(clickedVerse.book, clickedVerse.chapter)
+      .then((verses: BibleVerse[]) => {
+        const v = verses.find(v => v.verse === clickedVerse.verse)
+        const text = v?.text ?? 'Verse not found'
+        verseCache.current.set(key, text)
+        setVersePreview({ text, loading: false })
+      })
+      .catch(() => setVersePreview({ text: 'Error loading verse', loading: false }))
+  }, [clickedVerse])
+
   function handleWordClick(strongs: string, position: number) {
     if (activeKey?.strongs === strongs && activeKey?.position === position) {
       setActiveKey(null); setDef(null); setActiveTag(null); onWordSelect?.(null); return
@@ -102,10 +188,26 @@ export function WordStudyPanel({ selected, onWordSelect }: Props) {
     setActiveKey({ strongs, position })
     setActiveTag(null)
     setDefLoading(true)
-    window.bibleApi.getStrongsEntry(isNT ? 'greek' : 'hebrew', strongs)
-      .then(e => { setDef({ strongs, entry: e }); setDefLoading(false) })
-      .catch(() => { setDef({ strongs, entry: null }); setDefLoading(false) })
+    const lang: Language = isNT ? 'greek' : 'hebrew'
+    Promise.all([
+      window.bibleApi.getStrongsEntry(lang, strongs).catch(() => null),
+      window.bibleApi.getLexiconEntry(lang, strongs).catch(() => null),
+    ])
+      .then(([entry, lexicon]) => { setDef({ strongs, entry, lexicon }); setDefLoading(false) })
+      .catch(() => { setDef({ strongs, entry: null, lexicon: null }); setDefLoading(false) })
   }
+
+  const { mainText, indexRaw } = useMemo(() =>
+    def?.lexicon?.thayers_text
+      ? processThayersText(def.lexicon.thayers_text)
+      : { mainText: '', indexRaw: '' },
+    [def?.lexicon?.thayers_text]
+  )
+  const scriptureIndex = useMemo(() => indexRaw ? parseScriptureIndex(indexRaw) : [], [indexRaw])
+  const highlightedText = useMemo(() =>
+    mainText ? highlightVerseRefs(mainText, selected.book, selected.chapter, selected.verse) : [],
+    [mainText, selected.book, selected.chapter, selected.verse]
+  )
 
   if (!selected?.verse) return <div className="panel-empty">Select a verse to see word study.</div>
   if (loading) return <div className="panel-loading">Loading...</div>
@@ -172,6 +274,76 @@ export function WordStudyPanel({ selected, onWordSelect }: Props) {
                 {def.entry.definition && <p className="strongs-def">{def.entry.definition.trim()}</p>}
                 {def.entry.kjv_usage && (
                   <p className="strongs-kjv"><span className="strongs-kjv-label">KJV uses:</span> {def.entry.kjv_usage}</p>
+                )}
+
+                {mainText && (
+                  <div className="lexicon-thayers">
+                    <div className="lexicon-thayers-label">
+                      {isNT ? "Thayer's Greek Lexicon" : 'Brown-Driver-Briggs'}
+                    </div>
+
+                    {def.lexicon?.outline && (
+                      <div className="lexicon-outline">
+                        {def.lexicon.outline.split('•').filter(s => s.trim()).map((item, i) => (
+                          <div key={i} className="lexicon-outline-item">• {item.trim()}</div>
+                        ))}
+                      </div>
+                    )}
+
+                    <p className="lexicon-thayers-text">{highlightedText}</p>
+
+                    {scriptureIndex.length > 0 && (
+                      <div className="lexicon-scripture-index">
+                        <div className="lexicon-scripture-index-label">Scripture Index</div>
+                        {scriptureIndex.map(({ book, refs }) => (
+                          <div key={book} className="lexicon-si-book">
+                            <span className="lexicon-si-bookname">{book}</span>
+                            <span className="lexicon-si-refs">
+                              {refs.map((ref, i) => {
+                                if (ref.verse === null) return (
+                                  <span key={i} className="lexicon-si-ref lexicon-si-ref--chapter">{ref.raw}</span>
+                                )
+                                const isCurrentVerse =
+                                  book === selected.book &&
+                                  ref.chapter === selected.chapter &&
+                                  ref.verse === selected.verse
+                                const isClicked =
+                                  clickedVerse?.book === book &&
+                                  clickedVerse?.chapter === ref.chapter &&
+                                  clickedVerse?.verse === ref.verse
+                                return (
+                                  <button
+                                    key={i}
+                                    className={`lexicon-si-ref${isCurrentVerse ? ' lexicon-si-ref--current' : ''}${isClicked ? ' lexicon-si-ref--hovered' : ''}`}
+                                    onClick={() => setClickedVerse(isClicked ? null : { book, chapter: ref.chapter, verse: ref.verse! })}
+                                  >
+                                    {ref.raw}
+                                  </button>
+                                )
+                              })}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {clickedVerse && versePreview && (
+                  <div className="lexicon-verse-preview">
+                    <div className="lexicon-verse-preview-ref">
+                      {clickedVerse.book} {clickedVerse.chapter}:{clickedVerse.verse}
+                    </div>
+                    <div className="lexicon-verse-preview-text">
+                      {versePreview.loading ? 'Loading…' : versePreview.text}
+                    </div>
+                    <button
+                      className="lexicon-verse-preview-goto"
+                      onClick={() => { onNavigate?.(clickedVerse.book, clickedVerse.chapter, clickedVerse.verse); setClickedVerse(null) }}
+                    >
+                      Go to verse →
+                    </button>
+                  </div>
                 )}
               </>
             ) : (

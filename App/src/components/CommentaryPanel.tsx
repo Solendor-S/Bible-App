@@ -29,9 +29,10 @@ import { HighlightsPanel } from './HighlightsPanel'
 import { MapPanel } from './MapPanel'
 import { CouncilsPanel } from './CouncilsPanel'
 import { HeresiesPanel } from './HeresiesPanel'
+import { OverviewPanel } from './OverviewPanel'
 import type { Bookmark, CommentaryEntry, CommentarySearchResult, SelectedVerse } from '../types'
 
-export type RightTab = 'commentary' | 'crossrefs' | 'wordstudy' | 'firstcentury' | 'notes' | 'topics' | 'bookmarks' | 'highlights' | 'map' | 'councils' | 'heresies'
+export type RightTab = 'commentary' | 'crossrefs' | 'wordstudy' | 'firstcentury' | 'notes' | 'topics' | 'bookmarks' | 'highlights' | 'map' | 'councils' | 'heresies' | 'overview'
 
 interface Props {
   selected: SelectedVerse
@@ -94,6 +95,7 @@ function EntryView({
 }
 
 const DEFAULT_TABS: { id: RightTab; label: string }[] = [
+  { id: 'overview',   label: 'Overview' },
   { id: 'commentary', label: 'Fathers' },
   { id: 'crossrefs',  label: 'Cross-Refs' },
   { id: 'wordstudy',  label: 'Words' },
@@ -177,10 +179,16 @@ function TabHeader({
     checkScroll()
     const el = scrollRef.current
     if (!el) return
+    const onWheel = (e: WheelEvent) => {
+      if (e.deltaY === 0) return
+      e.preventDefault()
+      el.scrollBy({ left: e.deltaY, behavior: 'smooth' })
+    }
     el.addEventListener('scroll', checkScroll, { passive: true })
+    el.addEventListener('wheel', onWheel, { passive: false })
     const ro = new ResizeObserver(checkScroll)
     ro.observe(el)
-    return () => { el.removeEventListener('scroll', checkScroll); ro.disconnect() }
+    return () => { el.removeEventListener('scroll', checkScroll); el.removeEventListener('wheel', onWheel); ro.disconnect() }
   }, [])
 
   const scroll = (dir: 'left' | 'right') => {
@@ -278,6 +286,8 @@ export function CommentaryPanel({ selected, featuredEntry, onClearFeatured, onNa
       <TabHeader rightTab={rightTab} onTabChange={onTabChange} location={location} />
       {(() => {
         switch (rightTab) {
+          case 'overview':
+            return <OverviewPanel selected={selected} />
           case 'highlights':
             return <HighlightsPanel onNavigate={onNavigate} translation={translation} />
           case 'map':
@@ -291,7 +301,7 @@ export function CommentaryPanel({ selected, featuredEntry, onClearFeatured, onNa
           case 'crossrefs':
             return <CrossRefsPanel selected={selected} onNavigate={onNavigate} translation={translation} />
           case 'wordstudy':
-            return <WordStudyPanel selected={selected} onWordSelect={onWordSelect} />
+            return <WordStudyPanel selected={selected} onWordSelect={onWordSelect} onNavigate={onNavigate} />
           case 'firstcentury':
             return <JosephusPanel selected={selected} />
           case 'councils':

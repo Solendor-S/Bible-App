@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { parsePassage, passagesToString } from '../lib/parsePassage'
 import type { PassageRef } from '../types'
 
@@ -15,6 +15,69 @@ interface Props {
   onForward: () => void
 }
 
+const BOOK_GROUPS: { label: string; books: string[] }[] = [
+  { label: 'Torah', books: ['Genesis', 'Exodus', 'Leviticus', 'Numbers', 'Deuteronomy'] },
+  { label: 'Historical', books: ['Joshua', 'Judges', 'Ruth', '1 Samuel', '2 Samuel', '1 Kings', '2 Kings', '1 Chronicles', '2 Chronicles', 'Ezra', 'Nehemiah', 'Esther'] },
+  { label: 'Wisdom & Poetry', books: ['Job', 'Psalms', 'Proverbs', 'Ecclesiastes', 'Song of Solomon'] },
+  { label: 'Major Prophets', books: ['Isaiah', 'Jeremiah', 'Lamentations', 'Ezekiel', 'Daniel'] },
+  { label: 'Minor Prophets', books: ['Hosea', 'Joel', 'Amos', 'Obadiah', 'Jonah', 'Micah', 'Nahum', 'Habakkuk', 'Zephaniah', 'Haggai', 'Zechariah', 'Malachi'] },
+  { label: 'Gospels', books: ['Matthew', 'Mark', 'Luke', 'John'] },
+  { label: 'Acts', books: ['Acts'] },
+  { label: 'Pauline Epistles', books: ['Romans', '1 Corinthians', '2 Corinthians', 'Galatians', 'Ephesians', 'Philippians', 'Colossians', '1 Thessalonians', '2 Thessalonians', '1 Timothy', '2 Timothy', 'Titus', 'Philemon'] },
+  { label: 'General Epistles', books: ['Hebrews', 'James', '1 Peter', '2 Peter', '1 John', '2 John', '3 John', 'Jude'] },
+  { label: 'Prophecy', books: ['Revelation'] },
+]
+
+function BookDropdown({ onSelect }: { onSelect: (book: string) => void }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    function onDown(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [open])
+
+  return (
+    <div className="book-dropdown" ref={ref}>
+      <button
+        className="book-dropdown-btn"
+        onClick={() => setOpen(o => !o)}
+        title="Browse books"
+      >
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+          <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+        </svg>
+        Books
+      </button>
+      {open && (
+        <div className="book-dropdown-menu">
+          {BOOK_GROUPS.map(group => (
+            <div key={group.label} className="book-group">
+              <div className="book-group-label">{group.label}</div>
+              <div className="book-group-items">
+                {group.books.map(book => (
+                  <button
+                    key={book}
+                    className="book-group-item"
+                    onClick={() => { onSelect(book); setOpen(false) }}
+                  >
+                    {book}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function NavigationBar({ passages, onPassagesChange, onSearchOpen, onChangelogOpen, aiOpen, onToggleAi, canBack, canForward, onBack, onForward }: Props) {
   const [inputValue, setInputValue] = useState(passagesToString(passages))
 
@@ -24,6 +87,11 @@ export function NavigationBar({ passages, onPassagesChange, onSearchOpen, onChan
 
   function submit() {
     const parsed = parsePassage(inputValue)
+    if (parsed.length > 0) onPassagesChange(parsed)
+  }
+
+  function handleBookSelect(book: string) {
+    const parsed = parsePassage(`${book} 1`)
     if (parsed.length > 0) onPassagesChange(parsed)
   }
 
@@ -52,6 +120,7 @@ export function NavigationBar({ passages, onPassagesChange, onSearchOpen, onChan
             spellCheck={false}
           />
           <button className="nav-go-btn" onClick={submit}>Go</button>
+          <BookDropdown onSelect={handleBookSelect} />
         </div>
       </div>
 

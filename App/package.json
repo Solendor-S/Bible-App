@@ -1,6 +1,6 @@
 {
   "name": "bible-app",
-  "version": "1.9.6",
+  "version": "1.9.8",
   "description": "Catena-style Bible study app with Church Fathers commentary",
   "author": "Sargon Shlimon",
   "copyright": "Copyright © 2026 Sargon Shlimon. All rights reserved.",
@@ -20,6 +20,13 @@
     "fetch-josephus": "node -r ts-node/register scripts/fetch-josephus.ts",
     "fetch-translations": "node -r ts-node/register scripts/fetch-translations.ts",
     "fetch-apocrypha": "node -r ts-node/register data/fetch-apocrypha.ts",
+    "scrape-lexicons": "C:\\Users\\Sargo\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe scripts/scrape-blb-lexicons.py",
+    "scrape-lexicons-greek": "C:\\Users\\Sargo\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe scripts/scrape-blb-lexicons.py --greek",
+    "scrape-lexicons-hebrew": "C:\\Users\\Sargo\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe scripts/scrape-blb-lexicons.py --hebrew",
+    "scrape-lexicons-resume": "C:\\Users\\Sargo\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe scripts/scrape-blb-lexicons.py --resume",
+    "scrape-bibleref": "C:\\Users\\Sargo\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe scripts/scrape-bibleref.py",
+    "scrape-bibleref-resume": "C:\\Users\\Sargo\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe scripts/scrape-bibleref.py --resume",
+    "scrape-bibleref-test": "C:\\Users\\Sargo\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe scripts/scrape-bibleref.py --book Genesis",
     "fetch-all": "npm run fetch-ccel && npm run fetch-catenabible-api && npm run build-db"
   },
   "dependencies": {

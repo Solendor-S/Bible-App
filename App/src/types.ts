@@ -42,6 +42,36 @@ export interface StrongsEntry {
   kjv_usage: string
 }
 
+export type Language = 'greek' | 'hebrew'
+
+export interface OverviewVerse {
+  note: string
+}
+
+export interface OverviewChapter {
+  themes: string  // JSON string array e.g. '["Creation","Light"]'
+  summary: string
+}
+
+export interface OverviewPericope {
+  title: string
+  verse_start: number
+  verse_end: number
+  description: string
+}
+
+export interface LexiconEntry {
+  number: string
+  lemma: string
+  translit: string
+  pronunciation: string
+  part_of_speech: string
+  strongs_def: string
+  outline: string
+  thayers_text: string  // Thayer's (Greek) or BDB (Hebrew) full text
+  kjv_translations: string
+}
+
 export interface CommentaryEntry {
   id: number
   father_name: string
@@ -219,6 +249,11 @@ declare global {
       saveNote(note: Note): Promise<void>
       deleteNote(id: string): Promise<void>
     }
+    overviewApi: {
+      getVerse(book: string, chapter: number, verse: number): Promise<OverviewVerse | null>
+      getChapter(book: string, chapter: number): Promise<OverviewChapter | null>
+      getPericope(book: string, chapter: number, verse: number): Promise<OverviewPericope | null>
+    }
     navesApi: {
       getForVerse(book: string, chapter: number, verse: number): Promise<NavesTopic[]>
       getTopicRefs(topicId: number, translation?: string): Promise<NavesRef[]>
@@ -232,7 +267,8 @@ declare global {
       getCrossRefsFull(book: string, chapter: number, verse: number, translation?: string): Promise<CrossRef[]>
       getGreekWords(book: string, chapter: number, verse: number): Promise<GreekWord[]>
       getHebrewWords(book: string, chapter: number, verse: number): Promise<HebrewWord[]>
-      getStrongsEntry(type: string, num: string): Promise<StrongsEntry | null>
+      getStrongsEntry(type: Language, num: string): Promise<StrongsEntry | null>
+      getLexiconEntry(type: Language, num: string): Promise<LexiconEntry | null>
       getCommentary(book: string, chapter: number, verse: number): Promise<CommentaryEntry[]>
       getJosephusForVerse(book: string, chapter: number, verse: number): Promise<JosephusEntry[]>
       getHistoricalForVerse(book: string, chapter: number, verse: number): Promise<HistoricalEntry[]>

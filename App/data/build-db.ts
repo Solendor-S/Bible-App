@@ -135,6 +135,52 @@ async function main() {
       description TEXT DEFAULT ''
     );
     CREATE INDEX IF NOT EXISTS idx_variants_loc ON textual_variants(book, chapter, verse);
+    CREATE TABLE IF NOT EXISTS thayers_greek (
+      number TEXT PRIMARY KEY,
+      lemma TEXT,
+      translit TEXT,
+      pronunciation TEXT,
+      part_of_speech TEXT,
+      strongs_def TEXT,
+      outline TEXT,
+      thayers_text TEXT,
+      kjv_translations TEXT
+    );
+    CREATE TABLE IF NOT EXISTS bdb_hebrew (
+      number TEXT PRIMARY KEY,
+      lemma TEXT,
+      translit TEXT,
+      pronunciation TEXT,
+      part_of_speech TEXT,
+      strongs_def TEXT,
+      outline TEXT,
+      bdb_text TEXT,
+      kjv_translations TEXT
+    );
+    CREATE TABLE IF NOT EXISTS overview_verses (
+      book TEXT NOT NULL,
+      chapter INTEGER NOT NULL,
+      verse INTEGER NOT NULL,
+      note TEXT,
+      PRIMARY KEY (book, chapter, verse)
+    );
+    CREATE TABLE IF NOT EXISTS overview_chapters (
+      book TEXT NOT NULL,
+      chapter INTEGER NOT NULL,
+      themes TEXT,
+      summary TEXT,
+      PRIMARY KEY (book, chapter)
+    );
+    CREATE TABLE IF NOT EXISTS overview_pericopes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      book TEXT NOT NULL,
+      chapter INTEGER NOT NULL,
+      verse_start INTEGER NOT NULL,
+      verse_end INTEGER NOT NULL,
+      title TEXT NOT NULL,
+      description TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_pericopes_loc ON overview_pericopes(book, chapter, verse_start);
   `)
 
   // Bible text
@@ -452,6 +498,111 @@ async function main() {
   }
   aVStmt.free()
   console.log(`  Inserted ${APOCRYPHA_BOOKS.length} books, ${APOCRYPHA_VERSES.length} verses`)
+
+  // Thayer's Greek Lexicon
+  const thayersPath = join(RAW_DIR, 'thayers-greek.json')
+  if (existsSync(thayersPath)) {
+    console.log('Inserting Thayer\'s Greek Lexicon...')
+    const entries = JSON.parse(readFileSync(thayersPath, 'utf-8'))
+    const stmt = db.prepare(`
+      INSERT OR REPLACE INTO thayers_greek
+        (number, lemma, translit, pronunciation, part_of_speech, strongs_def, outline, thayers_text, kjv_translations)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `)
+    for (const e of entries) {
+      stmt.run([e.number, e.lemma ?? '', e.translit ?? '', e.pronunciation ?? '',
+        e.part_of_speech ?? '', e.strongs_def ?? '', e.outline ?? '',
+        e.thayers_text ?? '', e.kjv_translations ?? ''])
+    }
+    stmt.free()
+    console.log(`  Inserted ${entries.length} Thayer's entries`)
+  } else {
+    console.warn('  thayers-greek.json not found — run scripts/scrape-blb-lexicons.py --greek')
+  }
+
+  // BDB Hebrew Lexicon
+  const bdbPath = join(RAW_DIR, 'bdb-hebrew.json')
+  if (existsSync(bdbPath)) {
+    console.log('Inserting BDB Hebrew Lexicon...')
+    const entries = JSON.parse(readFileSync(bdbPath, 'utf-8'))
+    const stmt = db.prepare(`
+      INSERT OR REPLACE INTO bdb_hebrew
+        (number, lemma, translit, pronunciation, part_of_speech, strongs_def, outline, bdb_text, kjv_translations)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `)
+    for (const e of entries) {
+      stmt.run([e.number, e.lemma ?? '', e.translit ?? '', e.pronunciation ?? '',
+        e.part_of_speech ?? '', e.strongs_def ?? '', e.outline ?? '',
+        e.thayers_text ?? '', e.kjv_translations ?? ''])
+    }
+    stmt.free()
+    console.log(`  Inserted ${entries.length} BDB entries`)
+  } else {
+    console.warn('  bdb-hebrew.json not found — run scripts/scrape-blb-lexicons.py --hebrew')
+  }
+
+  // bibleref.com Overview — verse notes
+  const brVersesPath = join(RAW_DIR, 'bibleref-verses.json')
+  if (existsSync(brVersesPath)) {
+    console.log('Inserting bibleref verse notes...')
+    const brVerses = JSON.parse(readFileSync(brVersesPath, 'utf-8'))
+    const vStmt = db.prepare(`
+      INSERT OR REPLACE INTO overview_verses (book, chapter, verse, note)
+      VALUES (?, ?, ?, ?)
+    `)
+    const pStmt = db.prepare(`
+      INSERT OR IGNORE INTO overview_pericopes (book, chapter, verse_start, verse_end, title, description)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `)
+    const seenPericopes = new Set<string>()
+    for (const e of brVerses) {
+      vStmt.run([e.book, e.chapter, e.verse, e.note ?? ''])
+      if (e.pericope_verse_start != null && e.pericope_verse_end != null) {
+        const pk = `${e.book}:${e.chapter}:${e.pericope_verse_start}:${e.pericope_verse_end}`
+        if (!seenPericopes.has(pk)) {
+          seenPericopes.add(pk)
+          pStmt.run([e.book, e.chapter, e.pericope_verse_start, e.pericope_verse_end,
+            e.pericope_title ?? '', e.pericope_desc ?? ''])
+        }
+      }
+    }
+    vStmt.free()
+    pStmt.free()
+    console.log(`  Inserted ${brVerses.length} verse notes, ${seenPericopes.size} pericopes`)
+  } else {
+    console.warn('  bibleref-verses.json not found — run scripts/scrape-bibleref.py')
+  }
+
+  // bibleref.com Overview — chapter summaries + Nave's themes
+  const brChaptersPath = join(RAW_DIR, 'bibleref-chapters.json')
+  if (existsSync(brChaptersPath)) {
+    console.log('Inserting bibleref chapter summaries + computing themes...')
+    const brChapters = JSON.parse(readFileSync(brChaptersPath, 'utf-8'))
+    const cStmt = db.prepare(`
+      INSERT OR REPLACE INTO overview_chapters (book, chapter, themes, summary)
+      VALUES (?, ?, ?, ?)
+    `)
+    for (const e of brChapters) {
+      const themeRows = db.prepare(`
+        SELECT nt.name FROM naves_refs nr
+        JOIN naves_topics nt ON nr.topic_id = nt.id
+        WHERE nr.book = ? AND nr.chapter = ?
+        GROUP BY nt.name ORDER BY COUNT(*) DESC LIMIT 5
+      `)
+      themeRows.bind([e.book, e.chapter])
+      const themes: string[] = []
+      while (themeRows.step()) {
+        const row = themeRows.getAsObject() as any
+        themes.push(row.name)
+      }
+      themeRows.free()
+      cStmt.run([e.book, e.chapter, JSON.stringify(themes), e.summary ?? ''])
+    }
+    cStmt.free()
+    console.log(`  Inserted ${brChapters.length} chapter entries`)
+  } else {
+    console.warn('  bibleref-chapters.json not found — run scripts/scrape-bibleref.py')
+  }
 
   // Write to disk
   const data = db.export()

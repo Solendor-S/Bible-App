@@ -419,6 +419,40 @@ ipcMain.handle('bible:getStrongsEntry', async (_e, type: string, num: string) =>
   return r[0] ?? null
 })
 
+ipcMain.handle('bible:getLexiconEntry', async (_e, type: string, num: string) => {
+  const database = await openDb()
+  const table = type === 'hebrew' ? 'bdb_hebrew' : 'thayers_greek'
+  const col = type === 'hebrew' ? 'bdb_text' : 'thayers_text'
+  const prefix = type === 'greek' ? 'G' : 'H'
+  const normalize = (n: string) => {
+    const m = n.match(new RegExp(`^${prefix}0*(\\d+)`))
+    return m ? `${prefix}${parseInt(m[1])}` : n
+  }
+  const query = `SELECT number, lemma, translit, pronunciation, part_of_speech, strongs_def, outline, ${col} AS thayers_text, kjv_translations FROM ${table} WHERE number = ?`
+  let r = rows(database, query, [num])
+  if (r.length === 0) r = rows(database, query, [normalize(num)])
+  return r[0] ?? null
+})
+
+ipcMain.handle('overview:getVerse', async (_e, book: string, chapter: number, verse: number) => {
+  const database = await openDb()
+  return rows(database, 'SELECT note FROM overview_verses WHERE book=? AND chapter=? AND verse=?', [book, chapter, verse])[0] ?? null
+})
+
+ipcMain.handle('overview:getChapter', async (_e, book: string, chapter: number) => {
+  const database = await openDb()
+  return rows(database, 'SELECT themes, summary FROM overview_chapters WHERE book=? AND chapter=?', [book, chapter])[0] ?? null
+})
+
+ipcMain.handle('overview:getPericope', async (_e, book: string, chapter: number, verse: number) => {
+  const database = await openDb()
+  return rows(database, `
+    SELECT title, verse_start, verse_end, description
+    FROM overview_pericopes
+    WHERE book=? AND chapter=? AND verse_start<=? AND verse_end>=?
+    LIMIT 1`, [book, chapter, verse, verse])[0] ?? null
+})
+
 ipcMain.handle('bible:getCrossRefsFull', async (_e, book: string, chapter: number, verse: number, translation = 'KJV') => {
   const database = await openDb()
   return rows(database, `

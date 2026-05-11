@@ -14,6 +14,8 @@ contextBridge.exposeInMainWorld('bibleApi', {
     ipcRenderer.invoke('bible:getHebrewWords', book, chapter, verse),
   getStrongsEntry: (type: string, num: string) =>
     ipcRenderer.invoke('bible:getStrongsEntry', type, num),
+  getLexiconEntry: (type: string, num: string) =>
+    ipcRenderer.invoke('bible:getLexiconEntry', type, num),
   getCommentary: (book: string, chapter: number, verse: number) =>
     ipcRenderer.invoke('commentary:getForVerse', book, chapter, verse),
   getJosephusForVerse: (book: string, chapter: number, verse: number) =>
@@ -80,6 +82,15 @@ contextBridge.exposeInMainWorld('highlightApi', {
   clear: (book: string, chapter: number, verse: number) =>
     ipcRenderer.invoke('highlights:clear', book, chapter, verse),
   getAll: (translation?: string) => ipcRenderer.invoke('highlights:getAll', translation),
+})
+
+contextBridge.exposeInMainWorld('overviewApi', {
+  getVerse: (book: string, chapter: number, verse: number) =>
+    ipcRenderer.invoke('overview:getVerse', book, chapter, verse),
+  getChapter: (book: string, chapter: number) =>
+    ipcRenderer.invoke('overview:getChapter', book, chapter),
+  getPericope: (book: string, chapter: number, verse: number) =>
+    ipcRenderer.invoke('overview:getPericope', book, chapter, verse),
 })
 
 contextBridge.exposeInMainWorld('chatApi', {
