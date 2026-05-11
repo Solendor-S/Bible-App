@@ -95,7 +95,7 @@ If Ollama isn't running, the rest of the app works fine without it.
 |--------|---------|-------|
 | KJV text | 31,100 verses | Public domain |
 | Cross-references | ~340,000 | Public domain dataset |
-| Parallel translations | ESV, NASB, NIV, ASV, YLT, WEB, and more | Various sources |
+| Parallel translations | ASV, WEB | Public domain |
 
 ### Church Fathers Commentary
 
