@@ -58,7 +58,7 @@ function EntryView({
   chapter: number
 }) {
   const [expanded, setExpanded] = useState(false)
-  const url = getSourceUrl(entry.father_name, book, chapter, entry.source_url)
+  const url = getSourceUrl(entry.father_name, book, chapter, entry.source_url, entry.excerpt)
   return (
     <div className="commentary-entry">
       <div className="commentary-header">

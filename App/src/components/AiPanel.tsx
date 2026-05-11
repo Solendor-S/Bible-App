@@ -1,10 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { AiChatMessage } from './AiChatMessage'
 import { streamChat, buildSystemPrompt, buildHistoricalContextPrompt, OLLAMA_MODELS, DEFAULT_MODEL } from '../lib/ollamaClient'
+import { streamGemini, GEMINI_MODELS, DEFAULT_GEMINI_MODEL } from '../lib/geminiClient'
 import type { ChatMessage, ChatSession, CommentarySearchResult, SelectedVerse } from '../types'
 
 const AI_PANEL_MIN = 200
 const AI_PANEL_DEFAULT = 320
+const GEMINI_KEY_STORAGE = 'gemini-api-key'
+const GEMINI_MODEL_STORAGE = 'gemini-model'
+const PROVIDER_STORAGE = 'ai-provider'
+
+type Provider = 'ollama' | 'gemini'
 
 interface Props {
   height: number
@@ -23,26 +29,42 @@ export function AiPanel({ height, activeVerse, onHeightChange, onNavigate, onSho
   const [aiMode, setAiMode] = useState<'scholar' | 'context'>('scholar')
   const [streaming, setStreaming] = useState(false)
   const [streamingContent, setStreamingContent] = useState('')
+  const [provider, setProvider] = useState<Provider>(() =>
+    (localStorage.getItem(PROVIDER_STORAGE) as Provider) ?? 'ollama'
+  )
+  const [geminiKey, setGeminiKey] = useState(() => localStorage.getItem(GEMINI_KEY_STORAGE) ?? '')
+  const [geminiModel, setGeminiModel] = useState(() => localStorage.getItem(GEMINI_MODEL_STORAGE) ?? DEFAULT_GEMINI_MODEL)
+  const [showKeyInput, setShowKeyInput] = useState(false)
+  const [keyDraft, setKeyDraft] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
-  useEffect(() => {
-    window.chatApi.getSessions().then(setSessions)
-  }, [])
+  useEffect(() => { window.chatApi.getSessions().then(setSessions) }, [])
+  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
+  useEffect(() => { if (streaming) messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [streaming])
 
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+  function switchProvider(p: Provider) {
+    setProvider(p)
+    localStorage.setItem(PROVIDER_STORAGE, p)
+  }
 
-  useEffect(() => {
-    if (streaming) messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [streaming])
+  function saveGeminiKey() {
+    const key = keyDraft.trim()
+    setGeminiKey(key)
+    localStorage.setItem(GEMINI_KEY_STORAGE, key)
+    setShowKeyInput(false)
+    setKeyDraft('')
+  }
+
+  function handleGeminiModelChange(id: string) {
+    setGeminiModel(id)
+    localStorage.setItem(GEMINI_MODEL_STORAGE, id)
+  }
 
   function handleResizeMouseDown(e: React.MouseEvent) {
     e.preventDefault()
     const startY = e.clientY
     const startH = height
-
     function onMove(ev: MouseEvent) {
       const delta = startY - ev.clientY
       const maxH = Math.floor(window.innerHeight * 0.65)
@@ -60,6 +82,11 @@ export function AiPanel({ height, activeVerse, onHeightChange, onNavigate, onSho
     const text = input.trim()
     if (!text || streaming) return
 
+    if (provider === 'gemini' && !geminiKey) {
+      setShowKeyInput(true)
+      return
+    }
+
     const userMsg: ChatMessage = {
       id: crypto.randomUUID(),
       role: 'user',
@@ -72,7 +99,6 @@ export function AiPanel({ height, activeVerse, onHeightChange, onNavigate, onSho
     setStreaming(true)
     setStreamingContent('')
 
-    // Fetch relevant DB context in parallel (scholar mode only)
     let contextLines: string[] = []
     if (aiMode === 'scholar') {
       try {
@@ -92,55 +118,70 @@ export function AiPanel({ height, activeVerse, onHeightChange, onNavigate, onSho
             contextLines.push(`${c.father_name} on ${c.book} ${c.chapter}:${c.verse}: "${c.excerpt}"`)
           })
         }
-      } catch {
-        // context fetch failed — proceed without it
-      }
+      } catch { /* proceed without context */ }
     }
 
     const systemPrompt = aiMode === 'context'
       ? buildHistoricalContextPrompt(activeVerse.book, activeVerse.chapter, activeVerse.verse)
       : buildSystemPrompt(activeVerse.book, activeVerse.chapter)
-    const ollamaMessages = [
-      { role: 'system' as const, content: systemPrompt },
-      ...newMessages.slice(0, -1).map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),
-      {
-        role: 'user' as const,
-        content: contextLines.length > 0
-          ? `${text}\n\n[Reference context from app database:\n${contextLines.join('\n')}]`
-          : text
-      }
-    ]
+
+    const userContent = contextLines.length > 0
+      ? `${text}\n\n[Reference context from app database:\n${contextLines.join('\n')}]`
+      : text
 
     let fullContent = ''
-    let ollamaInstalled = false
-    try {
-      // Start Ollama if it isn't already running
-      setStreamingContent('Starting AI Scholar…')
-      const ollamaStatus = await window.bibleApi.ensureOllama()
-      setStreamingContent('')
-      if (!ollamaStatus.success) {
-        throw new Error(ollamaStatus.error ?? 'Could not start Ollama.')
-      }
-      ollamaInstalled = true
-      if (!ollamaStatus.alreadyRunning) {
-        // Brief pause to let the model server fully settle after cold start
-        await new Promise(r => setTimeout(r, 800))
-      }
 
-      for await (const chunk of streamChat(ollamaMessages, selectedModel)) {
-        fullContent += chunk
-        setStreamingContent(fullContent)
+    try {
+      if (provider === 'gemini') {
+        const geminiMessages = [
+          ...newMessages.slice(0, -1).map(m => ({
+            role: m.role === 'user' ? 'user' as const : 'model' as const,
+            content: m.content,
+          })),
+          { role: 'user' as const, content: userContent },
+        ]
+        for await (const chunk of streamGemini(geminiMessages, systemPrompt, geminiModel, geminiKey)) {
+          fullContent += chunk
+          setStreamingContent(fullContent)
+        }
+      } else {
+        setStreamingContent('Starting AI Scholar…')
+        const ollamaStatus = await window.bibleApi.ensureOllama()
+        setStreamingContent('')
+        if (!ollamaStatus.success) throw new Error(ollamaStatus.error ?? 'Could not start Ollama.')
+        if (!ollamaStatus.alreadyRunning) await new Promise(r => setTimeout(r, 800))
+
+        const ollamaMessages = [
+          { role: 'system' as const, content: systemPrompt },
+          ...newMessages.slice(0, -1).map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),
+          { role: 'user' as const, content: userContent },
+        ]
+        for await (const chunk of streamChat(ollamaMessages, selectedModel)) {
+          fullContent += chunk
+          setStreamingContent(fullContent)
+        }
       }
     } catch (err: any) {
       const msg = err?.message ?? ''
-      if (!ollamaInstalled) {
-        fullContent = `⚠️ Ollama is not installed. Download it from https://ollama.com, then run: \`ollama pull ${selectedModel}\``
-      } else if (msg.includes('not found') || msg.includes('404') || msg.includes('pull')) {
-        fullContent = `⚠️ Ollama is installed but **${selectedModel}** is not pulled. Run:\n\`ollama pull ${selectedModel}\``
-      } else if (msg.includes('20 seconds')) {
-        fullContent = `⚠️ Ollama took too long to start. Try opening Ollama manually and sending your message again.`
+      if (provider === 'gemini') {
+        if (msg.includes('API_KEY_INVALID') || msg.includes('400')) {
+          fullContent = `⚠️ Invalid Gemini API key. Click **API Key** to update it.`
+        } else if (msg.includes('429') || msg.includes('quota')) {
+          fullContent = `⚠️ Gemini rate limit reached. Free tier: 2.5 Flash allows 1,500 requests/day and 15/minute. Try again shortly or switch to a less-used model.`
+        } else {
+          fullContent = `⚠️ Gemini error: ${msg}`
+        }
       } else {
-        fullContent = `⚠️ Could not start AI Scholar: ${msg}`
+        const ollamaInstalled = msg !== '' && !msg.includes('ECONNREFUSED')
+        if (!ollamaInstalled) {
+          fullContent = `⚠️ Ollama is not installed. Download it from https://ollama.com, then run: \`ollama pull ${selectedModel}\``
+        } else if (msg.includes('not found') || msg.includes('404') || msg.includes('pull')) {
+          fullContent = `⚠️ Ollama is installed but **${selectedModel}** is not pulled. Run:\n\`ollama pull ${selectedModel}\``
+        } else if (msg.includes('20 seconds')) {
+          fullContent = `⚠️ Ollama took too long to start. Try opening Ollama manually and sending your message again.`
+        } else {
+          fullContent = `⚠️ Could not start AI Scholar: ${msg}`
+        }
       }
     }
 
@@ -155,7 +196,6 @@ export function AiPanel({ height, activeVerse, onHeightChange, onNavigate, onSho
     setStreaming(false)
     setStreamingContent('')
 
-    // Persist session
     const sessionId = activeSessionId ?? crypto.randomUUID()
     const existingSession = sessions.find(s => s.id === sessionId)
     const title = existingSession?.title ?? text.slice(0, 60)
@@ -225,6 +265,22 @@ export function AiPanel({ height, activeVerse, onHeightChange, onNavigate, onSho
           </div>
 
           <div className="ai-input-bar">
+            {showKeyInput && (
+              <div className="ai-key-row">
+                <span className="ai-key-label">Gemini API key:</span>
+                <input
+                  className="ai-key-input"
+                  type="password"
+                  value={keyDraft}
+                  onChange={e => setKeyDraft(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && saveGeminiKey()}
+                  placeholder="AIza…"
+                  autoFocus
+                />
+                <button className="ai-key-save-btn" onClick={saveGeminiKey}>Save</button>
+                <button className="ai-key-cancel-btn" onClick={() => setShowKeyInput(false)}>✕</button>
+              </div>
+            )}
             <div className="ai-input-row">
               <textarea
                 ref={textareaRef}
@@ -248,17 +304,55 @@ export function AiPanel({ height, activeVerse, onHeightChange, onNavigate, onSho
               </button>
             </div>
             <div className="ai-model-bar">
-              <span className="ai-model-label">Model:</span>
-              <select
-                className="ai-model-select"
-                value={selectedModel}
-                onChange={e => setSelectedModel(e.target.value)}
-                disabled={streaming}
-              >
-                {OLLAMA_MODELS.map(m => (
-                  <option key={m.id} value={m.id}>{m.label} · {m.ram} RAM</option>
-                ))}
-              </select>
+              <div className="ai-provider-toggle">
+                <button
+                  className={`ai-provider-btn${provider === 'ollama' ? ' ai-provider-btn--active' : ''}`}
+                  onClick={() => switchProvider('ollama')}
+                  disabled={streaming}
+                  title="Local Ollama model — runs on your machine"
+                >Ollama</button>
+                <button
+                  className={`ai-provider-btn${provider === 'gemini' ? ' ai-provider-btn--active' : ''}`}
+                  onClick={() => switchProvider('gemini')}
+                  disabled={streaming}
+                  title="Google Gemini API — no local RAM needed"
+                >Gemini</button>
+              </div>
+
+              {provider === 'ollama' ? (
+                <select
+                  className="ai-model-select"
+                  value={selectedModel}
+                  onChange={e => setSelectedModel(e.target.value)}
+                  disabled={streaming}
+                >
+                  {OLLAMA_MODELS.map(m => (
+                    <option key={m.id} value={m.id}>{m.label} · {m.ram} RAM</option>
+                  ))}
+                </select>
+              ) : (
+                <>
+                  <select
+                    className="ai-model-select"
+                    value={geminiModel}
+                    onChange={e => handleGeminiModelChange(e.target.value)}
+                    disabled={streaming}
+                  >
+                    {GEMINI_MODELS.map(m => (
+                      <option key={m.id} value={m.id}>{m.label} · {m.note}</option>
+                    ))}
+                  </select>
+                  <button
+                    className={`ai-key-btn${!geminiKey ? ' ai-key-btn--missing' : ''}`}
+                    onClick={() => { setKeyDraft(geminiKey); setShowKeyInput(v => !v) }}
+                    disabled={streaming}
+                    title={geminiKey ? 'API key saved — click to change' : 'No API key — click to add'}
+                  >
+                    {geminiKey ? '🔑 Key set' : '🔑 Add key'}
+                  </button>
+                </>
+              )}
+
               <div className="ai-mode-toggle">
                 <button
                   className={`ai-mode-btn${aiMode === 'scholar' ? ' ai-mode-btn--active' : ''}`}
