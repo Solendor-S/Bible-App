@@ -1,21 +1,25 @@
 # Bible App
 
-A catena-style Bible study desktop app (Electron) built around KJV scripture and Church Fathers commentary. Click any verse to see patristic commentary sorted by era. Optional AI scholar powered by a local Ollama model — no data leaves your machine.
+A catena-style Bible study desktop app (Electron) built around KJV scripture and Church Fathers commentary. Click any verse to see patristic commentary sorted chronologically by era. Optional AI scholar powered by a local Ollama model — no data leaves your machine.
 
 ## Features
 
 - **KJV Bible** — full text, navigable by book/chapter/verse with browser-style back/forward history
+- **Book browser** — dropdown grouped by category (Torah, Gospels, Epistles, Prophets, etc.) alongside the passage search bar
 - **Church Fathers commentary** — 59,000+ entries from catenabible.com, CCEL Catena Aurea, and hand-curated sources; shown per verse, sorted chronologically
-- **Word study** — click any word to see the underlying Greek (NT) or Hebrew (OT) with Strongs concordance entry
+- **Overview tab** — verse notes, chapter summaries with themes, and pericope (passage grouping) context sourced from bibleref.com
+- **Word study** — click any word to see the underlying Greek (NT) or Hebrew (OT) with Strongs concordance, BDB/Thayer's lexicon entries, morphology, and textual variants
 - **Cross-references** — related verses shown inline per selected verse
 - **Parallel translations** — compare two translations side by side
 - **Concordance** — search every occurrence of any word across the Bible
 - **Nave's Topical Bible** — browse topics linked to any verse
 - **Apocrypha** — full text of deuterocanonical books
-- **Historical context** — Josephus and archaeological/manuscript references keyed to verses
+- **Historical context** — Josephus (*Antiquities* and *Jewish War*) keyed to verses
+- **Maps** — biblical geography referenced to the selected passage
+- **Councils & Heresies** — reference tables of ecumenical councils and early church heresies
 - **Verse highlights** — color-code verses (Important, Conviction, Promise, Blessing)
 - **Bookmarks** — save and revisit any verse
-- **Notes** — attach personal notes to verses, organized in notebooks
+- **Notes** — attach personal notes to verses, organised in notebooks
 - **Search** — full-text search across verses and Fathers commentary
 - **Red-letter mode** — toggle Christ's words in red
 - **AI Scholar** — ask questions about the text and Fathers using a local Ollama model
@@ -43,7 +47,7 @@ Both scripts handle everything automatically.
 ## Manual Setup
 
 ```bash
-# Git LFS must be installed first (for the 93 MB database)
+# Git LFS must be installed first (for the database)
 git lfs install
 git clone https://github.com/Solendor-S/Bible-App.git ~/BibleApp
 cd ~/BibleApp/App
@@ -83,6 +87,47 @@ ollama pull gemma4   # or any model from the table above
 
 If Ollama isn't running, the rest of the app works fine without it.
 
+## Data Sources
+
+### Scripture & Cross-References
+
+| Source | Content | Notes |
+|--------|---------|-------|
+| KJV text | 31,100 verses | Public domain |
+| Cross-references | ~340,000 | Public domain dataset |
+| Parallel translations | ESV, NASB, NIV, ASV, YLT, WEB, and more | Various sources |
+
+### Church Fathers Commentary
+
+| Source | Entries | Notes |
+|--------|---------|-------|
+| [catenabible.com](https://www.catenabible.com) | ~52,700 | Scraped via their API |
+| [CCEL Catena Aurea](https://www.ccel.org) | ~6,600 | Aquinas's compilation of Fathers on the Gospels |
+| Hand-curated | ~55 | Selected patristic excerpts |
+
+### Word Study
+
+| Source | Content | Notes |
+|--------|---------|-------|
+| Strong's Concordance | Greek & Hebrew lexicon | Public domain |
+| BDB (Brown-Driver-Briggs) | Hebrew lexicon with morphology | Public domain |
+| Thayer's Greek Lexicon | NT Greek lexicon | Public domain |
+| OpenGNT | Greek NT with morphology & textual variants | Open dataset |
+| TAHOT (OT Hebrew) | Hebrew morphology | Open dataset |
+
+### Overview & Context
+
+| Source | Content | Notes |
+|--------|---------|-------|
+| [bibleref.com](https://www.bibleref.com) | Verse notes, chapter summaries, pericope groupings | Scraped; partial Bible coverage |
+| [Nave's Topical Bible](https://en.wikipedia.org/wiki/Nave%27s_Topical_Bible) | ~20,000 topics linked to verses | Public domain |
+
+### History & Geography
+
+| Source | Content | Notes |
+|--------|---------|-------|
+| Josephus (*Antiquities* + *Jewish War*) | Historical references keyed to verses | Public domain translation |
+
 ## Rebuilding the Database
 
 The compiled database (`App/data/bible.db`) is included via Git LFS. To rebuild from source:
@@ -95,15 +140,12 @@ npm run fetch-ccel              # Re-fetch CCEL Catena Aurea
 npm run fetch-all               # Fetch all + rebuild
 ```
 
-## Data Sources
-
-| Source | Entries | Notes |
-|--------|---------|-------|
-| [catenabible.com](https://www.catenabible.com) | ~52,700 | Scraped via their API |
-| [CCEL Catena Aurea](https://www.ccel.org) | ~6,600 | Aquinas's compilation |
-| Hand-curated | ~55 | Selected excerpts |
-| KJV text | 31,100 verses | Public domain |
-| Cross-references | ~300,000 | From public dataset |
+To re-scrape bibleref.com overview data:
+```bash
+npm run scrape-bibleref-test    # Genesis only (~25 min, for testing)
+npm run scrape-bibleref         # Full Bible (~8–9 hours)
+npm run scrape-bibleref-resume  # Resume interrupted scrape
+```
 
 ## Building a Distributable
 
