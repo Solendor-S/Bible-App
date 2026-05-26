@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import type { BibleVerse, GreekWord, HebrewWord, Language, LexiconEntry, StrongsEntry, SelectedVerse } from '../types'
-import { decodeMorphology, TAG_DEFINITIONS } from '../utils/morphology'
+import { decodeMorphology, TAG_DEFINITIONS, GREEK_TAG_EXAMPLES, HEBREW_TAG_EXAMPLES } from '../utils/morphology'
 import { escapeRegex } from '../utils/regex'
 
 const NT_BOOKS = new Set([
@@ -21,6 +21,8 @@ interface Props {
   selected: SelectedVerse
   onWordSelect?: (info: WordHighlight | null) => void
   onNavigate?: (book: string, chapter: number, verse: number) => void
+  jumpToStrongs?: string | null
+  onJumpHandled?: () => void
 }
 
 interface WordDef {
@@ -38,6 +40,11 @@ interface ClickedVerse {
   book: string
   chapter: number
   verse: number
+}
+
+function normalizeStrongs(s: string): string {
+  const m = s.match(/^([GH])0*(\d+)/)
+  return m ? `${m[1]}${m[2]}` : s
 }
 
 const GLOSS_STOPWORDS = new Set([
@@ -129,7 +136,7 @@ function parseScriptureIndex(raw: string): ScriptureRef[] {
   return order.map(b => map.get(b)!)
 }
 
-export function WordStudyPanel({ selected, onWordSelect, onNavigate }: Props) {
+export function WordStudyPanel({ selected, onWordSelect, onNavigate, jumpToStrongs, onJumpHandled }: Props) {
   const isNT = NT_BOOKS.has(selected?.book)
   const [words, setWords] = useState<(GreekWord | HebrewWord)[]>([])
   const [loading, setLoading] = useState(false)
@@ -140,6 +147,8 @@ export function WordStudyPanel({ selected, onWordSelect, onNavigate }: Props) {
   const [clickedVerse, setClickedVerse] = useState<ClickedVerse | null>(null)
   const [versePreview, setVersePreview] = useState<{ text: string; loading: boolean } | null>(null)
   const verseCache = useRef<Map<string, string>>(new Map())
+  const prevJumpRef = useRef<string | null>(null)
+  const lexiconRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     setWords([])
@@ -181,6 +190,30 @@ export function WordStudyPanel({ selected, onWordSelect, onNavigate }: Props) {
       .catch(() => setVersePreview({ text: 'Error loading verse', loading: false }))
   }, [clickedVerse])
 
+  // Reset jump tracking when verse changes
+  useEffect(() => { prevJumpRef.current = null }, [selected?.book, selected?.chapter, selected?.verse])
+
+  // Auto-select word when jumpToStrongs changes
+  useEffect(() => {
+    if (!jumpToStrongs || loading || !words.length) return
+    if (jumpToStrongs === prevJumpRef.current) return
+    prevJumpRef.current = jumpToStrongs
+    const normTarget = normalizeStrongs(jumpToStrongs)
+    const word = words.find(w => normalizeStrongs(w.strongs) === normTarget)
+    if (!word) { onJumpHandled?.(); return }
+    setActiveKey({ strongs: word.strongs, position: word.position })
+    setActiveTag(null)
+    setDefLoading(true)
+    const lang: Language = isNT ? 'greek' : 'hebrew'
+    Promise.all([
+      window.bibleApi.getStrongsEntry(lang, word.strongs).catch(() => null),
+      window.bibleApi.getLexiconEntry(lang, word.strongs).catch(() => null),
+    ])
+      .then(([entry, lexicon]) => { setDef({ strongs: word.strongs, entry, lexicon }); setDefLoading(false) })
+      .catch(() => { setDef({ strongs: word.strongs, entry: null, lexicon: null }); setDefLoading(false) })
+    onJumpHandled?.()
+  }, [jumpToStrongs, words, loading])
+
   function handleWordClick(strongs: string, position: number) {
     if (activeKey?.strongs === strongs && activeKey?.position === position) {
       setActiveKey(null); setDef(null); setActiveTag(null); onWordSelect?.(null); return
@@ -208,6 +241,14 @@ export function WordStudyPanel({ selected, onWordSelect, onNavigate }: Props) {
     mainText ? highlightVerseRefs(mainText, selected.book, selected.chapter, selected.verse) : [],
     [mainText, selected.book, selected.chapter, selected.verse]
   )
+  const hasVerseInLexicon = useMemo(() =>
+    highlightedText.some(p => React.isValidElement(p) && (p as React.ReactElement).type === 'mark'),
+    [highlightedText]
+  )
+
+  function scrollToVerseInLexicon() {
+    lexiconRef.current?.querySelector('.lexicon-verse-highlight')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }
 
   if (!selected?.verse) return <div className="panel-empty">Select a verse to see word study.</div>
   if (loading) return <div className="panel-loading">Loading...</div>
@@ -248,25 +289,45 @@ export function WordStudyPanel({ selected, onWordSelect, onNavigate }: Props) {
                 {(() => {
                   const activeWord = words.find(w => w.strongs === activeKey!.strongs && w.position === activeKey!.position)
                   const morph = activeWord ? decodeMorphology((activeWord as any).morph ?? '', isNT ? 'greek' : 'hebrew') : null
-                  if (!morph) return null
+                  const gloss = activeWord?.gloss
+                  const tagExamples = isNT ? GREEK_TAG_EXAMPLES : HEBREW_TAG_EXAMPLES
                   return (
                     <div className="strongs-morph">
-                      <span className="strongs-morph-pos">{morph.partOfSpeech}</span>
-                      {morph.tags.length > 0 && (
-                        <div className="strongs-morph-chips">
-                          {morph.tags.map(tag => (
-                            <button
-                              key={tag}
-                              className={`morph-chip${activeTag === tag ? ' morph-chip--active' : ''}`}
-                              onClick={() => setActiveTag(prev => prev === tag ? null : tag)}
-                            >
-                              {tag}
-                            </button>
-                          ))}
+                      {gloss && (
+                        <div className="strongs-morph-gloss">
+                          <span className="strongs-morph-gloss-label">Use in this verse</span>
+                          <span className="strongs-morph-gloss-value">{gloss}</span>
                         </div>
                       )}
-                      {activeTag && TAG_DEFINITIONS[activeTag] && (
-                        <div className="morph-chip-def">{TAG_DEFINITIONS[activeTag]}</div>
+                      {morph && (
+                        <>
+                          <span className="strongs-morph-pos">{morph.partOfSpeech}</span>
+                          {morph.tags.length > 0 && (
+                            <div className="strongs-morph-chips">
+                              {morph.tags.map(tag => (
+                                <button
+                                  key={tag}
+                                  className={`morph-chip${activeTag === tag ? ' morph-chip--active' : ''}`}
+                                  onClick={() => setActiveTag(prev => prev === tag ? null : tag)}
+                                >
+                                  {tag}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                          {activeTag && TAG_DEFINITIONS[activeTag] && (
+                            <div className="morph-chip-def">
+                              <span className="morph-chip-def-tag">{activeTag}</span>
+                              <span className="morph-chip-def-text">{TAG_DEFINITIONS[activeTag]}</span>
+                              {tagExamples[activeTag] && (
+                                <div className="morph-chip-def-example">
+                                  <span className="morph-chip-def-example-label">Example  </span>
+                                  <span className="morph-chip-def-example-text">{tagExamples[activeTag]}</span>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </>
                       )}
                     </div>
                   )
@@ -277,7 +338,7 @@ export function WordStudyPanel({ selected, onWordSelect, onNavigate }: Props) {
                 )}
 
                 {mainText && (
-                  <div className="lexicon-thayers">
+                  <div className="lexicon-thayers" ref={lexiconRef}>
                     <div className="lexicon-thayers-label">
                       {isNT ? "Thayer's Greek Lexicon" : 'Brown-Driver-Briggs'}
                     </div>
@@ -289,6 +350,14 @@ export function WordStudyPanel({ selected, onWordSelect, onNavigate }: Props) {
                         ))}
                       </div>
                     )}
+
+                    <button
+                      className={`lexicon-goto-verse-btn${!hasVerseInLexicon ? ' lexicon-goto-verse-btn--absent' : ''}`}
+                      onClick={hasVerseInLexicon ? scrollToVerseInLexicon : undefined}
+                      disabled={!hasVerseInLexicon}
+                    >
+                      {hasVerseInLexicon ? 'Go to verse ↓' : 'Verse not found'}
+                    </button>
 
                     <p className="lexicon-thayers-text">{highlightedText}</p>
 

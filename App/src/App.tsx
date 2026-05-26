@@ -11,6 +11,7 @@ import { AiPanel } from './components/AiPanel'
 import { AddNoteModal } from './components/AddNoteModal'
 import type { NoteTarget } from './components/AddNoteModal'
 import { ApocryphaPanel } from './components/ApocryphaPanel'
+import { EarlyTextsPanel } from './components/EarlyTextsPanel'
 import { parsePassage } from './lib/parsePassage'
 import type { WordHighlight } from './components/WordStudyPanel'
 import type { Bookmark, CommentarySearchResult, PassageRef, SelectedVerse } from './types'
@@ -34,8 +35,9 @@ export default function App() {
   const [changelogOpen, setChangelogOpen] = useState(false)
   const [noteTarget, setNoteTarget] = useState<NoteTarget | null>(null)
   const [notesRefreshToken, setNotesRefreshToken] = useState(0)
-  const [leftTab, setLeftTab] = useState<'canon' | 'apocrypha'>('canon')
+  const [leftTab, setLeftTab] = useState<'canon' | 'apocrypha' | 'early'>('canon')
   const [concordanceWord, setConcordanceWord] = useState<string | null>(null)
+  const [jumpToStrongs, setJumpToStrongs] = useState<string | null>(null)
   const [redLetterOn, setRedLetterOn] = useState(true)
   const [parallelVerse, setParallelVerse] = useState<SelectedVerse | null>(null)
   const [navHistory, setNavHistory] = useState<NavEntry[]>([DEFAULT_ACTIVE])
@@ -161,6 +163,11 @@ export default function App() {
     setAiPanelHeight(h => h > 0 ? 0 : AI_PANEL_DEFAULT)
   }
 
+  function handleStrongsView(strongs: string) {
+    setRightTab('wordstudy')
+    setJumpToStrongs(strongs)
+  }
+
   return (
     <div className="app">
       {updateInfo && (
@@ -211,6 +218,12 @@ export default function App() {
             >
               Apocrypha
             </button>
+            <button
+              className={`canon-tab-btn${leftTab === 'early' ? ' canon-tab-btn--active' : ''}`}
+              onClick={() => setLeftTab('early')}
+            >
+              Early Texts
+            </button>
           </div>
           {leftTab === 'canon' ? (
             <BiblePanel
@@ -231,9 +244,12 @@ export default function App() {
               onWordClick={word => setConcordanceWord(word)}
               onViewParallels={handleViewParallels}
               onBookmarkToggle={handleBookmarkToggle}
+              onStrongsView={handleStrongsView}
             />
-          ) : (
+          ) : leftTab === 'apocrypha' ? (
             <ApocryphaPanel />
+          ) : (
+            <EarlyTextsPanel />
           )}
         </div>
         <CommentaryPanel
@@ -248,6 +264,8 @@ export default function App() {
           bookmarks={bookmarks}
           onBookmarkRemove={handleBookmarkRemove}
           translation={primaryTrans}
+          jumpToStrongs={jumpToStrongs}
+          onJumpHandled={() => setJumpToStrongs(null)}
         />
       </div>
       {aiPanelHeight > 0 && (

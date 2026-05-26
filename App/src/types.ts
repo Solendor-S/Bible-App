@@ -3,6 +3,13 @@ export interface BibleVerse {
   text: string
 }
 
+export interface Footnote {
+  verse: number
+  marker: string
+  word_index: number
+  content: string
+}
+
 export interface Book {
   book: string
   book_order: number
@@ -58,6 +65,21 @@ export interface OverviewPericope {
   verse_start: number
   verse_end: number
   description: string
+}
+
+export interface BiblehubChapter {
+  essay: string
+}
+
+export interface BiblehubPassage {
+  verse_start: number
+  verse_end: number
+  heading: string
+  text: string
+}
+
+export interface BiblesummaryChapter {
+  summary: string
 }
 
 export interface LexiconEntry {
@@ -194,6 +216,12 @@ export interface Note {
   updatedAt: number
 }
 
+export interface ResolvedCitation {
+  hasDbMatch: boolean
+  url?: string
+  aiSuggested?: boolean
+}
+
 export interface Bookmark {
   id: string
   book: string
@@ -253,6 +281,9 @@ declare global {
       getVerse(book: string, chapter: number, verse: number): Promise<OverviewVerse | null>
       getChapter(book: string, chapter: number): Promise<OverviewChapter | null>
       getPericope(book: string, chapter: number, verse: number): Promise<OverviewPericope | null>
+      getBiblehubChapter(book: string, chapter: number): Promise<BiblehubChapter | null>
+      getBiblehubPassage(book: string, chapter: number, verse: number): Promise<BiblehubPassage | null>
+      getBiblesummaryChapter(book: string, chapter: number): Promise<BiblesummaryChapter | null>
     }
     navesApi: {
       getForVerse(book: string, chapter: number, verse: number): Promise<NavesTopic[]>
@@ -263,6 +294,7 @@ declare global {
       getBooks(): Promise<Book[]>
       getChapters(book: string): Promise<number[]>
       getVerses(book: string, chapter: number): Promise<BibleVerse[]>
+      getChapterFootnotes(book: string, chapter: number): Promise<Footnote[]>
       getCrossRefs(book: string, chapter: number, verse: number, translation?: string): Promise<CrossRef[]>
       getCrossRefsFull(book: string, chapter: number, verse: number, translation?: string): Promise<CrossRef[]>
       getGreekWords(book: string, chapter: number, verse: number): Promise<GreekWord[]>
@@ -287,6 +319,12 @@ declare global {
       getBooks(): Promise<ApocryphaBook[]>
       getChapters(book: string): Promise<number[]>
       getVerses(book: string, chapter: number): Promise<ApocryphaVerse[]>
+    }
+    earlyTextsApi: {
+      getBooks(): Promise<{ book: string; chapter_count: number }[]>
+      getChapters(book: string): Promise<number[]>
+      getVerses(book: string, chapter: number): Promise<{ verse: number; text: string }[]>
+      getFootnotes(book: string, chapter: number): Promise<{ marker: number; note: string }[]>
     }
     chatApi: {
       getSessions(): Promise<ChatSession[]>

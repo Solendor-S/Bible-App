@@ -1,6 +1,6 @@
 {
   "name": "bible-app",
-  "version": "1.9.9",
+  "version": "2.1.0",
   "description": "Catena-style Bible study app with Church Fathers commentary",
   "author": "Sargon Shlimon",
   "copyright": "Copyright © 2026 Sargon Shlimon. All rights reserved.",
@@ -24,9 +24,18 @@
     "scrape-lexicons-greek": "C:\\Users\\Sargo\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe scripts/scrape-blb-lexicons.py --greek",
     "scrape-lexicons-hebrew": "C:\\Users\\Sargo\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe scripts/scrape-blb-lexicons.py --hebrew",
     "scrape-lexicons-resume": "C:\\Users\\Sargo\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe scripts/scrape-blb-lexicons.py --resume",
+    "fetch-kjv-notes": "C:\\Users\\Sargo\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe scripts/fetch-kjv-notes.py",
+    "fetch-hebrew-gaps": "C:\\Users\\Sargo\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe scripts/fetch-hebrew-gaps.py",
+    "fetch-hebrew-gaps-dry": "C:\\Users\\Sargo\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe scripts/fetch-hebrew-gaps.py --dry-run",
     "scrape-bibleref": "C:\\Users\\Sargo\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe scripts/scrape-bibleref.py",
     "scrape-bibleref-resume": "C:\\Users\\Sargo\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe scripts/scrape-bibleref.py --resume",
     "scrape-bibleref-test": "C:\\Users\\Sargo\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe scripts/scrape-bibleref.py --book Genesis",
+    "scrape-biblehub": "C:\\Users\\Sargo\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe scripts/scrape-biblehub.py",
+    "scrape-biblehub-resume": "C:\\Users\\Sargo\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe scripts/scrape-biblehub.py --resume",
+    "scrape-biblehub-test": "C:\\Users\\Sargo\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe scripts/scrape-biblehub.py --book Genesis",
+    "scrape-biblesummary": "C:\\Users\\Sargo\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe scripts/scrape-biblesummary.py",
+    "scrape-biblesummary-resume": "C:\\Users\\Sargo\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe scripts/scrape-biblesummary.py --resume",
+    "scrape-biblesummary-test": "C:\\Users\\Sargo\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe scripts/scrape-biblesummary.py --book Genesis",
     "fetch-all": "npm run fetch-ccel && npm run fetch-catenabible-api && npm run build-db"
   },
   "dependencies": {

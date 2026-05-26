@@ -4,6 +4,7 @@ contextBridge.exposeInMainWorld('bibleApi', {
   getBooks: () => ipcRenderer.invoke('bible:getBooks'),
   getChapters: (book: string) => ipcRenderer.invoke('bible:getChapters', book),
   getVerses: (book: string, chapter: number) => ipcRenderer.invoke('bible:getVerses', book, chapter),
+  getChapterFootnotes: (book: string, chapter: number) => ipcRenderer.invoke('bible:getChapterFootnotes', book, chapter),
   getCrossRefs: (book: string, chapter: number, verse: number, translation?: string) =>
     ipcRenderer.invoke('bible:getCrossRefs', book, chapter, verse, translation),
   getCrossRefsFull: (book: string, chapter: number, verse: number, translation?: string) =>
@@ -53,6 +54,13 @@ contextBridge.exposeInMainWorld('apocryphaApi', {
   getVerses: (book: string, chapter: number) => ipcRenderer.invoke('apocrypha:getVerses', book, chapter),
 })
 
+contextBridge.exposeInMainWorld('earlyTextsApi', {
+  getBooks: () => ipcRenderer.invoke('earlyTexts:getBooks'),
+  getChapters: (book: string) => ipcRenderer.invoke('earlyTexts:getChapters', book),
+  getVerses: (book: string, chapter: number) => ipcRenderer.invoke('earlyTexts:getVerses', book, chapter),
+  getFootnotes: (book: string, chapter: number) => ipcRenderer.invoke('earlyTexts:getFootnotes', book, chapter),
+})
+
 contextBridge.exposeInMainWorld('navesApi', {
   getForVerse: (book: string, chapter: number, verse: number) =>
     ipcRenderer.invoke('naves:getForVerse', book, chapter, verse),
@@ -91,6 +99,12 @@ contextBridge.exposeInMainWorld('overviewApi', {
     ipcRenderer.invoke('overview:getChapter', book, chapter),
   getPericope: (book: string, chapter: number, verse: number) =>
     ipcRenderer.invoke('overview:getPericope', book, chapter, verse),
+  getBiblehubChapter: (book: string, chapter: number) =>
+    ipcRenderer.invoke('overview:getBiblehubChapter', book, chapter),
+  getBiblehubPassage: (book: string, chapter: number, verse: number) =>
+    ipcRenderer.invoke('overview:getBiblehubPassage', book, chapter, verse),
+  getBiblesummaryChapter: (book: string, chapter: number) =>
+    ipcRenderer.invoke('overview:getBiblesummaryChapter', book, chapter),
 })
 
 contextBridge.exposeInMainWorld('chatApi', {

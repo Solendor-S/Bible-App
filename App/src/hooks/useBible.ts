@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import type { Book, BibleVerse, CrossRef } from '../types'
+import type { Book, BibleVerse, CrossRef, Footnote } from '../types'
 
 export function useBooks() {
   const [books, setBooks] = useState<Book[]>([])
@@ -76,4 +76,23 @@ export function useCrossRefs(book: string, chapter: number, verse: number, trans
     window.bibleApi.getCrossRefs(book, chapter, verse, translation).then(setRefs)
   }, [book, chapter, verse, translation])
   return refs
+}
+
+const EMPTY_FOOTNOTE_MAP: Map<number, Footnote[]> = new Map()
+
+export function useChapterFootnotes(translation: string, book: string, chapter: number): Map<number, Footnote[]> {
+  const [fnMap, setFnMap] = useState<Map<number, Footnote[]>>(EMPTY_FOOTNOTE_MAP)
+  useEffect(() => {
+    if (translation !== 'KJV' || !book || !chapter) { setFnMap(EMPTY_FOOTNOTE_MAP); return }
+    window.bibleApi.getChapterFootnotes(book, chapter).then(rows => {
+      const m = new Map<number, Footnote[]>()
+      for (const row of rows) {
+        const arr = m.get(row.verse) ?? []
+        arr.push(row)
+        m.set(row.verse, arr)
+      }
+      setFnMap(m)
+    })
+  }, [translation, book, chapter])
+  return fnMap
 }

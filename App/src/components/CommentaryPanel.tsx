@@ -46,6 +46,8 @@ interface Props {
   bookmarks?: Bookmark[]
   onBookmarkRemove?: (book: string, chapter: number, verse: number) => void
   translation?: string
+  jumpToStrongs?: string | null
+  onJumpHandled?: () => void
 }
 
 function EntryView({
@@ -255,7 +257,7 @@ function TabHeader({
   )
 }
 
-export function CommentaryPanel({ selected, featuredEntry, onClearFeatured, onNavigate, rightTab, onTabChange, onWordSelect, notesRefreshToken, bookmarks = [], onBookmarkRemove, translation = 'KJV' }: Props) {
+export function CommentaryPanel({ selected, featuredEntry, onClearFeatured, onNavigate, rightTab, onTabChange, onWordSelect, notesRefreshToken, bookmarks = [], onBookmarkRemove, translation = 'KJV', jumpToStrongs, onJumpHandled }: Props) {
   const { entries, loading } = useCommentary(selected.book, selected.chapter, selected.verse)
   const [fatherSearch, setFatherSearch] = useState('')
 
@@ -301,7 +303,7 @@ export function CommentaryPanel({ selected, featuredEntry, onClearFeatured, onNa
           case 'crossrefs':
             return <CrossRefsPanel selected={selected} onNavigate={onNavigate} translation={translation} />
           case 'wordstudy':
-            return <WordStudyPanel selected={selected} onWordSelect={onWordSelect} onNavigate={onNavigate} />
+            return <WordStudyPanel selected={selected} onWordSelect={onWordSelect} onNavigate={onNavigate} jumpToStrongs={jumpToStrongs} onJumpHandled={onJumpHandled} />
           case 'firstcentury':
             return <JosephusPanel selected={selected} />
           case 'councils':

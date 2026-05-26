@@ -12,6 +12,89 @@ import { APOCRYPHA_CREATE_SQL, APOCRYPHA_BOOKS, APOCRYPHA_VERSES } from '../elec
 const DB_PATH = join(__dirname, 'bible.db')
 const RAW_DIR = join(__dirname, 'raw')
 
+function stripDiacritics(s: string): string {
+  return s.normalize('NFD').replace(/[̀-ͯ]/g, '')
+}
+
+interface BiblehubPassage {
+  verse_start: number
+  verse_end: number
+  heading: string
+  text: string
+}
+
+function parseVerseRange(line: string): [number | null, number | null] {
+  const m = line.match(/Verses?\s*(\d+)\s*[–—-]\s*(\d+)/)
+  if (m) return [parseInt(m[1]), parseInt(m[2])]
+  const m2 = line.match(/Verses?\s*(\d+)/)
+  if (m2) return [parseInt(m2[1]), parseInt(m2[1])]
+  return [null, null]
+}
+
+function parseHeading(line: string): string {
+  const m = line.match(/Verses?\s*\d+\s*[–—-]\s*\d*\s*[–—]\s*(.+)/)
+  if (m) return m[1].trim()
+  const m2 = line.match(/Verses?\s*\d+\s*[–—-]?\s*\d*\s*[–—]?\s*(.*)/)
+  if (m2) return m2[1].trim().replace(/^[–—-]\s*/, '')
+  return line.trim()
+}
+
+function splitBiblehubSummary(summary: string): { passages: BiblehubPassage[]; essay: string } {
+  const paragraphs = summary.split('\n\n').map(p => p.trim()).filter(Boolean)
+  const passages: BiblehubPassage[] = []
+  let essayParas: string[] = []
+  let seenVerses = false
+  let i = 0
+
+  while (i < paragraphs.length) {
+    const para = paragraphs[i]
+    const firstLine = para.split('\n')[0].trim()
+    const isVerse = /^Verses?\s*\d+/.test(firstLine)
+
+    if (isVerse) {
+      seenVerses = true
+      const [vs, ve] = parseVerseRange(firstLine)
+      const heading = parseHeading(firstLine)
+      const inlineBody = para.split('\n').slice(1).join('\n').trim()
+      let body = inlineBody
+      if (!body && i + 1 < paragraphs.length) {
+        const nxt = paragraphs[i + 1]
+        if (!/^Verses?\s*\d+/.test(nxt.split('\n')[0].trim())) {
+          body = nxt
+          i++
+        }
+      }
+      passages.push({ verse_start: vs ?? 1, verse_end: ve ?? vs ?? 1, heading, text: body })
+    } else {
+      if (seenVerses) {
+        essayParas = paragraphs.slice(i)
+        break
+      } else {
+        essayParas.push(para)
+      }
+    }
+    i++
+  }
+
+  // The thematic essay is concatenated directly onto the last passage body (no \n\n separator
+  // because <p> tags are stripped without adding paragraph breaks). Split at the boundary:
+  // a period immediately followed by a capital letter signals where the essay begins.
+  if (passages.length > 0) {
+    const fullText = passages[passages.length - 1].text
+    if (fullText.length > 300) {
+      const m = fullText.match(/(?<![\"'])\.[A-Z]/)
+      if (m && m.index !== undefined) {
+        const splitPos = m.index + 1
+        passages[passages.length - 1].text = fullText.slice(0, splitPos).trim()
+        const remainder = fullText.slice(splitPos).trim()
+        if (remainder) essayParas = [remainder, ...essayParas]
+      }
+    }
+  }
+
+  return { passages, essay: essayParas.join('\n\n') }
+}
+
 async function main() {
   const SQL = await initSqlJs()
   const db = new SQL.Database()
@@ -81,6 +164,10 @@ async function main() {
       pronunciation TEXT,
       definition TEXT,
       kjv_usage TEXT
+    );
+    CREATE TABLE IF NOT EXISTS bsb_strongs_map (
+      bsb_num TEXT PRIMARY KEY,
+      standard_num TEXT NOT NULL
     );
     CREATE TABLE IF NOT EXISTS strongs_hebrew (
       number TEXT PRIMARY KEY,
@@ -181,6 +268,80 @@ async function main() {
       description TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_pericopes_loc ON overview_pericopes(book, chapter, verse_start);
+    CREATE TABLE IF NOT EXISTS biblehub_chapters (
+      book TEXT NOT NULL,
+      chapter INTEGER NOT NULL,
+      passages TEXT,
+      essay TEXT,
+      PRIMARY KEY (book, chapter)
+    );
+    CREATE TABLE IF NOT EXISTS biblesummary_chapters (
+      book TEXT NOT NULL,
+      chapter INTEGER NOT NULL,
+      summary TEXT,
+      PRIMARY KEY (book, chapter)
+    );
+    CREATE TABLE IF NOT EXISTS verse_footnotes (
+      book TEXT NOT NULL,
+      chapter INTEGER NOT NULL,
+      verse INTEGER NOT NULL,
+      marker TEXT NOT NULL,
+      word_index INTEGER NOT NULL,
+      content TEXT NOT NULL,
+      PRIMARY KEY (book, chapter, verse, marker)
+    );
+    CREATE TABLE IF NOT EXISTS lxx_words (
+      book     TEXT    NOT NULL,
+      chapter  INTEGER NOT NULL,
+      verse    INTEGER NOT NULL,
+      position INTEGER NOT NULL,
+      greek    TEXT    NOT NULL,
+      translit TEXT,
+      strongs  TEXT,
+      gloss    TEXT,
+      morph    TEXT,
+      greek_norm TEXT,
+      PRIMARY KEY (book, chapter, verse, position)
+    );
+    CREATE INDEX IF NOT EXISTS idx_lxx_words_greek_norm ON lxx_words(greek_norm);
+    CREATE TABLE IF NOT EXISTS wlc_words (
+      book     TEXT    NOT NULL,
+      chapter  INTEGER NOT NULL,
+      verse    INTEGER NOT NULL,
+      position INTEGER NOT NULL,
+      hebrew   TEXT    NOT NULL,
+      translit TEXT,
+      strongs  TEXT,
+      gloss    TEXT,
+      morph    TEXT,
+      PRIMARY KEY (book, chapter, verse, position)
+    );
+    CREATE TABLE IF NOT EXISTS dss_words (
+      book     TEXT    NOT NULL,
+      chapter  INTEGER NOT NULL,
+      verse    INTEGER NOT NULL,
+      position INTEGER NOT NULL,
+      hebrew   TEXT    NOT NULL,
+      translit TEXT,
+      strongs  TEXT,
+      gloss    TEXT,
+      morph    TEXT,
+      PRIMARY KEY (book, chapter, verse, position)
+    );
+    CREATE TABLE IF NOT EXISTS early_texts (
+      book    TEXT    NOT NULL,
+      chapter INTEGER NOT NULL,
+      verse   INTEGER NOT NULL,
+      text    TEXT    NOT NULL,
+      PRIMARY KEY (book, chapter, verse)
+    );
+    CREATE TABLE IF NOT EXISTS early_text_footnotes (
+      book    TEXT    NOT NULL,
+      chapter INTEGER NOT NULL,
+      marker  INTEGER NOT NULL,
+      note    TEXT    NOT NULL,
+      PRIMARY KEY (book, chapter, marker)
+    );
   `)
 
   // Bible text
@@ -583,25 +744,119 @@ async function main() {
       VALUES (?, ?, ?, ?)
     `)
     for (const e of brChapters) {
-      const themeRows = db.prepare(`
-        SELECT nt.name FROM naves_refs nr
-        JOIN naves_topics nt ON nr.topic_id = nt.id
-        WHERE nr.book = ? AND nr.chapter = ?
-        GROUP BY nt.name ORDER BY COUNT(*) DESC LIMIT 5
-      `)
-      themeRows.bind([e.book, e.chapter])
-      const themes: string[] = []
-      while (themeRows.step()) {
-        const row = themeRows.getAsObject() as any
-        themes.push(row.name)
-      }
-      themeRows.free()
+      let themes: string[] = []
+      try {
+        const themeRows = db.prepare(`
+          SELECT nt.name FROM naves_refs nr
+          JOIN naves_topics nt ON nr.topic_id = nt.id
+          WHERE nr.book = ? AND nr.chapter = ?
+          GROUP BY nt.name ORDER BY COUNT(*) DESC LIMIT 5
+        `)
+        themeRows.bind([e.book, e.chapter])
+        while (themeRows.step()) {
+          const row = themeRows.getAsObject() as any
+          themes.push(row.name)
+        }
+        themeRows.free()
+      } catch { /* naves_refs not yet populated — themes stay empty */ }
       cStmt.run([e.book, e.chapter, JSON.stringify(themes), e.summary ?? ''])
     }
     cStmt.free()
     console.log(`  Inserted ${brChapters.length} chapter entries`)
   } else {
     console.warn('  bibleref-chapters.json not found — run scripts/scrape-bibleref.py')
+  }
+
+  // BibleHub chapter summaries — split into passage entries (for Context scope) + thematic essay (for Chapter scope)
+  const biblehubPath = join(RAW_DIR, 'biblehub-chapters.json')
+  if (existsSync(biblehubPath)) {
+    console.log('Inserting BibleHub chapter summaries...')
+    const entries = JSON.parse(readFileSync(biblehubPath, 'utf-8'))
+    const stmt = db.prepare('INSERT OR REPLACE INTO biblehub_chapters (book, chapter, passages, essay) VALUES (?, ?, ?, ?)')
+    for (const e of entries) {
+      const { passages, essay } = splitBiblehubSummary(e.summary ?? '')
+      stmt.run([e.book, e.chapter, JSON.stringify(passages), essay])
+    }
+    stmt.free()
+    console.log(`  Inserted ${entries.length} BibleHub chapters`)
+  } else {
+    console.warn('  biblehub-chapters.json not found — run scripts/scrape-biblehub.py')
+  }
+
+  // BibleSummary short chapter summaries
+  const biblesummaryPath = join(RAW_DIR, 'biblesummary-chapters.json')
+  if (existsSync(biblesummaryPath)) {
+    console.log('Inserting BibleSummary chapter summaries...')
+    const entries = JSON.parse(readFileSync(biblesummaryPath, 'utf-8'))
+    const stmt = db.prepare('INSERT OR REPLACE INTO biblesummary_chapters (book, chapter, summary) VALUES (?, ?, ?)')
+    for (const e of entries) stmt.run([e.book, e.chapter, e.summary ?? ''])
+    stmt.free()
+    console.log(`  Inserted ${entries.length} BibleSummary chapters`)
+  } else {
+    console.warn('  biblesummary-chapters.json not found — run scripts/scrape-biblesummary.py')
+  }
+
+  // KJV marginal notes (translator footnotes)
+  const kjvNotesPath = join(RAW_DIR, 'kjv-footnotes.json')
+  if (existsSync(kjvNotesPath)) {
+    console.log('Inserting KJV marginal notes...')
+    const notes = JSON.parse(readFileSync(kjvNotesPath, 'utf-8'))
+    const fnStmt = db.prepare(
+      'INSERT OR REPLACE INTO verse_footnotes (book, chapter, verse, marker, word_index, content) VALUES (?, ?, ?, ?, ?, ?)'
+    )
+    for (const n of notes) {
+      fnStmt.run([n.book, n.chapter, n.verse, n.marker, n.word_index, n.content])
+    }
+    fnStmt.free()
+    console.log(`  Inserted ${notes.length} footnote records`)
+  } else {
+    console.warn('  kjv-footnotes.json not found — run: npm run fetch-kjv-notes')
+  }
+
+  // BSB extended Strong's → standard Strong's mapping
+  // Strips diacritics in TypeScript (SQLite LIKE can't handle polytonic Greek) to
+  // prefix-match BSB surface forms (G5625+) against standard lemmas, scoring by gloss overlap.
+  console.log('Building BSB extended Strong\'s map...')
+  const extRes = db.exec(`SELECT DISTINCT strongs FROM greek_words WHERE CAST(REPLACE(strongs,'G','') AS INTEGER) > 5624`)
+  if (extRes.length && extRes[0].values.length) {
+    const sgRes = db.exec(`SELECT number, lemma, kjv_usage FROM strongs_greek WHERE lemma IS NOT NULL AND lemma != '' AND CAST(REPLACE(number,'G','') AS INTEGER) <= 5624`)
+    const stdEntries: Array<{num: string; stripped: string; kjv: string}> = sgRes.length
+      ? (sgRes[0].values as any[][]).map(([num, lemma, kjv]) => ({
+          num: num as string,
+          stripped: stripDiacritics(lemma as string),
+          kjv: ((kjv as string) || '').toLowerCase()
+        }))
+      : []
+    const mapStmt = db.prepare('INSERT OR REPLACE INTO bsb_strongs_map (bsb_num, standard_num) VALUES (?, ?)')
+    const fStmt = db.prepare('SELECT DISTINCT greek, gloss FROM greek_words WHERE strongs = ? AND greek IS NOT NULL')
+    let mapped = 0
+    for (const [bsbNum] of extRes[0].values as any[][]) {
+      fStmt.bind([bsbNum as string])
+      const formData: Array<{strippedPfx: string; gloss: string}> = []
+      while (fStmt.step()) {
+        const row = fStmt.getAsObject() as any
+        const strippedPfx = stripDiacritics(row.greek as string).slice(0, 3)
+        if (strippedPfx.length >= 2) formData.push({ strippedPfx, gloss: ((row.gloss as string) || '').toLowerCase() })
+      }
+      fStmt.reset()
+      if (!formData.length) continue
+      const rawGloss = formData.find(f => f.gloss)?.gloss ?? ''
+      const glossWords = rawGloss.split(/\s+/).filter(w => w.length > 2)
+      let best: string | null = null
+      let bestScore = -Infinity
+      for (const { num, stripped, kjv } of stdEntries) {
+        if (!formData.some(f => stripped.startsWith(f.strippedPfx))) continue
+        const glossScore = glossWords.filter(w =>
+          kjv.includes(w) || (w.endsWith('s') && w.length > 3 && kjv.includes(w.slice(0, -1)))
+        ).length
+        const total = glossScore * 10000 - parseInt(num.replace(/\D/g, ''), 10)
+        if (total > bestScore) { bestScore = total; best = num }
+      }
+      if (best) { mapStmt.run([bsbNum, best]); mapped++ }
+    }
+    fStmt.free()
+    mapStmt.free()
+    console.log(`  Mapped ${mapped} / ${extRes[0].values.length} BSB extended numbers`)
   }
 
   // Write to disk

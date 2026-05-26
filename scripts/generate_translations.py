@@ -203,7 +203,7 @@ def parse_zefania(data: bytes) -> list[tuple[str, int, int, str]]:
                     v = int(vers_el.get("vnumber", "0"))
                 except ValueError:
                     continue
-                text = clean("".join(vers_el.itertext()))
+                text = clean(re.sub(r'\[([^\]]*)\]', r'\1', " ".join(vers_el.itertext())))
                 if text:
                     rows.append((book, ch, v, text))
 

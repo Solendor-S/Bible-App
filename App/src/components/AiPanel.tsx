@@ -1,14 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { AiChatMessage } from './AiChatMessage'
 import { streamChat, buildSystemPrompt, buildHistoricalContextPrompt, OLLAMA_MODELS, DEFAULT_MODEL } from '../lib/ollamaClient'
-import { streamGemini, GEMINI_MODELS, DEFAULT_GEMINI_MODEL } from '../lib/geminiClient'
-import type { ChatMessage, ChatSession, CommentarySearchResult, SelectedVerse } from '../types'
+import { streamGemini, fetchGeminiOnce, isTrustedUrl, buildFallbackSearchUrl, GEMINI_MODELS, DEFAULT_GEMINI_MODEL } from '../lib/geminiClient'
+import { lookupWorkByTitle } from '../lib/sourceLinks'
+import type { ChatMessage, ChatSession, CommentarySearchResult, ResolvedCitation, SelectedVerse } from '../types'
 
 const AI_PANEL_MIN = 200
 const AI_PANEL_DEFAULT = 320
 const GEMINI_KEY_STORAGE = 'gemini-api-key'
 const GEMINI_MODEL_STORAGE = 'gemini-model'
 const PROVIDER_STORAGE = 'ai-provider'
+const CITATION_MODE_STORAGE = 'citation-mode'
 
 type Provider = 'ollama' | 'gemini'
 
@@ -36,12 +38,88 @@ export function AiPanel({ height, activeVerse, onHeightChange, onNavigate, onSho
   const [geminiModel, setGeminiModel] = useState(() => localStorage.getItem(GEMINI_MODEL_STORAGE) ?? DEFAULT_GEMINI_MODEL)
   const [showKeyInput, setShowKeyInput] = useState(false)
   const [keyDraft, setKeyDraft] = useState('')
+  const [resolvedCitations, setResolvedCitations] = useState<Record<string, ResolvedCitation>>({})
+  const [alwaysLinkCitations, setAlwaysLinkCitations] = useState(
+    () => localStorage.getItem(CITATION_MODE_STORAGE) === 'always-link'
+  )
+  const processedMsgIds = useRef<Set<string>>(new Set())
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => { window.chatApi.getSessions().then(setSessions) }, [])
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
   useEffect(() => { if (streaming) messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [streaming])
+
+  // Resolve external links for citation chips that reference a specific work not in our DB
+  useEffect(() => {
+    if (streaming) return
+    const unprocessed = messages.filter(
+      msg => msg.role === 'assistant' && !processedMsgIds.current.has(msg.id)
+    )
+    if (unprocessed.length === 0) return
+    unprocessed.forEach(msg => processedMsgIds.current.add(msg.id))
+
+    const regex = /\[FATHER: ([^\]]+)\]/g
+    const toResolve: Array<{ key: string; fatherName: string; workTitle: string; verseRef?: string }> = []
+    for (const msg of unprocessed) {
+      regex.lastIndex = 0
+      let match: RegExpExecArray | null
+      while ((match = regex.exec(msg.content)) !== null) {
+        const parts = match[1].split('|').map(s => s.trim())
+        const fatherName = parts[0]
+        const workTitle = parts[1]
+        if (!workTitle) continue
+        const key = `${fatherName.toLowerCase()}|${workTitle.toLowerCase()}`
+        if (resolvedCitations[key] !== undefined) continue
+        toResolve.push({ key, fatherName, workTitle, verseRef: parts[2] })
+      }
+    }
+    if (toResolve.length === 0) return
+
+    ;(async () => {
+      const updates: Record<string, ResolvedCitation> = {}
+      for (const { key, fatherName, workTitle, verseRef } of toResolve) {
+        // 1. Check DB for a verse-specific match
+        let hasDbMatch = false
+        if (verseRef) {
+          const vm = verseRef.match(/^(.+?)\s+(\d+):(\d+)/)
+          if (vm) {
+            const results = await window.chatApi.searchCommentaryByFatherAndVerse(
+              fatherName, vm[1].trim(), parseInt(vm[2]), parseInt(vm[3])
+            ).catch(() => [] as CommentarySearchResult[])
+            hasDbMatch = results.length > 0
+          }
+        }
+        if (hasDbMatch) { updates[key] = { hasDbMatch: true }; continue }
+
+        // 2. Try WORK_TITLE_MAP
+        let url = lookupWorkByTitle(fatherName, workTitle)
+        let aiSuggested = false
+
+        // 3. Try AI (Gemini only — fast, single-shot)
+        if (!url && provider === 'gemini' && geminiKey) {
+          try {
+            const prompt = `Find the URL for "${workTitle}" by ${fatherName} on newadvent.org/fathers, ccel.org/ccel, or tertullian.org/fathers. Reply with ONLY the URL starting with https://, or exactly "not found". No explanation.`
+            const result = await fetchGeminiOnce(prompt, geminiModel, geminiKey)
+            if (result && result !== 'not found' && result.startsWith('https://') && isTrustedUrl(result)) {
+              url = result
+              aiSuggested = true
+            }
+          } catch { /* fall through */ }
+        }
+
+        // 4. Fallback: Google search restricted to trusted sites
+        if (!url) {
+          url = buildFallbackSearchUrl(fatherName, workTitle)
+          aiSuggested = true
+        }
+
+        updates[key] = { hasDbMatch: false, url, aiSuggested }
+      }
+      if (Object.keys(updates).length > 0)
+        setResolvedCitations(prev => ({ ...prev, ...updates }))
+    })()
+  }, [messages, streaming])
 
   function switchProvider(p: Provider) {
     setProvider(p)
@@ -211,9 +289,14 @@ export function AiPanel({ height, activeVerse, onHeightChange, onNavigate, onSho
   }
 
   async function handleNavigateFather(fatherName: string, book?: string, chapter?: number, verse?: number) {
-    const results = (book && chapter !== undefined && verse !== undefined)
-      ? await window.chatApi.searchCommentaryByFatherAndVerse(fatherName, book, chapter, verse)
-      : await window.chatApi.searchCommentaryByFather(fatherName)
+    if (book && chapter !== undefined && verse !== undefined) {
+      const results = await window.chatApi.searchCommentaryByFatherAndVerse(fatherName, book, chapter, verse)
+      if (results.length > 0) { onShowFatherEntry(results[0]); return }
+      // No verse-specific match — don't fall back to an unrelated entry
+      return
+    }
+    // No verse context — navigate to first result for this father
+    const results = await window.chatApi.searchCommentaryByFather(fatherName)
     if (results.length > 0) onShowFatherEntry(results[0])
   }
 
@@ -250,6 +333,8 @@ export function AiPanel({ height, activeVerse, onHeightChange, onNavigate, onSho
                 message={msg}
                 onNavigateVerse={onNavigate}
                 onNavigateFather={handleNavigateFather}
+                resolvedCitations={resolvedCitations}
+                alwaysLinkCitations={alwaysLinkCitations}
               />
             ))}
             {streaming && (
@@ -259,6 +344,8 @@ export function AiPanel({ height, activeVerse, onHeightChange, onNavigate, onSho
                 streaming
                 onNavigateVerse={onNavigate}
                 onNavigateFather={handleNavigateFather}
+                resolvedCitations={resolvedCitations}
+                alwaysLinkCitations={alwaysLinkCitations}
               />
             )}
             <div ref={messagesEndRef} />
@@ -366,6 +453,19 @@ export function AiPanel({ height, activeVerse, onHeightChange, onNavigate, onSho
                   disabled={streaming}
                   title="First-century historical & cultural context"
                 >Historical Context</button>
+              </div>
+
+              <div className="ai-mode-toggle">
+                <button
+                  className={`ai-mode-btn${!alwaysLinkCitations ? ' ai-mode-btn--active' : ''}`}
+                  onClick={() => { setAlwaysLinkCitations(false); localStorage.setItem(CITATION_MODE_STORAGE, 'navigate') }}
+                  title="Click father citations to navigate to matching DB entry"
+                >DB Nav</button>
+                <button
+                  className={`ai-mode-btn${alwaysLinkCitations ? ' ai-mode-btn--active' : ''}`}
+                  onClick={() => { setAlwaysLinkCitations(true); localStorage.setItem(CITATION_MODE_STORAGE, 'always-link') }}
+                  title="Click father citations to open external source link"
+                >Always Link</button>
               </div>
             </div>
           </div>

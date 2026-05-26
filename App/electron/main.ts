@@ -378,6 +378,13 @@ ipcMain.handle('bible:getVerses', async (_e, book: string, chapter: number) => {
   return rows(database, 'SELECT verse, text FROM bible_verses WHERE book = ? AND chapter = ? ORDER BY verse', [book, chapter])
 })
 
+ipcMain.handle('bible:getChapterFootnotes', async (_e, book: string, chapter: number) => {
+  const database = await openDb()
+  return rows(database,
+    'SELECT verse, marker, word_index, content FROM verse_footnotes WHERE book=? AND chapter=? ORDER BY verse, marker',
+    [book, chapter])
+})
+
 ipcMain.handle('bible:getCrossRefs', async (_e, book: string, chapter: number, verse: number, translation = 'KJV') => {
   const database = await openDb()
   return rows(database, `
@@ -401,20 +408,26 @@ ipcMain.handle('bible:getHebrewWords', async (_e, book: string, chapter: number,
   return rows(database, `SELECT position, hebrew, translit, strongs, gloss, morph FROM hebrew_words WHERE book = ? AND chapter = ? AND verse = ? ORDER BY position`, [book, chapter, verse])
 })
 
+// For extended BSB Strong's numbers (G>5624), look up the pre-built mapping table.
+function greekFallbackRows(database: any, num: string, query: string): any[] {
+  const mapped = rows(database, 'SELECT standard_num FROM bsb_strongs_map WHERE bsb_num = ?', [num])
+  if (!mapped.length) return []
+  const stdNum = mapped[0].standard_num
+  return rows(database, query, [stdNum])
+}
+
 ipcMain.handle('bible:getStrongsEntry', async (_e, type: string, num: string) => {
   const database = await openDb()
   const table = type === 'hebrew' ? 'strongs_hebrew' : 'strongs_greek'
-  // TAGNT/TAHOT use zero-padded numbers with optional letter suffixes (e.g. "G0910", "G2941G", "H0430G", "H1254A")
-  // OpenScriptures dictionary keys have no padding and no suffix (e.g. "G910", "G2941", "H430", "H1254")
-  // Try exact match first, then normalize by stripping padding and suffix
-  let r = rows(database, `SELECT number, lemma, translit, pronunciation, definition, kjv_usage FROM ${table} WHERE number = ?`, [num])
+  const selectCols = 'number, lemma, translit, pronunciation, definition, kjv_usage'
+  let r = rows(database, `SELECT ${selectCols} FROM ${table} WHERE number = ?`, [num])
   if (r.length === 0) {
     const prefix = type === 'greek' ? 'G' : 'H'
     const m = num.match(new RegExp(`^${prefix}0*(\\d+)`))
-    if (m) {
-      const normalized = `${prefix}${parseInt(m[1])}`
-      r = rows(database, `SELECT number, lemma, translit, pronunciation, definition, kjv_usage FROM ${table} WHERE number = ?`, [normalized])
-    }
+    if (m) r = rows(database, `SELECT ${selectCols} FROM ${table} WHERE number = ?`, [`${prefix}${parseInt(m[1])}`])
+  }
+  if (r.length === 0 && type === 'greek') {
+    r = greekFallbackRows(database, num, `SELECT ${selectCols} FROM ${table} WHERE number = ?`)
   }
   return r[0] ?? null
 })
@@ -431,6 +444,9 @@ ipcMain.handle('bible:getLexiconEntry', async (_e, type: string, num: string) =>
   const query = `SELECT number, lemma, translit, pronunciation, part_of_speech, strongs_def, outline, ${col} AS thayers_text, kjv_translations FROM ${table} WHERE number = ?`
   let r = rows(database, query, [num])
   if (r.length === 0) r = rows(database, query, [normalize(num)])
+  if (r.length === 0 && type === 'greek') {
+    r = greekFallbackRows(database, num, query)
+  }
   return r[0] ?? null
 })
 
@@ -442,6 +458,24 @@ ipcMain.handle('overview:getVerse', async (_e, book: string, chapter: number, ve
 ipcMain.handle('overview:getChapter', async (_e, book: string, chapter: number) => {
   const database = await openDb()
   return rows(database, 'SELECT themes, summary FROM overview_chapters WHERE book=? AND chapter=?', [book, chapter])[0] ?? null
+})
+
+ipcMain.handle('overview:getBiblehubChapter', async (_e, book: string, chapter: number) => {
+  const database = await openDb()
+  return rows(database, 'SELECT essay FROM biblehub_chapters WHERE book=? AND chapter=?', [book, chapter])[0] ?? null
+})
+
+ipcMain.handle('overview:getBiblehubPassage', async (_e, book: string, chapter: number, verse: number) => {
+  const database = await openDb()
+  const row = rows(database, 'SELECT passages FROM biblehub_chapters WHERE book=? AND chapter=?', [book, chapter])[0]
+  if (!row?.passages) return null
+  const passages: Array<{ verse_start: number; verse_end: number; heading: string; text: string }> = JSON.parse(row.passages)
+  return passages.find(p => p.verse_start <= verse && verse <= p.verse_end) ?? null
+})
+
+ipcMain.handle('overview:getBiblesummaryChapter', async (_e, book: string, chapter: number) => {
+  const database = await openDb()
+  return rows(database, 'SELECT summary FROM biblesummary_chapters WHERE book=? AND chapter=?', [book, chapter])[0] ?? null
 })
 
 ipcMain.handle('overview:getPericope', async (_e, book: string, chapter: number, verse: number) => {
@@ -541,6 +575,31 @@ ipcMain.handle('apocrypha:getChapters', async (_e, book: string) => {
 ipcMain.handle('apocrypha:getVerses', async (_e, book: string, chapter: number) => {
   const database = await openDb()
   return rows(database, 'SELECT verse, text FROM apocrypha_verses WHERE book = ? AND chapter = ? ORDER BY verse', [book, chapter])
+})
+
+// ── Early Texts (Apostolic Fathers) ──────────
+ipcMain.handle('earlyTexts:getBooks', async () => {
+  const database = await openDb()
+  return rows(database, `
+    SELECT book, MAX(chapter) AS chapter_count
+    FROM early_texts GROUP BY book ORDER BY book
+  `)
+})
+
+ipcMain.handle('earlyTexts:getChapters', async (_e, book: string) => {
+  const database = await openDb()
+  const result = rows(database, 'SELECT DISTINCT chapter FROM early_texts WHERE book = ? ORDER BY chapter', [book])
+  return result.map((r: any) => r.chapter as number)
+})
+
+ipcMain.handle('earlyTexts:getVerses', async (_e, book: string, chapter: number) => {
+  const database = await openDb()
+  return rows(database, 'SELECT verse, text FROM early_texts WHERE book = ? AND chapter = ? ORDER BY verse', [book, chapter])
+})
+
+ipcMain.handle('earlyTexts:getFootnotes', async (_e, book: string, chapter: number) => {
+  const database = await openDb()
+  return rows(database, 'SELECT marker, note FROM early_text_footnotes WHERE book = ? AND chapter = ? ORDER BY marker', [book, chapter])
 })
 
 ipcMain.handle('shell:openExternal', (_e, url: string) => shell.openExternal(url))
@@ -925,14 +984,36 @@ ipcMain.handle('naves:search', async (_e, query: string) => {
 })
 
 // ── Bible Translations ────────────────────────
+
+// Word-table translations reconstructed on the fly from per-word tables
+const WORD_TABLE_TRANSLATIONS: Record<string, { table: string; col: string }> = {
+  'LXX':    { table: 'lxx_words',        col: 'greek'  },
+  'WLC':    { table: 'wlc_words',        col: 'hebrew' },
+  'DSS':    { table: 'dss_words',        col: 'hebrew' },
+  'SBLGNT': { table: 'greek_words',      col: 'greek'  },
+  'TAGNT':  { table: 'greek_words_tagnt', col: 'greek' },
+  'TR':     { table: 'greek_words_tr',   col: 'greek'  },
+}
+
 ipcMain.handle('translations:getList', async () => {
   const database = await openDb()
   const result = rows(database, 'SELECT DISTINCT translation FROM bible_translations ORDER BY translation')
-  return result.map((r: any) => r.translation as string)
+  const stored = result.map((r: any) => r.translation as string)
+  return [...stored, ...Object.keys(WORD_TABLE_TRANSLATIONS)]
 })
 
 ipcMain.handle('translations:getVerses', async (_e, translation: string, book: string, chapter: number) => {
   const database = await openDb()
+  const wt = WORD_TABLE_TRANSLATIONS[translation]
+  if (wt) {
+    // Reconstruct verse text from word table, preserving word order via subquery
+    return rows(database,
+      `SELECT verse, group_concat(${wt.col}, ' ') as text
+       FROM (SELECT verse, ${wt.col} FROM ${wt.table} WHERE book = ? AND chapter = ? ORDER BY position)
+       GROUP BY verse ORDER BY verse`,
+      [book, chapter]
+    )
+  }
   return rows(database,
     'SELECT verse, text FROM bible_translations WHERE translation = ? AND book = ? AND chapter = ? ORDER BY verse',
     [translation, book, chapter]
