@@ -15,8 +15,7 @@
     "@electron-forge/cli": "^7.11.1",
     "@electron-forge/maker-squirrel": "^7.11.1",
     "@electron-forge/maker-zip": "^7.11.1",
-    "@electron-forge/plugin-auto-unpack-natives": "^7.11.1",
-    "@electron-forge/plugin-vite": "^7.11.1",
+"@electron-forge/plugin-vite": "^7.11.1",
     "@types/node": "^20.11.5",
     "@types/react": "^18.2.48",
     "@types/react-dom": "^18.2.18",
@@ -48,10 +47,6 @@
         }
       ],
       "plugins": [
-        {
-          "name": "@electron-forge/plugin-auto-unpack-natives",
-          "config": {}
-        },
         {
           "name": "@electron-forge/plugin-vite",
           "config": {
