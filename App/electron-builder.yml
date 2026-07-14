@@ -34,6 +34,9 @@ nsis:
   createDesktopShortcut: true
   createStartMenuShortcut: true
   include: build/installer.nsh
+  # Space-free name: GitHub rewrites spaces in asset names, which breaks the
+  # electron-updater filename match in latest.yml. Keep it URL-safe.
+  artifactName: ${name}-${version}-setup.${ext}
 
 # ── macOS: DMG (unsigned for now — no Apple Developer account) ───
 mac:
@@ -41,6 +44,7 @@ mac:
   icon: build/icon.png
   category: public.app-category.reference
   identity: null
+  artifactName: ${name}-${version}.${ext}
 
 # ── Auto-update feed (electron-updater reads this) ──────────────
 # Feed only — releases are published manually by the maintainer.
