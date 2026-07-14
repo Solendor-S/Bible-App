@@ -836,6 +836,11 @@ body {
   font-style: italic;
 }
 
+.word-pill-gloss {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
 .wordstudy-def {
   border-top: 1px solid var(--border);
   padding: 14px 16px;

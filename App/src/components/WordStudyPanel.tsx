@@ -270,6 +270,7 @@ export function WordStudyPanel({ selected, onWordSelect, onNavigate, jumpToStron
             >
               <span className="word-pill-text">{text}</span>
               <span className="word-pill-translit">{w.translit}</span>
+              {w.gloss && <span className="word-pill-gloss">{w.gloss}</span>}
             </button>
           )
         })}
