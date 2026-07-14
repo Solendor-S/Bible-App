@@ -6,7 +6,9 @@ A catena-style Bible study desktop app (Electron) built around KJV scripture and
 
 [![Download the latest release](https://img.shields.io/github/v/release/Solendor-S/Bible-App?label=Download&style=for-the-badge)](https://github.com/Solendor-S/Bible-App/releases/latest)
 
-Grab the installer for your OS from the **[latest release](https://github.com/Solendor-S/Bible-App/releases/latest)** — Windows `.exe` or macOS `.dmg`. Everything (including the database) is bundled; no other tools required. See [Install](#install) for the first-launch security prompts. The app updates itself automatically after that.
+Grab the installer from the **[latest release](https://github.com/Solendor-S/Bible-App/releases/latest)**. Everything (including the database) is bundled; no other tools required. See [Install](#install) for the first-launch security prompts. The app updates itself automatically after that.
+
+> **Windows only for now** — the macOS `.dmg` is coming soon.
 
 ## Features
 
