@@ -15,12 +15,10 @@ import { NAVES_CREATE_SQL, NAVES_TOPICS, NAVES_REFS } from './navesData'
 let db: Database | null = null
 
 function getCurrentVersion(): string {
-  try {
-    const pkgPath = app.isPackaged
-      ? join(process.resourcesPath, 'package.json')
-      : join(__dirname, '../../package.json')
-    return JSON.parse(readFileSync(pkgPath, 'utf-8')).version ?? '0.0.0'
-  } catch { return '0.0.0' }
+  // app.getVersion() reads the app's package.json from inside the asar in a packaged
+  // build (where process.resourcesPath/package.json does NOT exist) and from the project
+  // package.json in dev — correct in both, unlike a manual resourcesPath read.
+  return app.getVersion()
 }
 
 // Seed DB lives in the repo (updated by git). Never read directly by the app.
@@ -407,14 +405,28 @@ ipcMain.handle('bible:getCrossRefs', async (_e, book: string, chapter: number, v
   `, [translation, book, chapter, verse])
 })
 
-ipcMain.handle('bible:getGreekWords', async (_e, book: string, chapter: number, verse: number) => {
-  const database = await openDb()
-  return rows(database, `SELECT position, greek, translit, strongs, gloss, morph FROM greek_words WHERE book = ? AND chapter = ? AND verse = ? ORDER BY position`, [book, chapter, verse])
-})
+// Interlinear word sources. Whitelist maps a source id (see src/lib/wordSources.ts)
+// to its table and script column; the column is aliased to `text` so every source
+// returns a uniform row shape regardless of Greek/Hebrew origin.
+const WORD_SOURCE_TABLES: Record<string, { table: string; col: 'greek' | 'hebrew' }> = {
+  opengnt: { table: 'greek_words',       col: 'greek' },
+  tagnt:   { table: 'greek_words_tagnt', col: 'greek' },
+  tr:      { table: 'greek_words_tr',    col: 'greek' },
+  tahot:   { table: 'hebrew_words',      col: 'hebrew' },
+  wlc:     { table: 'wlc_words',         col: 'hebrew' },
+  dss:     { table: 'dss_words',         col: 'hebrew' },
+  lxx:     { table: 'lxx_words',         col: 'greek' },
+}
 
-ipcMain.handle('bible:getHebrewWords', async (_e, book: string, chapter: number, verse: number) => {
+ipcMain.handle('bible:getWords', async (_e, source: string, book: string, chapter: number, verse: number) => {
+  const src = WORD_SOURCE_TABLES[source]
+  if (!src) return []  // unknown/untrusted source id — never interpolate raw input into SQL
   const database = await openDb()
-  return rows(database, `SELECT position, hebrew, translit, strongs, gloss, morph FROM hebrew_words WHERE book = ? AND chapter = ? AND verse = ? ORDER BY position`, [book, chapter, verse])
+  return rows(
+    database,
+    `SELECT position, ${src.col} AS text, translit, strongs, gloss, morph FROM ${src.table} WHERE book = ? AND chapter = ? AND verse = ? ORDER BY position`,
+    [book, chapter, verse]
+  )
 })
 
 // For extended BSB Strong's numbers (G>5624), look up the pre-built mapping table.

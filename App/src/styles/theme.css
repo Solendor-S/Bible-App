@@ -790,14 +790,50 @@ body {
 .wordstudy-panel::-webkit-scrollbar { width: 6px; }
 .wordstudy-panel::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 
-.wordstudy-lang-label {
-  font-size: 10px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--text-muted);
-  padding: 10px 16px 6px;
+.wordstudy-sources {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 16px 8px;
 }
+
+.source-chip {
+  display: inline-flex;
+  align-items: stretch;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--bg-secondary);
+}
+.source-chip--active {
+  border-color: var(--text-accent);
+  background: rgba(122, 162, 200, 0.12);
+}
+.source-chip-btn {
+  background: none;
+  border: none;
+  padding: 4px 9px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.source-chip-btn:hover,
+.source-chip--active .source-chip-btn { color: var(--text-primary); }
+
+.source-chip-star {
+  background: none;
+  border: none;
+  border-left: 1px solid var(--border);
+  padding: 4px 6px;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.source-chip-star:hover { color: var(--text-accent); }
+.source-chip-star--on { color: #e6b800; }
 
 .wordstudy-words {
   display: flex;

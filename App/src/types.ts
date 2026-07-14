@@ -22,19 +22,12 @@ export interface CrossRef {
   text: string
 }
 
-export interface GreekWord {
+// Uniform interlinear word row, returned for any source (Greek or Hebrew).
+// `text` is the original-language word (aliased from the source table's greek/hebrew column).
+export interface WordRow {
   position: number
-  greek: string
-  translit: string
-  strongs: string
-  gloss: string | null
-  morph: string | null
-}
-
-export interface HebrewWord {
-  position: number
-  hebrew: string
-  translit: string
+  text: string
+  translit: string | null
   strongs: string
   gloss: string | null
   morph: string | null
@@ -297,8 +290,7 @@ declare global {
       getChapterFootnotes(book: string, chapter: number): Promise<Footnote[]>
       getCrossRefs(book: string, chapter: number, verse: number, translation?: string): Promise<CrossRef[]>
       getCrossRefsFull(book: string, chapter: number, verse: number, translation?: string): Promise<CrossRef[]>
-      getGreekWords(book: string, chapter: number, verse: number): Promise<GreekWord[]>
-      getHebrewWords(book: string, chapter: number, verse: number): Promise<HebrewWord[]>
+      getWords(source: string, book: string, chapter: number, verse: number): Promise<WordRow[]>
       getStrongsEntry(type: Language, num: string): Promise<StrongsEntry | null>
       getLexiconEntry(type: Language, num: string): Promise<LexiconEntry | null>
       getCommentary(book: string, chapter: number, verse: number): Promise<CommentaryEntry[]>

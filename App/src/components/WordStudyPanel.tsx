@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import type { BibleVerse, GreekWord, HebrewWord, Language, LexiconEntry, StrongsEntry, SelectedVerse } from '../types'
+import type { BibleVerse, WordRow, Language, LexiconEntry, StrongsEntry, SelectedVerse } from '../types'
 import { decodeMorphology, TAG_DEFINITIONS, GREEK_TAG_EXAMPLES, HEBREW_TAG_EXAMPLES } from '../utils/morphology'
 import { escapeRegex } from '../utils/regex'
+import { DEFAULT_FAVOURITE, sourcesFor, getSource, type Testament } from '../lib/wordSources'
 
 const NT_BOOKS = new Set([
   'Matthew', 'Mark', 'Luke', 'John', 'Acts', 'Romans',
@@ -10,6 +11,19 @@ const NT_BOOKS = new Set([
   'Titus', 'Philemon', 'Hebrews', 'James', '1 Peter', '2 Peter',
   '1 John', '2 John', '3 John', 'Jude', 'Revelation',
 ])
+
+// Per-testament favourite (default) source, persisted across sessions.
+const FAV_KEY = 'wordstudy.favourites'
+function loadFavourites(): Record<Testament, string> {
+  try {
+    const raw = localStorage.getItem(FAV_KEY)
+    if (raw) {
+      const p = JSON.parse(raw)
+      return { NT: p.NT ?? DEFAULT_FAVOURITE.NT, OT: p.OT ?? DEFAULT_FAVOURITE.OT }
+    }
+  } catch {}
+  return { ...DEFAULT_FAVOURITE }
+}
 
 export interface WordHighlight {
   gloss: string | null
@@ -138,7 +152,12 @@ function parseScriptureIndex(raw: string): ScriptureRef[] {
 
 export function WordStudyPanel({ selected, onWordSelect, onNavigate, jumpToStrongs, onJumpHandled }: Props) {
   const isNT = NT_BOOKS.has(selected?.book)
-  const [words, setWords] = useState<(GreekWord | HebrewWord)[]>([])
+  const testament: Testament = isNT ? 'NT' : 'OT'
+  const [words, setWords] = useState<WordRow[]>([])
+  const [favourites, setFavourites] = useState<Record<Testament, string>>(loadFavourites)
+  const [sourceId, setSourceId] = useState<string>(() => loadFavourites()[isNT ? 'NT' : 'OT'])
+  const availableSources = sourcesFor(testament)
+  const script = (getSource(sourceId)?.script ?? (isNT ? 'greek' : 'hebrew')) as Language
   const [loading, setLoading] = useState(false)
   const [activeKey, setActiveKey] = useState<{ strongs: string; position: number } | null>(null)
   const [def, setDef] = useState<WordDef | null>(null)
@@ -150,6 +169,9 @@ export function WordStudyPanel({ selected, onWordSelect, onNavigate, jumpToStron
   const prevJumpRef = useRef<string | null>(null)
   const lexiconRef = useRef<HTMLDivElement>(null)
 
+  // Navigating between OT and NT switches to that testament's favourite source.
+  useEffect(() => { setSourceId(favourites[testament]) }, [testament])
+
   useEffect(() => {
     setWords([])
     setActiveKey(null)
@@ -157,11 +179,17 @@ export function WordStudyPanel({ selected, onWordSelect, onNavigate, jumpToStron
     onWordSelect?.(null)
     if (!selected?.book || !selected?.verse) return
     setLoading(true)
-    const fetch = isNT
-      ? window.bibleApi.getGreekWords(selected.book, selected.chapter, selected.verse)
-      : window.bibleApi.getHebrewWords(selected.book, selected.chapter, selected.verse)
-    fetch.then(w => { setWords(w); setLoading(false) }).catch(() => setLoading(false))
-  }, [selected?.book, selected?.chapter, selected?.verse])
+    window.bibleApi.getWords(sourceId, selected.book, selected.chapter, selected.verse)
+      .then(w => { setWords(w); setLoading(false) })
+      .catch(() => setLoading(false))
+  }, [selected?.book, selected?.chapter, selected?.verse, sourceId])
+
+  function favourite(id: string) {
+    const next = { ...favourites, [testament]: id }
+    setFavourites(next)
+    try { localStorage.setItem(FAV_KEY, JSON.stringify(next)) } catch {}
+    setSourceId(id)  // starring also selects it
+  }
 
   useEffect(() => {
     if (!activeKey || !words.length) return
@@ -204,7 +232,7 @@ export function WordStudyPanel({ selected, onWordSelect, onNavigate, jumpToStron
     setActiveKey({ strongs: word.strongs, position: word.position })
     setActiveTag(null)
     setDefLoading(true)
-    const lang: Language = isNT ? 'greek' : 'hebrew'
+    const lang: Language = script
     Promise.all([
       window.bibleApi.getStrongsEntry(lang, word.strongs).catch(() => null),
       window.bibleApi.getLexiconEntry(lang, word.strongs).catch(() => null),
@@ -221,7 +249,7 @@ export function WordStudyPanel({ selected, onWordSelect, onNavigate, jumpToStron
     setActiveKey({ strongs, position })
     setActiveTag(null)
     setDefLoading(true)
-    const lang: Language = isNT ? 'greek' : 'hebrew'
+    const lang: Language = script
     Promise.all([
       window.bibleApi.getStrongsEntry(lang, strongs).catch(() => null),
       window.bibleApi.getLexiconEntry(lang, strongs).catch(() => null),
@@ -251,30 +279,54 @@ export function WordStudyPanel({ selected, onWordSelect, onNavigate, jumpToStron
   }
 
   if (!selected?.verse) return <div className="panel-empty">Select a verse to see word study.</div>
-  if (loading) return <div className="panel-loading">Loading...</div>
-  if (!words.length) return <div className="panel-empty">No {isNT ? 'Greek' : 'Hebrew'} words found for this verse.</div>
+
+  const activeSource = getSource(sourceId)
 
   return (
     <div className="wordstudy-panel">
-      <div className="wordstudy-lang-label">{isNT ? 'Greek New Testament' : 'Hebrew Old Testament'}</div>
-      <div className="wordstudy-words">
-        {words.map((w, i) => {
-          const text = isNT ? (w as GreekWord).greek : (w as HebrewWord).hebrew
-          const active = activeKey?.strongs === w.strongs && activeKey?.position === w.position
+      <div className="wordstudy-sources" aria-label="Source text">
+        {availableSources.map(s => {
+          const isSel = s.id === sourceId
+          const isFav = favourites[testament] === s.id
           return (
-            <button
-              key={i}
-              className={`word-pill${active ? ' word-pill--active' : ''}`}
-              onClick={() => handleWordClick(w.strongs, w.position)}
-              title={w.strongs}
-            >
-              <span className="word-pill-text">{text}</span>
-              <span className="word-pill-translit">{w.translit}</span>
-              {w.gloss && <span className="word-pill-gloss">{w.gloss}</span>}
-            </button>
+            <div key={s.id} className={`source-chip${isSel ? ' source-chip--active' : ''}`}>
+              <button className="source-chip-btn" title={s.fullName} onClick={() => setSourceId(s.id)}>{s.label}</button>
+              <button
+                className={`source-chip-star${isFav ? ' source-chip-star--on' : ''}`}
+                title={isFav
+                  ? `${s.label} is the default for the ${testament === 'NT' ? 'New Testament' : 'Old Testament'}`
+                  : `Make ${s.label} the default`}
+                aria-label={isFav ? `${s.label} is the default source` : `Make ${s.label} the default source`}
+                onClick={() => favourite(s.id)}
+              >{isFav ? '★' : '☆'}</button>
+            </div>
           )
         })}
       </div>
+
+      {loading ? (
+        <div className="panel-loading">Loading...</div>
+      ) : !words.length ? (
+        <div className="panel-empty">No {activeSource?.label ?? ''} words for this verse.</div>
+      ) : (
+        <div className="wordstudy-words">
+          {words.map((w, i) => {
+            const active = activeKey?.strongs === w.strongs && activeKey?.position === w.position
+            return (
+              <button
+                key={i}
+                className={`word-pill${active ? ' word-pill--active' : ''}`}
+                onClick={() => handleWordClick(w.strongs, w.position)}
+                title={w.strongs}
+              >
+                <span className="word-pill-text" dir={script === 'hebrew' ? 'rtl' : 'ltr'}>{w.text}</span>
+                <span className="word-pill-translit">{w.translit}</span>
+                {w.gloss && <span className="word-pill-gloss">{w.gloss}</span>}
+              </button>
+            )
+          })}
+        </div>
+      )}
 
       {activeKey && (
         <div className="wordstudy-def">
@@ -289,9 +341,9 @@ export function WordStudyPanel({ selected, onWordSelect, onNavigate, jumpToStron
                 </div>
                 {(() => {
                   const activeWord = words.find(w => w.strongs === activeKey!.strongs && w.position === activeKey!.position)
-                  const morph = activeWord ? decodeMorphology((activeWord as any).morph ?? '', isNT ? 'greek' : 'hebrew') : null
+                  const morph = activeWord ? decodeMorphology(activeWord.morph ?? '', script) : null
                   const gloss = activeWord?.gloss
-                  const tagExamples = isNT ? GREEK_TAG_EXAMPLES : HEBREW_TAG_EXAMPLES
+                  const tagExamples = script === 'greek' ? GREEK_TAG_EXAMPLES : HEBREW_TAG_EXAMPLES
                   return (
                     <div className="strongs-morph">
                       {gloss && (
@@ -341,7 +393,7 @@ export function WordStudyPanel({ selected, onWordSelect, onNavigate, jumpToStron
                 {mainText && (
                   <div className="lexicon-thayers" ref={lexiconRef}>
                     <div className="lexicon-thayers-label">
-                      {isNT ? "Thayer's Greek Lexicon" : 'Brown-Driver-Briggs'}
+                      {script === 'greek' ? "Thayer's Greek Lexicon" : 'Brown-Driver-Briggs'}
                     </div>
 
                     {def.lexicon?.outline && (

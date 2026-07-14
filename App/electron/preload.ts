@@ -9,10 +9,8 @@ contextBridge.exposeInMainWorld('bibleApi', {
     ipcRenderer.invoke('bible:getCrossRefs', book, chapter, verse, translation),
   getCrossRefsFull: (book: string, chapter: number, verse: number, translation?: string) =>
     ipcRenderer.invoke('bible:getCrossRefsFull', book, chapter, verse, translation),
-  getGreekWords: (book: string, chapter: number, verse: number) =>
-    ipcRenderer.invoke('bible:getGreekWords', book, chapter, verse),
-  getHebrewWords: (book: string, chapter: number, verse: number) =>
-    ipcRenderer.invoke('bible:getHebrewWords', book, chapter, verse),
+  getWords: (source: string, book: string, chapter: number, verse: number) =>
+    ipcRenderer.invoke('bible:getWords', source, book, chapter, verse),
   getStrongsEntry: (type: string, num: string) =>
     ipcRenderer.invoke('bible:getStrongsEntry', type, num),
   getLexiconEntry: (type: string, num: string) =>
