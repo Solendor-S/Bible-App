@@ -1,15 +1,17 @@
 name: Release
 
-# Build + publish installers when a version tag is pushed (e.g. `git tag v2.3.0 && git push --tags`).
-# electron-builder uploads to a DRAFT GitHub release named after the version; a human reviews the
-# notes and clicks Publish. Can also be run manually from the Actions tab (workflow_dispatch).
+# Build installers when a version tag is pushed (e.g. `git tag v2.3.0 && git push origin v2.3.0`),
+# then publish them to a single DRAFT GitHub release for a human to review and publish.
+# Build and publish are decoupled on purpose: running electron-builder --publish in parallel
+# matrix jobs races and creates duplicate draft releases, so here the matrix only *builds* and
+# uploads artifacts, and one final job collects them and creates the release exactly once.
 on:
   push:
     tags: ['v*']
   workflow_dispatch:
 
 permissions:
-  contents: write   # electron-builder creates the release + uploads assets via GITHUB_TOKEN
+  contents: write   # the release job needs to create the release + upload assets
 
 jobs:
   build:
@@ -35,7 +37,37 @@ jobs:
           cache: npm
           cache-dependency-path: App/package-lock.json
       - run: npm ci
-      - run: npm run build      # electron-vite build → out/
-      - run: npx electron-builder ${{ matrix.target }} --publish always
+      - run: npm run build                              # electron-vite build → out/
+      - run: npx electron-builder ${{ matrix.target }} --publish never   # build only; publish happens once, in the release job
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installers-${{ matrix.os }}
+          if-no-files-found: error
+          path: |
+            App/dist-installer/*-setup.exe
+            App/dist-installer/*-setup.exe.blockmap
+            App/dist-installer/*.dmg
+            App/dist-installer/*.dmg.blockmap
+            App/dist-installer/latest*.yml
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4     # for package.json (version fallback) — no LFS needed
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true        # flatten both matrix artifacts into one dir
+      - name: Publish assets to a draft release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          case "$tag" in v*) ;; *) tag="v$(node -p "require('./App/package.json').version")";; esac
+          echo "Release tag: $tag"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$tag" --repo "$GITHUB_REPOSITORY" --clobber artifacts/*
+          else
+            gh release create "$tag" --repo "$GITHUB_REPOSITORY" --draft --title "$tag" --generate-notes artifacts/*
+          fi
