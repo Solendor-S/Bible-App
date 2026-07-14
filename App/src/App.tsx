@@ -178,13 +178,13 @@ export default function App() {
             <path d="M3 12a9 9 0 0 0 9 9" strokeLinecap="round"/>
           </svg>
           <span className="update-toast-text">
-            Update available — <strong>v{updateInfo.latest}</strong>
+            Update ready — <strong>v{updateInfo.latest}</strong>
           </span>
           <button
             className="update-toast-btn"
-            onClick={() => { window.bibleApi.launchUpdater(); setUpdateInfo(null) }}
+            onClick={() => { window.bibleApi.launchUpdater() }}
           >
-            Launch Updater
+            Restart &amp; Update
           </button>
           <button className="update-toast-dismiss" onClick={() => setUpdateInfo(null)} title="Dismiss">
             ×

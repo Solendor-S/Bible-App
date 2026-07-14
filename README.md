@@ -2,6 +2,12 @@
 
 A catena-style Bible study desktop app (Electron) built around KJV scripture and Church Fathers commentary. Click any verse to see patristic commentary sorted chronologically by era. Optional AI scholar powered by a local Ollama model — no data leaves your machine.
 
+## ⬇️ Download
+
+[![Download the latest release](https://img.shields.io/github/v/release/Solendor-S/Bible-App?label=Download&style=for-the-badge)](https://github.com/Solendor-S/Bible-App/releases/latest)
+
+Grab the installer for your OS from the **[latest release](https://github.com/Solendor-S/Bible-App/releases/latest)** — Windows `.exe` or macOS `.dmg`. Everything (including the database) is bundled; no other tools required. See [Install](#install) for the first-launch security prompts. The app updates itself automatically after that.
+
 ## Features
 
 - **KJV Bible** — full text, navigable by book/chapter/verse with browser-style back/forward history
@@ -26,47 +32,46 @@ A catena-style Bible study desktop app (Electron) built around KJV scripture and
 - **Chat sessions** — persistent AI conversation history
 - **Built-in updater** — check and apply updates from within the app
 
-## Setup
+## Install
+
+Download the installer for your platform from the
+**[latest release](https://github.com/Solendor-S/Bible-App/releases/latest)**. The database
+and everything else is bundled — no Node, Git, or other tools required.
 
 ### Windows
 
-1. Download **[setup.bat](setup.bat)** from this repo
-2. Double-click it — it will install missing dependencies, clone the app, and optionally set up the AI
+Run **`Bible Study Setup x.y.z.exe`**. Because the installer isn't code-signed yet, Windows
+SmartScreen may warn — click **More info → Run anyway**. During install you'll get an optional
+checkbox to install the AI Scholar (Ollama); it's **off by default** — leave it unchecked to
+skip (you can install it later from inside the app).
 
 ### macOS
 
-1. Download **[setup.sh](setup.sh)** from this repo
-2. Open Terminal, `cd` to your Downloads folder, and run:
-
-```bash
-chmod +x setup.sh && ./setup.sh
-```
-
-Both scripts handle everything automatically.
-
-## Manual Setup
-
-```bash
-# Git LFS must be installed first (for the database)
-git lfs install
-git clone https://github.com/Solendor-S/Bible-App.git ~/BibleApp
-cd ~/BibleApp/App
-npm install
-npm run dev
-```
+Open the **`.dmg`** and drag **Bible Study** into Applications. The app isn't notarized yet, so
+the first launch is blocked by Gatekeeper — **right-click the app → Open → Open** (only needed
+once).
 
 ## Updating
 
-The app checks for updates on launch and shows a toast if a new version is available. Click **Launch Updater** to apply it automatically.
+The app checks for updates on launch and downloads them in the background. When one is ready, a
+toast appears — click **Restart & Update** to install it.
 
-**macOS manual update** (run from anywhere):
+### Upgrading from an older version
+
+Earlier versions ran from a source folder (`~/BibleApp`) instead of an installer, so they can't
+update themselves to this version. **Download the installer above and run it once** — after that,
+updates are automatic. Your data carries over automatically (highlights, bookmarks, notes, and
+chats are kept separately and shared between versions — nothing to export or import). Once the new
+version is working, you can delete the old `~/BibleApp` folder and any old desktop shortcuts.
+
+## Run from source (developers)
+
 ```bash
-cd ~/BibleApp && git fetch --no-tags origin main && git reset --hard origin/main && git lfs pull && rm -rf App/node_modules && npm install --prefix App
-```
-
-**Windows manual update** (run from anywhere in PowerShell):
-```powershell
-cd "$env:USERPROFILE\BibleApp"; git fetch --no-tags origin main; git reset --hard origin/main; git lfs pull; if (Test-Path App\node_modules) { Remove-Item -Recurse -Force App\node_modules }; npm install --prefix App
+git lfs install          # database ships via Git LFS
+git clone https://github.com/Solendor-S/Bible-App.git
+cd Bible-App/App
+npm install
+npm run dev              # electron-vite dev server
 ```
 
 ## AI Scholar (optional)
@@ -149,13 +154,18 @@ npm run scrape-bibleref-resume  # Resume interrupted scrape
 
 ## Building a Distributable
 
+Built with [electron-vite](https://electron-vite.org) (bundling) +
+[electron-builder](https://www.electron.build) (installers).
+
 ```bash
 cd App
-npm run build     # Package + make installer for current platform
-npm run package   # Package without making installers
+npm run build:win   # NSIS .exe installer (Windows)
+npm run build:mac   # .dmg (macOS — run on a Mac)
+npm run package     # unpacked app dir only, no installer
 ```
 
-Output goes to `App/out/`.
+Installers are written to `App/dist-installer/`. Auto-update is wired to GitHub Releases via
+`electron-builder.yml`; publishing a release is a manual step (`electron-builder --publish`).
 
 ## Tech Stack
 

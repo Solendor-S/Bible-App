@@ -7,6 +7,7 @@ import { spawn } from 'child_process'
 import https from 'https'
 import http from 'http'
 import initSqlJs, { Database } from 'sql.js'
+import { autoUpdater } from 'electron-updater'
 import { HISTORICAL_CREATE_SQL, HISTORICAL_MIGRATE_SQL, HISTORICAL_SOURCES, HISTORICAL_REFS } from './historicalData'
 import { APOCRYPHA_CREATE_SQL, APOCRYPHA_BOOKS, APOCRYPHA_VERSES } from './apocryphaData'
 import { NAVES_CREATE_SQL, NAVES_TOPICS, NAVES_REFS } from './navesData'
@@ -38,7 +39,15 @@ function getDbVersionPath(): string {
 }
 
 function getPreloadPath(): string {
-  return join(__dirname, 'preload.js')
+  return join(__dirname, '../preload/index.js')
+}
+
+// Repo `resources/` is shipped via electron-builder extraResources (→ resources/ under
+// process.resourcesPath). In dev __dirname is out/main, three levels under the repo root.
+function getResourcesDir(): string {
+  return app.isPackaged
+    ? join(process.resourcesPath, 'resources')
+    : join(__dirname, '../../../resources')
 }
 
 async function openDb(): Promise<Database> {
@@ -285,7 +294,7 @@ function rows(database: Database, sql: string, params: any[] = []): any[] {
 }
 
 function createSplash(): BrowserWindow {
-  const iconPath = join(__dirname, '../../../resources/icon.png')
+  const iconPath = join(getResourcesDir(), 'icon.png')
   let iconSrc = ''
   try { iconSrc = `data:image/png;base64,${readFileSync(iconPath).toString('base64')}` } catch {}
 
@@ -332,7 +341,7 @@ function createWindow(): BrowserWindow {
     minHeight: 600,
     show: false,
     backgroundColor: '#1a1a1a',
-    icon: join(__dirname, isMac ? '../../../resources/icon.png' : '../../../resources/icon.ico'),
+    icon: join(getResourcesDir(), isMac ? 'icon.png' : 'icon.ico'),
     titleBarStyle: isMac ? 'hiddenInset' : 'hidden',
     ...(isMac ? {} : {
       titleBarOverlay: {
@@ -348,10 +357,10 @@ function createWindow(): BrowserWindow {
     }
   })
 
-  if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
-    win.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL)
+  if (!app.isPackaged && process.env['ELECTRON_RENDERER_URL']) {
+    win.loadURL(process.env['ELECTRON_RENDERER_URL'])
   } else {
-    win.loadFile(join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`))
+    win.loadFile(join(__dirname, '../renderer/index.html'))
   }
 
   win.webContents.setWindowOpenHandler(({ url }) => {
@@ -1111,46 +1120,23 @@ ipcMain.handle('ollama:ensureRunning', async () => {
   return { success: true, alreadyRunning: false }
 })
 
-// ── Update check ─────────────────────────────
+// ── Auto-update (electron-updater) ─────────────────────────────
+// The update feed comes from electron-builder's `publish: github` config, baked
+// into app-update.yml at build time. autoDownload fetches the new installer in the
+// background; we surface the toast only once it's downloaded, so the toast's
+// "Restart & Update" button can install immediately via quitAndInstall().
 
 const REPO = 'Solendor-S/Bible-App'
 
-function semverGt(a: string, b: string): boolean {
-  const parse = (v: string) => v.replace(/^v/, '').split('.').map(Number)
-  const [aMaj, aMin, aPat] = parse(a)
-  const [bMaj, bMin, bPat] = parse(b)
-  if (aMaj !== bMaj) return aMaj > bMaj
-  if (aMin !== bMin) return aMin > bMin
-  return aPat > bPat
-}
-
-function fetchLatestTag(): Promise<string> {
-  return new Promise((resolve, reject) => {
-    https.get(
-      { hostname: 'api.github.com', path: `/repos/${REPO}/releases/latest`, headers: { 'User-Agent': 'BibleApp/1.0' } },
-      (res) => {
-        let data = ''
-        res.on('data', (c) => { data += c })
-        res.on('end', () => {
-          try { resolve(JSON.parse(data).tag_name ?? '') }
-          catch { reject(new Error('parse error')) }
-        })
-      }
-    ).on('error', reject)
+function initAutoUpdater(win: BrowserWindow): void {
+  if (!app.isPackaged) return  // updater is disabled in dev
+  autoUpdater.autoDownload = true
+  autoUpdater.autoInstallOnAppQuit = true
+  autoUpdater.on('update-downloaded', (info) => {
+    win.webContents.send('app:updateAvailable', { current: getCurrentVersion(), latest: info.version })
   })
-}
-
-async function checkForUpdateAndNotify(win: BrowserWindow): Promise<void> {
-  try {
-    const current = getCurrentVersion()
-    const tag = await fetchLatestTag()
-    const latest = tag.replace(/^v/, '')
-    if (semverGt(latest, current)) {
-      win.webContents.send('app:updateAvailable', { current, latest })
-    }
-  } catch {
-    // silent — no network or no releases yet
-  }
+  autoUpdater.on('error', () => { /* silent — no network or no releases yet */ })
+  autoUpdater.checkForUpdates().catch(() => {})
 }
 
 ipcMain.handle('app:getVersion', () => getCurrentVersion())
@@ -1179,30 +1165,9 @@ ipcMain.handle('app:getReleases', (): Promise<{ tag: string; name: string; date:
 })
 
 ipcMain.handle('app:launchUpdater', () => {
-  const outDir = join(homedir(), 'BibleApp', 'App', 'updater', 'out')
-
-  if (process.platform === 'win32') {
-    const exe = join(outDir, 'BibleAppUpdater-win32-x64', 'BibleAppUpdater.exe')
-    if (existsSync(exe)) {
-      spawn(exe, [], { detached: true, stdio: 'ignore' }).unref()
-      app.quit()
-      return
-    }
-  } else if (process.platform === 'darwin') {
-    for (const arch of ['arm64', 'x64']) {
-      const appBundle = join(outDir, `BibleAppUpdater-darwin-${arch}`, 'BibleAppUpdater.app')
-      if (existsSync(appBundle)) {
-        spawn('open', [appBundle], { detached: true, stdio: 'ignore' }).unref()
-        app.quit()
-        return
-      }
-    }
-  }
-
-  // Fallback: run via npm (binary not found — rebuilds from source)
-  const updaterDir = join(homedir(), 'BibleApp', 'App', 'updater')
-  spawn('npm', ['run', 'start'], { cwd: updaterDir, detached: true, stdio: 'ignore', shell: true }).unref()
-  app.quit()
+  // The new installer has already been downloaded in the background by
+  // electron-updater; quit and install it now (app relaunches automatically).
+  autoUpdater.quitAndInstall()
 })
 
 app.whenReady().then(async () => {
@@ -1214,7 +1179,7 @@ app.whenReady().then(async () => {
     win.show()
   })
   win.webContents.once('did-finish-load', () => {
-    checkForUpdateAndNotify(win)
+    initAutoUpdater(win)
   })
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()

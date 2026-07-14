@@ -3,6 +3,7 @@ node_modules/
 out/
 dist/
 dist-electron/
+dist-installer/
 release/
 
 # LFS-tracked large files are included (bible.db, commentary-catenabible.json)

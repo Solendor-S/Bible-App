@@ -1,0 +1,50 @@
+appId: com.sargonshlimon.biblestudy
+productName: Bible Study
+copyright: Copyright © 2026 Sargon Shlimon
+
+directories:
+  output: dist-installer
+  buildResources: build
+
+# Only ship the compiled app + production deps (electron-builder auto-includes
+# `dependencies`, never `devDependencies`, so the scrapers/build tools stay out).
+files:
+  - out/**/*
+  - package.json
+
+# Read at runtime from process.resourcesPath (see electron/main.ts).
+extraResources:
+  - from: data/bible.db
+    to: bible.db
+  - from: node_modules/sql.js/dist/sql-wasm.wasm
+    to: sql-wasm.wasm
+  - from: ../resources
+    to: resources
+
+asar: true
+
+# ── Windows: NSIS wizard installer ──────────────────────────────
+win:
+  target: nsis
+  icon: ../resources/icon.ico
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  include: build/installer.nsh
+
+# ── macOS: DMG (unsigned for now — no Apple Developer account) ───
+mac:
+  target: dmg
+  icon: build/icon.png
+  category: public.app-category.reference
+  identity: null
+
+# ── Auto-update feed (electron-updater reads this) ──────────────
+# Feed only — releases are published manually by the maintainer.
+publish:
+  provider: github
+  owner: Solendor-S
+  repo: Bible-App
