@@ -21,7 +21,9 @@ export const WORD_SOURCES: WordSource[] = [
   { id: 'tahot',   label: 'TAHOT',   fullName: 'Translators Amalgamated Hebrew OT', script: 'hebrew', testament: 'OT' },
   { id: 'wlc',     label: 'WLC',     fullName: 'Westminster Leningrad Codex',       script: 'hebrew', testament: 'OT' },
   { id: 'dss',     label: 'DSS',     fullName: 'Dead Sea Scrolls',                  script: 'hebrew', testament: 'OT' },
-  { id: 'lxx',     label: 'LXX',     fullName: 'Septuagint (Greek Old Testament)',  script: 'greek',  testament: 'OT' },
+  // LXX (untagged) is omitted here — it has no interlinear data, so it stays only as a
+  // parallel translation (WORD_TABLE_TRANSLATIONS in main.ts). LXX-A carries the tags.
+  { id: 'lxx_a',   label: 'LXX-A',   fullName: 'Apostolic Bible (tagged Septuagint)', script: 'greek', testament: 'OT' },
 ]
 
 // Initial favourite (default) per testament, before the user stars another.

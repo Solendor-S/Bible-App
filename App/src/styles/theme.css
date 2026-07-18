@@ -877,6 +877,13 @@ body {
   color: var(--text-secondary);
 }
 
+.word-pill-morph {
+  font-size: 9px;
+  color: var(--text-accent);
+  font-family: ui-monospace, 'Cascadia Code', 'Consolas', monospace;
+  letter-spacing: 0.02em;
+}
+
 .wordstudy-def {
   border-top: 1px solid var(--border);
   padding: 14px 16px;

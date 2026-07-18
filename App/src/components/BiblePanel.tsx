@@ -82,7 +82,7 @@ export const HIGHLIGHT_COLORS = [
 ]
 
 const TRANS_GROUPS: { label: string; items: string[] }[] = [
-  { label: 'English',              items: ['KJV', 'ASV', 'WEB'] },
+  { label: 'English',              items: ['KJV', 'BSB', 'ASV', 'WEB'] },
   { label: 'English Interlinear',  items: ['KJV+', 'I_KJV+'] },
   { label: 'Greek OT (Septuagint)', items: ['LXX', 'E_LXX'] },
   { label: 'Hebrew OT',            items: ['WLC', 'DSS'] },

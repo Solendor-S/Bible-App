@@ -416,6 +416,7 @@ const WORD_SOURCE_TABLES: Record<string, { table: string; col: 'greek' | 'hebrew
   wlc:     { table: 'wlc_words',         col: 'hebrew' },
   dss:     { table: 'dss_words',         col: 'hebrew' },
   lxx:     { table: 'lxx_words',         col: 'greek' },
+  lxx_a:   { table: 'lxx_a_words',       col: 'greek' },
 }
 
 ipcMain.handle('bible:getWords', async (_e, source: string, book: string, chapter: number, verse: number) => {
@@ -1009,6 +1010,7 @@ ipcMain.handle('naves:search', async (_e, query: string) => {
 // Word-table translations reconstructed on the fly from per-word tables
 const WORD_TABLE_TRANSLATIONS: Record<string, { table: string; col: string }> = {
   'LXX':    { table: 'lxx_words',        col: 'greek'  },
+  'E_LXX':  { table: 'lxx_a_words',      col: 'greek'  },  // Ecclesiastical/Apostolic LXX (tagged)
   'WLC':    { table: 'wlc_words',        col: 'hebrew' },
   'DSS':    { table: 'dss_words',        col: 'hebrew' },
   'SBLGNT': { table: 'greek_words',      col: 'greek'  },

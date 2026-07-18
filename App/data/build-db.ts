@@ -304,6 +304,20 @@ async function main() {
       PRIMARY KEY (book, chapter, verse, position)
     );
     CREATE INDEX IF NOT EXISTS idx_lxx_words_greek_norm ON lxx_words(greek_norm);
+    CREATE TABLE IF NOT EXISTS lxx_a_words (
+      book     TEXT    NOT NULL,
+      chapter  INTEGER NOT NULL,
+      verse    INTEGER NOT NULL,
+      position INTEGER NOT NULL,
+      greek    TEXT    NOT NULL,
+      translit TEXT,
+      strongs  TEXT,
+      gloss    TEXT,
+      morph    TEXT,
+      greek_norm TEXT,
+      PRIMARY KEY (book, chapter, verse, position)
+    );
+    CREATE INDEX IF NOT EXISTS idx_lxx_a_words_greek_norm ON lxx_a_words(greek_norm);
     CREATE TABLE IF NOT EXISTS wlc_words (
       book     TEXT    NOT NULL,
       chapter  INTEGER NOT NULL,

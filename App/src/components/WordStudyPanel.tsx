@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import type { BibleVerse, WordRow, Language, LexiconEntry, StrongsEntry, SelectedVerse } from '../types'
-import { decodeMorphology, TAG_DEFINITIONS, GREEK_TAG_EXAMPLES, HEBREW_TAG_EXAMPLES } from '../utils/morphology'
+import { decodeMorphology, compactMorph, TAG_DEFINITIONS, GREEK_TAG_EXAMPLES, HEBREW_TAG_EXAMPLES } from '../utils/morphology'
 import { escapeRegex } from '../utils/regex'
 import { DEFAULT_FAVOURITE, sourcesFor, getSource, type Testament } from '../lib/wordSources'
 
@@ -15,11 +15,14 @@ const NT_BOOKS = new Set([
 // Per-testament favourite (default) source, persisted across sessions.
 const FAV_KEY = 'wordstudy.favourites'
 function loadFavourites(): Record<Testament, string> {
+  // Fall back to the default if a stored favourite no longer exists (e.g. LXX was removed).
+  const valid = (id: string | undefined, t: Testament) =>
+    id && getSource(id)?.testament === t ? id : DEFAULT_FAVOURITE[t]
   try {
     const raw = localStorage.getItem(FAV_KEY)
     if (raw) {
       const p = JSON.parse(raw)
-      return { NT: p.NT ?? DEFAULT_FAVOURITE.NT, OT: p.OT ?? DEFAULT_FAVOURITE.OT }
+      return { NT: valid(p.NT, 'NT'), OT: valid(p.OT, 'OT') }
     }
   } catch {}
   return { ...DEFAULT_FAVOURITE }
@@ -309,7 +312,7 @@ export function WordStudyPanel({ selected, onWordSelect, onNavigate, jumpToStron
       ) : !words.length ? (
         <div className="panel-empty">No {activeSource?.label ?? ''} words for this verse.</div>
       ) : (
-        <div className="wordstudy-words">
+        <div className="wordstudy-words" dir={script === 'hebrew' ? 'rtl' : 'ltr'}>
           {words.map((w, i) => {
             const active = activeKey?.strongs === w.strongs && activeKey?.position === w.position
             return (
@@ -322,6 +325,9 @@ export function WordStudyPanel({ selected, onWordSelect, onNavigate, jumpToStron
                 <span className="word-pill-text" dir={script === 'hebrew' ? 'rtl' : 'ltr'}>{w.text}</span>
                 <span className="word-pill-translit">{w.translit}</span>
                 {w.gloss && <span className="word-pill-gloss">{w.gloss}</span>}
+                {w.morph && compactMorph(w.morph, script) && (
+                  <span className="word-pill-morph">{compactMorph(w.morph, script)}</span>
+                )}
               </button>
             )
           })}
