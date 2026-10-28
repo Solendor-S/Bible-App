@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { AiChatMessage } from './AiChatMessage'
 import { streamChat, buildSystemPrompt, buildHistoricalContextPrompt, OLLAMA_MODELS, DEFAULT_MODEL } from '../lib/ollamaClient'
-import { streamGemini, fetchGeminiOnce, isTrustedUrl, buildFallbackSearchUrl, GEMINI_MODELS, DEFAULT_GEMINI_MODEL } from '../lib/geminiClient'
+import { streamGemini, fetchGeminiOnce, isTrustedUrl, buildFallbackSearchUrl, GEMINI_MODELS, resolveGeminiModel } from '../lib/geminiClient'
 import { lookupWorkByTitle } from '../lib/aiWorkLinks'
 import { bibleDb } from '../db/sqlite'
 import { findCommentaryForCitation, searchCommentaryText, searchVerses } from '../db/queries'
@@ -45,7 +45,7 @@ export function AiPanel({ height, activeVerse, onHeightChange, onNavigate, onSho
     (localStorage.getItem(PROVIDER_STORAGE) as Provider) ?? 'ollama'
   )
   const [geminiKey, setGeminiKey] = useState(() => localStorage.getItem(GEMINI_KEY_STORAGE) ?? '')
-  const [geminiModel, setGeminiModel] = useState(() => localStorage.getItem(GEMINI_MODEL_STORAGE) ?? DEFAULT_GEMINI_MODEL)
+  const [geminiModel, setGeminiModel] = useState(() => resolveGeminiModel(localStorage.getItem(GEMINI_MODEL_STORAGE)))
   const [showKeyInput, setShowKeyInput] = useState(false)
   const [keyDraft, setKeyDraft] = useState('')
   const [resolvedCitations, setResolvedCitations] = useState<Record<string, ResolvedCitation>>({})

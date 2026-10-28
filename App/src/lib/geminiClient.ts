@@ -5,13 +5,19 @@ export interface GeminiModel {
 }
 
 export const GEMINI_MODELS: GeminiModel[] = [
-  { id: 'gemini-3-flash-preview',  label: 'Gemini 3 Flash',        note: '1,500/day free' },
-  { id: 'gemini-3.1-flash-lite',   label: 'Gemini 3.1 Flash Lite', note: '1,500/day free, fastest' },
-  { id: 'gemini-2.5-flash',        label: 'Gemini 2.5 Flash',      note: '1,500/day free' },
-  { id: 'gemini-2.5-flash-lite',   label: 'Gemini 2.5 Flash Lite', note: '1,500/day free, fastest' },
+  // Free-tier text models, Oct 2026 (ai.google.dev/gemini-api/docs/models + /pricing).
+  // Exact daily limits vary per project — see aistudio.google.com/rate-limit.
+  { id: 'gemini-3.8-flash',      label: 'Gemini 3.8 Flash',      note: 'free tier, recommended' },
+  { id: 'gemini-3.6-flash',      label: 'Gemini 3.6 Flash',      note: 'free tier' },
+  { id: 'gemini-3.5-flash-lite', label: 'Gemini 3.5 Flash-Lite', note: 'free tier, fastest' },
+  { id: 'gemini-3.1-flash-lite', label: 'Gemini 3.1 Flash-Lite', note: 'free tier, lightest' },
 ]
 
-export const DEFAULT_GEMINI_MODEL = GEMINI_MODELS[0].id
+/** Saved choice, or the default if it was retired from the list (e.g. 2.5 / 3 Flash preview). */
+export function resolveGeminiModel(saved: string | null): string {
+  return GEMINI_MODELS.some(m => m.id === saved) ? saved! : GEMINI_MODELS[0].id
+}
+
 const BASE = 'https://generativelanguage.googleapis.com/v1beta/models'
 
 export interface GeminiMessage {
