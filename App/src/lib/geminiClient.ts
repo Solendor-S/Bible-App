@@ -7,8 +7,10 @@ export interface GeminiModel {
 export const GEMINI_MODELS: GeminiModel[] = [
   // Free-tier text models, Oct 2026 (ai.google.dev/gemini-api/docs/models + /pricing).
   // Exact daily limits vary per project — see aistudio.google.com/rate-limit.
-  { id: 'gemini-3.8-flash',      label: 'Gemini 3.8 Flash',      note: 'free tier, recommended' },
-  { id: 'gemini-3.6-flash',      label: 'Gemini 3.6 Flash',      note: 'free tier' },
+  // 3.6 first: 3.8 is the newest but is frequently overloaded (503 "high demand"); busy
+  // models fall back down this list automatically (see AiPanel).
+  { id: 'gemini-3.6-flash',      label: 'Gemini 3.6 Flash',      note: 'free tier, recommended' },
+  { id: 'gemini-3.8-flash',      label: 'Gemini 3.8 Flash',      note: 'free tier, newest — often busy' },
   { id: 'gemini-3.5-flash-lite', label: 'Gemini 3.5 Flash-Lite', note: 'free tier, fastest' },
   { id: 'gemini-3.1-flash-lite', label: 'Gemini 3.1 Flash-Lite', note: 'free tier, lightest' },
 ]
@@ -35,6 +37,13 @@ export function buildFallbackSearchUrl(fatherName: string, workTitle: string): s
   const q = encodeURIComponent(`${fatherName} "${workTitle}"`)
   return `https://www.google.com/search?q=${q}+site:newadvent.org+OR+site:ccel.org+OR+site:tertullian.org`
 }
+
+/** The model is overloaded or rate-limited — worth retrying on another model. */
+export class GeminiBusyError extends Error {}
+
+/** No response headers within this long = treat the model as busy. When overloaded, the
+ *  streaming endpoint just holds the connection open instead of returning 503. */
+const CONNECT_TIMEOUT_MS = 25_000
 
 export interface StreamOptions {
   signal?: AbortSignal
@@ -97,12 +106,25 @@ export async function* streamGemini(
     generationConfig: { temperature: 0.7, thinkingConfig: { includeThoughts: true } },
   }
 
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-    signal,
-  })
+  const ctrl = new AbortController()
+  const onAbort = () => ctrl.abort()
+  signal?.addEventListener('abort', onAbort)
+  let connectTimedOut = false
+  const timer = setTimeout(() => { connectTimedOut = true; ctrl.abort() }, CONNECT_TIMEOUT_MS)
+  let response: Response
+  try {
+    response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: ctrl.signal,
+    })
+  } catch (e) {
+    if (connectTimedOut) throw new GeminiBusyError(`no response within ${CONNECT_TIMEOUT_MS / 1000}s`)
+    throw e
+  } finally {
+    clearTimeout(timer)
+  }
 
   if (!response.ok) {
     const err = await response.text()
@@ -111,6 +133,8 @@ export async function* streamGemini(
       const parsed = JSON.parse(err)
       msg = parsed?.error?.message ?? msg
     } catch { /* use default */ }
+    signal?.removeEventListener('abort', onAbort)
+    if (response.status === 503 || response.status === 429 || response.status === 500) throw new GeminiBusyError(msg)
     throw new Error(msg)
   }
 

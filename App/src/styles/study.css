@@ -315,3 +315,4 @@ mark, .ref-highlight { background: var(--accent-dim); color: var(--accent); bord
 .ai-thoughts summary { cursor: pointer; color: var(--text-muted); font-size: 11px; }
 .ai-thoughts-body { white-space: pre-wrap; font-style: italic; color: var(--text-muted); max-height: 160px; overflow-y: auto; margin-top: 4px; line-height: 1.45; }
 .ai-send-btn--stop { background: #b3261e !important; color: #fff !important; }
+.ai-status-note { flex-basis: 100%; font-size: 11px; color: #e0a458; }

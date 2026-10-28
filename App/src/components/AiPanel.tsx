@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { AiChatMessage } from './AiChatMessage'
 import { streamChat, buildSystemPrompt, buildHistoricalContextPrompt, OLLAMA_MODELS, DEFAULT_MODEL } from '../lib/ollamaClient'
-import { streamGemini, fetchGeminiOnce, isTrustedUrl, buildFallbackSearchUrl, GEMINI_MODELS, resolveGeminiModel } from '../lib/geminiClient'
+import { streamGemini, GeminiBusyError, fetchGeminiOnce, isTrustedUrl, buildFallbackSearchUrl, GEMINI_MODELS, resolveGeminiModel } from '../lib/geminiClient'
 import { lookupWorkByTitle } from '../lib/aiWorkLinks'
 import { bibleDb } from '../db/sqlite'
 import { findCommentaryForCitation, searchCommentaryText, searchVerses } from '../db/queries'
@@ -53,6 +53,7 @@ export function AiPanel({ height, activeVerse, onHeightChange, onNavigate, onSho
   // What the model is doing right now — so a long think doesn't look like a hang
   const [phase, setPhase] = useState<'searching' | 'starting' | 'waiting' | 'thinking' | 'writing' | null>(null)
   const [thoughts, setThoughts] = useState('')
+  const [statusNote, setStatusNote] = useState('')
   const [elapsed, setElapsed] = useState(0)
   const abortRef = useRef<{ ctrl: AbortController; reason: 'stopped' | 'timeout' | null } | null>(null)
   const [provider, setProvider] = useState<Provider>(() =>
@@ -216,6 +217,7 @@ export function AiPanel({ height, activeVerse, onHeightChange, onNavigate, onSho
     setStreaming(true)
     setStreamingContent('')
     setThoughts('')
+    setStatusNote('')
     const abort = { ctrl: new AbortController(), reason: null as 'stopped' | 'timeout' | null }
     abortRef.current = abort
     lastActivity.current = Date.now()
@@ -263,13 +265,26 @@ export function AiPanel({ height, activeVerse, onHeightChange, onNavigate, onSho
           })),
           { role: 'user' as const, content: userContent },
         ]
-        setPhase('waiting')
-        lastActivity.current = Date.now()
-        for await (const chunk of streamGemini(geminiMessages, systemPrompt, geminiModel, geminiKey, { signal: abort.ctrl.signal, onThought })) {
+        // Chosen model first, then the rest: a busy model (503 / no response) falls through
+        const order = [geminiModel, ...GEMINI_MODELS.map(m => m.id).filter(id => id !== geminiModel)]
+        const label = (id: string) => GEMINI_MODELS.find(m => m.id === id)?.label ?? id
+        for (let i = 0; i < order.length; i++) {
+          setPhase('waiting')
           lastActivity.current = Date.now()
-          setPhase('writing')
-          fullContent += chunk
-          setStreamingContent(fullContent)
+          try {
+            for await (const chunk of streamGemini(geminiMessages, systemPrompt, order[i], geminiKey, { signal: abort.ctrl.signal, onThought })) {
+              lastActivity.current = Date.now()
+              setPhase('writing')
+              fullContent += chunk
+              setStreamingContent(fullContent)
+            }
+            if (i > 0) fullContent += `\n\n_Answered by ${label(order[i])} — ${label(order[0])} was busy._`
+            break
+          } catch (e) {
+            if (!(e instanceof GeminiBusyError) || fullContent || i === order.length - 1 || abort.reason) throw e
+            setStatusNote(`${label(order[i])} is busy (${e.message}) — trying ${label(order[i + 1])}…`)
+            setThoughts('')
+          }
         }
       } else {
         setPhase('starting')
@@ -401,6 +416,7 @@ export function AiPanel({ height, activeVerse, onHeightChange, onNavigate, onSho
                 <span className="ai-status-dot" />
                 <span className="ai-status-label">{PHASE_LABEL[phase](provider === 'gemini' ? 'Gemini' : 'Ollama')}</span>
                 <span className="ai-status-time">{elapsed}s</span>
+                {statusNote && <span className="ai-status-note">{statusNote}</span>}
                 {thoughts && (
                   <details className="ai-thoughts" open={phase === 'thinking'}>
                     <summary>Thought summary</summary>
