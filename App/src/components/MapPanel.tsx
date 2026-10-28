@@ -29,8 +29,10 @@ const CITY_COORDS: Record<string, { lat: number; lng: number }> = {
   ...CORRESPONDENCE_EXTRA_COORDS,
 }
 const traditionColor = (t?: string) => TRADITION_COLORS[t ?? ''] ?? '#94a3b8'
-// CARTO basemaps now require an API key; OSM standard tiles, inverted by CSS for dark themes.
-const TILE_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
+// CARTO basemaps now require an API key and OSM labels places in the local language, so use
+// Esri's Canvas basemaps: a base layer plus an English label layer, in light and dark variants.
+const esri = (layer: string) => `https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_${layer}/MapServer/tile/{z}/{y}/{x}`
+const TILE_OPTS = { attribution: 'Tiles &copy; Esri &mdash; Esri, HERE, Garmin, &copy; OpenStreetMap contributors', maxZoom: 16 }
 
 function drawJourneys(L: any, layers: any, map: any, ids: Set<string>) {
   const active = JOURNEYS.filter(j => ids.has(j.id))
@@ -81,6 +83,7 @@ export function MapPanel({ selected, onOpenFather }: Props) {
   const [error, setError] = useState<string | null>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
   const [theme] = usePref('theme')
+  const tilesRef = useRef<any>(null)
   const senders = useMemo(() => ['All', ...new Set(FATHER_LETTERS.map(l => l.fromFather))], [])
   useOutsideClick(dropdownRef, dropdownOpen, () => setDropdownOpen(false))
 
@@ -99,7 +102,7 @@ export function MapPanel({ selected, onOpenFather }: Props) {
       try {
         const map = L.map(containerRef.current, { center: [37, 33], zoom: 5, zoomControl: false })
         L.control.zoom({ position: 'bottomleft' }).addTo(map)
-        L.tileLayer(TILE_URL, { attribution: '&copy; OpenStreetMap contributors', maxZoom: 18 }).addTo(map)
+        tilesRef.current = L.layerGroup().addTo(map)
         layersRef.current = L.layerGroup().addTo(map)
         mapRef.current = map
         setMapReady(true)
@@ -155,6 +158,19 @@ export function MapPanel({ selected, onOpenFather }: Props) {
     })
   }, [mode, activeId, stackedIds, tradition, sender, mapReady])
 
+  // Basemap follows the app theme (Dark Gray for dark / high contrast, Light Gray for light)
+  useEffect(() => {
+    const tiles = tilesRef.current
+    if (!tiles) return
+    import('leaflet').then(mod => {
+      const L = mod.default ?? mod as any
+      const tone = theme === 'light' ? 'Light_Gray' : 'Dark_Gray'
+      tiles.clearLayers()
+      L.tileLayer(esri(`${tone}_Base`), TILE_OPTS).addTo(tiles)
+      L.tileLayer(esri(`${tone}_Reference`), { ...TILE_OPTS, attribution: '' }).addTo(tiles)
+    })
+  }, [theme, mapReady])
+
   useEffect(() => { if (mapRef.current) setTimeout(() => mapRef.current?.invalidateSize(), 50) }, [fullscreen, city, letter])
 
   const toggleStack = (id: string, e: React.MouseEvent) => {
@@ -166,7 +182,7 @@ export function MapPanel({ selected, onOpenFather }: Props) {
   if (error) return <div className="map-panel"><div className="panel-empty">Map error: {error}</div></div>
 
   return (
-    <div className={`map-panel${fullscreen ? ' map-panel--fullscreen' : ''}${theme === 'light' ? '' : ' map-panel--dark'}`}>
+    <div className={`map-panel${fullscreen ? ' map-panel--fullscreen' : ''}`}>
       <div className="map-toolbar">
         <Chips small value={mode} onChange={m => { setMode(m); setCity(null); setLetter(null) }}
           options={[{ value: 'journeys', label: 'Journeys' }, { value: 'fathers', label: 'Fathers' }, { value: 'letters', label: 'Letters' }]} />

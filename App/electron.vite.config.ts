@@ -3,12 +3,12 @@ import react from '@vitejs/plugin-react'
 import { resolve } from 'path'
 
 // Content-Security-Policy for the packaged renderer only — Vite's dev server needs inline scripts.
-// connect-src: Ollama (AI Scholar), Gemini, Crossway ESV. img-src: OpenStreetMap tiles.
+// connect-src: Ollama (AI Scholar), Gemini, Crossway ESV. img-src: Esri basemap tiles.
 const CSP = [
   "default-src 'self'",
   "script-src 'self'",
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: https://tile.openstreetmap.org",
+  "img-src 'self' data: https://server.arcgisonline.com",
   "font-src 'self' data:",
   "connect-src 'self' http://localhost:11434 http://127.0.0.1:11434 https://generativelanguage.googleapis.com https://api.esv.org",
 ].join('; ')

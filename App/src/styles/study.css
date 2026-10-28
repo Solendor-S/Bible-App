@@ -302,5 +302,4 @@ mark, .ref-highlight { background: var(--accent-dim); color: var(--accent); bord
 .cal-day--done.cal-day--today { color: var(--bg-primary); }
 .cal-legend { display: flex; gap: 6px; align-items: center; font-size: 11px; color: var(--text-muted); margin: 6px 0; }
 .cal-legend .cal-day { padding: 0 4px; }
-.map-panel--dark .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(0.85) contrast(0.9); }
 .commentary-father { flex-direction: row; align-items: center; }
