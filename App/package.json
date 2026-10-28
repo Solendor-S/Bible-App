@@ -15,6 +15,7 @@
     "check-esv": "node src/lib/esv.selfcheck.ts",
     "check-usfm": "node src/lib/usfm.selfcheck.ts",
     "setup-data": "node -r ts-node/register scripts/download-data.ts",
+    "import-android": "C:\\Users\\Sargo\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe -I data/import-android.py",
     "build-db": "node -r ts-node/register data/build-db.ts",
     "fetch-ccel": "node -r ts-node/register scripts/fetch-ccel.ts",
     "scrape-catenabible": "node -r ts-node/register scripts/scrape-catenabible.ts",
