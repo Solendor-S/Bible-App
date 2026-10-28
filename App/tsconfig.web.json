@@ -13,5 +13,8 @@
       "@renderer/*": ["./src/*"]
     }
   },
-  "include": ["src/**/*"]
+  "include": ["src/**/*"],
+  // Standalone check run by `npm run check-esv` under node's own type stripping,
+  // which needs the explicit .ts import specifier the bundler config rejects.
+  "exclude": ["src/**/*.selfcheck.ts"]
 }

@@ -12,6 +12,8 @@
     "build:win": "electron-vite build && electron-builder --win",
     "build:mac": "electron-vite build && electron-builder --mac",
     "package": "electron-vite build && electron-builder --dir",
+    "check-esv": "node src/lib/esv.selfcheck.ts",
+    "check-usfm": "node src/lib/usfm.selfcheck.ts",
     "setup-data": "node -r ts-node/register scripts/download-data.ts",
     "build-db": "node -r ts-node/register data/build-db.ts",
     "fetch-ccel": "node -r ts-node/register scripts/fetch-ccel.ts",

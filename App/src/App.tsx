@@ -13,6 +13,7 @@ import type { NoteTarget } from './components/AddNoteModal'
 import { ApocryphaPanel } from './components/ApocryphaPanel'
 import { EarlyTextsPanel } from './components/EarlyTextsPanel'
 import { parsePassage } from './lib/parsePassage'
+import { sqlTranslation } from './lib/esv'
 import type { WordHighlight } from './components/WordStudyPanel'
 import type { Bookmark, CommentarySearchResult, PassageRef, SelectedVerse } from './types'
 import './styles/theme.css'
@@ -54,11 +55,16 @@ export default function App() {
   const [primaryTrans, setPrimaryTrans] = useState('KJV')
   const [compareTrans, setCompareTrans] = useState<string | null>(null)
   const [availableTranslations, setAvailableTranslations] = useState<string[]>(['KJV'])
+  // Search, concordance and cross-refs all query SQLite, where the ESV has no rows —
+  // they fall back to the KJV rather than returning silently empty results.
+  const sqlTrans = sqlTranslation(primaryTrans)
 
   useEffect(() => {
     window.bookmarksApi.getAll().then(setBookmarks)
     window.translationsApi.getList().then(list => {
-      if (list.length > 0) setAvailableTranslations(['KJV', ...list])
+      // ESV is virtual: it lives behind Crossway's API, never in bible.db, so
+      // translations:getList can't find it. Appended here instead.
+      if (list.length > 0) setAvailableTranslations(['KJV', ...list, 'ESV'])
     })
   }, [])
 
@@ -263,7 +269,7 @@ export default function App() {
           notesRefreshToken={notesRefreshToken}
           bookmarks={bookmarks}
           onBookmarkRemove={handleBookmarkRemove}
-          translation={primaryTrans}
+          translation={sqlTrans}
           jumpToStrongs={jumpToStrongs}
           onJumpHandled={() => setJumpToStrongs(null)}
         />
@@ -282,7 +288,7 @@ export default function App() {
         onClose={() => setSearchOpen(false)}
         onNavigate={loc => handleNavigate(loc.book, loc.chapter, loc.verse)}
         onAdd={handleAddContext}
-        translation={primaryTrans}
+        translation={sqlTrans}
       />
       <ChangelogModal open={changelogOpen} onClose={() => setChangelogOpen(false)} />
       {concordanceWord && (
@@ -290,7 +296,7 @@ export default function App() {
           word={concordanceWord}
           onClose={() => setConcordanceWord(null)}
           onNavigate={loc => handleNavigate(loc.book, loc.chapter, loc.verse)}
-          translation={primaryTrans}
+          translation={sqlTrans}
         />
       )}
       {parallelVerse && (

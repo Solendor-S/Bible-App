@@ -47,3 +47,12 @@ journey-animations/
 # Claude Code local config
 CLAUDE.md
 .claude/
+
+# TS composite build artifact
+*.tsbuildinfo
+
+# SQLite sidecars + import backups
+*.db-shm
+*.db-wal
+App/data/bible.db.new
+App/data/naves.json

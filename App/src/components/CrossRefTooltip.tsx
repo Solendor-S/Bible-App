@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { stripUsfm } from '../lib/usfm'
 import type { CrossRef } from '../types'
 
 interface Props {
@@ -29,7 +30,7 @@ export function CrossRefTooltip({ refs, onNavigate }: Props) {
               onClick={() => { onNavigate(r.to_book, r.to_chapter, r.to_verse); setOpen(false) }}
             >
               <span className="crossref-ref">{r.to_book} {r.to_chapter}:{r.to_verse}</span>
-              <span className="crossref-text">{r.text}</span>
+              <span className="crossref-text">{stripUsfm(r.text)}</span>
             </button>
           ))}
         </div>

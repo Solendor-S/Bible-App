@@ -4582,3 +4582,140 @@ body {
 .map-popup .leaflet-popup-tip {
   background: var(--bg-secondary);
 }
+
+/* ── ESV (Crossway API) ──────────────────────── */
+
+.trans-dropdown-setup {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  border-top: 1px solid var(--border);
+  color: var(--accent);
+  font-size: 12px;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+.trans-dropdown-setup:hover { background: var(--accent-dim); }
+
+.esv-notice {
+  margin: 16px 0;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-secondary);
+}
+
+.esv-notice-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+}
+
+.esv-notice-body {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-muted);
+  margin: 0 0 12px;
+}
+
+.esv-notice-btn,
+.esv-link-btn,
+.esv-save-btn {
+  background: var(--accent-dim);
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  border-radius: var(--radius-lg);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 14px;
+  cursor: pointer;
+}
+.esv-notice-btn:hover,
+.esv-link-btn:hover,
+.esv-save-btn:hover:not(:disabled) { background: var(--accent); color: var(--bg-primary); }
+.esv-save-btn:disabled { opacity: 0.6; cursor: default; }
+
+.esv-copyright {
+  margin: 18px 0 4px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-subtle);
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.esv-modal { width: 620px; max-height: 78vh; }
+
+.esv-modal-body {
+  overflow-y: auto;
+  flex: 1;
+  padding: 18px 20px 24px;
+}
+.esv-modal-body::-webkit-scrollbar { width: 6px; }
+.esv-modal-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+.esv-intro {
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+  margin: 0 0 20px;
+}
+
+.esv-step { margin-bottom: 18px; }
+
+.esv-step-head { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+
+.esv-step-num {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--accent-dim);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.esv-step-title { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+
+.esv-step-body {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-muted);
+  margin: 0 0 8px;
+  padding-left: 32px;
+}
+
+.esv-link-btn { margin-left: 32px; font-size: 12px; padding: 6px 12px; }
+
+.esv-key-input {
+  width: 100%;
+  margin-top: 8px;
+  padding: 10px 12px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  color: var(--text-primary);
+  font-size: 13px;
+  outline: none;
+}
+.esv-key-input:focus { border-color: var(--accent); }
+
+.esv-save-btn { margin-top: 10px; }
+
+.esv-status { margin-top: 10px; font-size: 12px; line-height: 1.5; color: var(--text-muted); }
+.esv-status--ok { color: var(--accent); }
+.esv-status--error { color: #e57373; }
+
+.esv-fineprint {
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--text-muted);
+  margin: 16px 0 0;
+}

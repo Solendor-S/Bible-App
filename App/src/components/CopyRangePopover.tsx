@@ -5,12 +5,13 @@ interface Props {
   book: string
   chapter: number
   allVerses: BibleVerse[]
+  translation: string
   initialVerse: number
   anchorRect: DOMRect
   onClose: () => void
 }
 
-export function CopyRangePopover({ book, chapter, allVerses, initialVerse, anchorRect, onClose }: Props) {
+export function CopyRangePopover({ book, chapter, allVerses, translation, initialVerse, anchorRect, onClose }: Props) {
   const [start, setStart] = useState(initialVerse)
   const [end, setEnd] = useState(initialVerse)
   const [copied, setCopied] = useState(false)
@@ -91,7 +92,9 @@ export function CopyRangePopover({ book, chapter, allVerses, initialVerse, ancho
 
   function buildCopyText(): string {
     const ref = start === end ? `${book} ${chapter}:${start}` : `${book} ${chapter}:${start}-${end}`
-    const header = `${ref} (KJV)`
+    // Quotations leaving the app carry only the short attribution — for the ESV this
+    // short form is exactly what Crossway permits in non-saleable media.
+    const header = `${ref} (${translation})`
     const lines = allVerses
       .filter(v => v.verse >= start && v.verse <= end)
       .map(v => `${v.verse} ${v.text}`)

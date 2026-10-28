@@ -3,6 +3,9 @@ import { useTranslationVerses, useCrossRefs, useHighlights, useChapterFootnotes 
 import { CrossRefTooltip } from './CrossRefTooltip'
 import { CopyRangePopover } from './CopyRangePopover'
 import { BookPrefacePanel } from './BookPrefacePanel'
+import { EsvSetupModal } from './EsvSetupModal'
+import { ESV_COPYRIGHT } from '../lib/esv'
+import { stripUsfm } from '../lib/usfm'
 import { isRedLetter, splitRedLetterVerse } from '../data/redLetter'
 import type { Segment } from '../data/redLetter'
 import type { WordHighlight } from './WordStudyPanel'
@@ -82,17 +85,18 @@ export const HIGHLIGHT_COLORS = [
 ]
 
 const TRANS_GROUPS: { label: string; items: string[] }[] = [
-  { label: 'English',              items: ['KJV', 'BSB', 'ASV', 'WEB'] },
+  { label: 'English',              items: ['KJV', 'ESV', 'BSB', 'ASV', 'WEB'] },
   { label: 'English Interlinear',  items: ['KJV+', 'I_KJV+'] },
   { label: 'Greek OT (Septuagint)', items: ['LXX', 'E_LXX'] },
   { label: 'Hebrew OT',            items: ['WLC', 'DSS'] },
   { label: 'Greek NT',             items: ['SBLGNT', 'TAGNT', 'TR'] },
 ]
 
-function TranslationDropdown({ value, options, onChange }: {
+function TranslationDropdown({ value, options, onChange, onSetupEsv }: {
   value: string
   options: string[]
   onChange: (t: string) => void
+  onSetupEsv?: () => void
 }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -136,6 +140,14 @@ function TranslationDropdown({ value, options, onChange }: {
               </div>
             )
           })}
+          {onSetupEsv && options.includes('ESV') && (
+            <button
+              className="trans-dropdown-setup"
+              onClick={() => { setOpen(false); onSetupEsv() }}
+            >
+              Set up the ESV…
+            </button>
+          )}
         </div>
       )}
     </div>
@@ -304,8 +316,7 @@ function VerseRow({ book, chapter, verseNum, text, compareText, compareTrans, se
   const refs = useCrossRefs(book, chapter, selected ? verseNum : 0, translation)
   const ref = useRef<HTMLDivElement>(null)
 
-  // Strip USFM inline markers e.g. \+w, \+w*, \+add, \+add*
-  const dispText = text.replace(/\\[+]\w+\*?/g, '')
+  const dispText = stripUsfm(text)
 
   useEffect(() => {
     if (selected) ref.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
@@ -506,7 +517,7 @@ function VerseRow({ book, chapter, verseNum, text, compareText, compareTrans, se
           {primaryContent}
           {compareTrans && ANNOTATED_TRANS.has(compareTrans) && compareText ? (
             <span className="verse-text verse-text--compare">
-              {parseKJVPlus(compareText.replace(/\\[+]\w+\*?/g, '')).map((tok, i) => (
+              {parseKJVPlus(stripUsfm(compareText)).map((tok, i) => (
                 <React.Fragment key={i}>
                   <span className={tok.italic ? 'verse-italic' : undefined}>{tok.word}</span>
                   {tok.strongs && (
@@ -554,6 +565,7 @@ interface PassageSectionProps {
   onViewParallels?: (book: string, chapter: number, verse: number) => void
   onBookmarkToggle: (book: string, chapter: number, verse: number, text: string) => void
   onStrongsView?: (strongs: string) => void
+  onSetupEsv: () => void
 }
 
 interface StrongsPopupState {
@@ -570,8 +582,8 @@ function passageLabel(p: PassageRef): string {
   return `${p.book} ${p.chapter}:${p.verseStart}${end}`
 }
 
-function PassageSection({ passage, activeVerse, wordHighlight, redLetterOn, primaryTrans, compareTrans, bookmarkedKeys, onVerseClick, onNavigate, onAddNote, onWordClick, onViewParallels, onBookmarkToggle, onStrongsView }: PassageSectionProps) {
-  const { verses, loading } = useTranslationVerses(primaryTrans, passage.book, passage.chapter)
+function PassageSection({ passage, activeVerse, wordHighlight, redLetterOn, primaryTrans, compareTrans, bookmarkedKeys, onVerseClick, onNavigate, onAddNote, onWordClick, onViewParallels, onBookmarkToggle, onStrongsView, onSetupEsv }: PassageSectionProps) {
+  const { verses, loading, esvError } = useTranslationVerses(primaryTrans, passage.book, passage.chapter)
   const { verses: compareVerses } = useTranslationVerses(compareTrans ?? '', passage.book, passage.chapter)
   const compareMap = new Map(compareVerses.map(v => [v.verse, v.text]))
   const { highlights, setHighlight } = useHighlights(passage.book, passage.chapter)
@@ -641,7 +653,26 @@ function PassageSection({ passage, activeVerse, wordHighlight, redLetterOn, prim
     <div className="passage-section">
       <div className="passage-section-header">{passageLabel(passage)}</div>
       {loading && <div className="panel-loading">Loading...</div>}
-      {!loading && displayed.length === 0 && (
+      {!loading && esvError && (
+        <div className="esv-notice">
+          {esvError.needsKey ? (
+            <>
+              <div className="esv-notice-title">The ESV needs a free key from Crossway</div>
+              <p className="esv-notice-body">
+                The ESV is copyrighted, so it is read through Crossway's own service rather than
+                bundled with the app. Setting it up takes about a minute and costs nothing.
+              </p>
+              <button className="esv-notice-btn" onClick={onSetupEsv}>Set up the ESV</button>
+            </>
+          ) : (
+            <>
+              <div className="esv-notice-title">{esvError.message}</div>
+              <button className="esv-notice-btn" onClick={onSetupEsv}>ESV settings</button>
+            </>
+          )}
+        </div>
+      )}
+      {!loading && !esvError && displayed.length === 0 && (
         <div className="panel-empty">No verses found.</div>
       )}
       {displayed.map(v => (
@@ -677,6 +708,11 @@ function PassageSection({ passage, activeVerse, wordHighlight, redLetterOn, prim
           onStrongsClick={handleStrongsClick}
         />
       ))}
+      {/* Crossway requires the full notice under every displayed ESV chapter. Copied
+          text gets the short " (ESV)" form instead — see CopyRangePopover. */}
+      {displayed.length > 0 && (primaryTrans === 'ESV' || compareTrans === 'ESV') && (
+        <div className="esv-copyright">{ESV_COPYRIGHT}</div>
+      )}
       {contextTarget && (
         <div
           ref={menuRef}
@@ -755,6 +791,7 @@ function PassageSection({ passage, activeVerse, wordHighlight, redLetterOn, prim
           book={passage.book}
           chapter={passage.chapter}
           allVerses={verses}
+          translation={primaryTrans}
           initialVerse={copyTarget.verse}
           anchorRect={copyTarget.rect}
           onClose={() => setCopyTarget(null)}
@@ -838,6 +875,7 @@ const FONT_SIZE_KEY = 'bible-font-size'
 
 export function BiblePanel({ passages, activeVerse, wordHighlight, redLetterOn, onRedLetterToggle, bookmarkedKeys, primaryTrans, compareTrans, availableTranslations, onVerseClick, onNavigate, onAddNote, onWordClick, onViewParallels, onBookmarkToggle, onPrimaryTransChange, onCompareTransChange, onStrongsView }: Props) {
   const otherTrans = availableTranslations.filter(t => t !== primaryTrans)
+  const [esvSetupOpen, setEsvSetupOpen] = useState(false)
   const [dssKeyOpen, setDssKeyOpen] = useState(false)
   const dssKeyRef = useRef<HTMLDivElement>(null)
   const [fontSizeIdx, setFontSizeIdx] = useState(() => {
@@ -863,6 +901,7 @@ export function BiblePanel({ passages, activeVerse, wordHighlight, redLetterOn, 
             value={primaryTrans}
             options={availableTranslations}
             onChange={onPrimaryTransChange}
+            onSetupEsv={() => setEsvSetupOpen(true)}
           />
           {otherTrans.length > 0 && (
             <button
@@ -957,9 +996,11 @@ export function BiblePanel({ passages, activeVerse, wordHighlight, redLetterOn, 
             onViewParallels={onViewParallels}
             onBookmarkToggle={onBookmarkToggle}
             onStrongsView={onStrongsView}
+            onSetupEsv={() => setEsvSetupOpen(true)}
           />
         ))}
       </div>
+      <EsvSetupModal open={esvSetupOpen} onClose={() => setEsvSetupOpen(false)} />
     </div>
   )
 }

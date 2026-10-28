@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { stripUsfm } from '../lib/usfm'
 import type { CrossRef, SelectedVerse } from '../types'
 
 interface Props {
@@ -36,7 +37,7 @@ export function CrossRefsPanel({ selected, onNavigate, translation = 'KJV' }: Pr
           <span className="crossref-location">
             {ref.to_book} {ref.to_chapter}:{ref.to_verse}
           </span>
-          <span className="crossref-verse-text">{ref.text}</span>
+          <span className="crossref-verse-text">{stripUsfm(ref.text)}</span>
         </div>
       ))}
     </div>

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { stripUsfm } from '../lib/usfm'
 import type { CrossRef, SelectedVerse } from '../types'
 
 interface Props {
@@ -60,7 +61,7 @@ export function ParallelModal({ verse, onClose, onNavigate, onAdd }: Props) {
                 }}
               >
                 <span className="result-ref">{r.to_book} {r.to_chapter}:{r.to_verse}</span>
-                <span className="result-text">{r.text}</span>
+                <span className="result-text">{stripUsfm(r.text)}</span>
               </button>
               <button
                 className={`parallel-add-btn${added.has(i) ? ' parallel-add-btn--done' : ''}`}
