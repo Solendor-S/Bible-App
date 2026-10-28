@@ -2,7 +2,7 @@ import { app, BrowserWindow, ipcMain, shell } from 'electron'
 
 import { join } from 'path'
 import { readFileSync, existsSync, mkdirSync, writeFileSync, readdirSync, unlinkSync, renameSync } from 'fs'
-import { homedir, tmpdir } from 'os'
+import { homedir } from 'os'
 import { spawn, execFileSync } from 'child_process'
 import https from 'https'
 import http from 'http'
@@ -341,16 +341,8 @@ ipcMain.handle('ollama:ensureRunning', async () => {
   if (!exe) return { success: false, error: 'Ollama not found. Install it from https://ollama.com' }
 
   try {
-    if (process.platform === 'darwin') {
-      spawn(exe, ['serve'], { detached: true, stdio: 'ignore' }).unref()
-    } else {
-      // WScript.Shell.Run with window style 0 (SW_HIDE) is the most reliable
-      // way to launch a hidden process on Windows — unaffected by execution policy
-      const vbsPath = join(tmpdir(), 'ollama-start.vbs')
-      const safePath = exe.replace(/"/g, '""')
-      writeFileSync(vbsPath, `Set sh = CreateObject("WScript.Shell")\nsh.Run """${safePath}"" serve", 0, False\n`)
-      spawn('wscript.exe', [vbsPath], { detached: true, stdio: 'ignore', windowsHide: true }).unref()
-    }
+    // windowsHide keeps the console window hidden on Windows; detached + unref lets it outlive us
+    spawn(exe, ['serve'], { detached: true, stdio: 'ignore', windowsHide: true }).unref()
   } catch (e: any) {
     return { success: false, error: `Failed to start Ollama: ${e.message}` }
   }

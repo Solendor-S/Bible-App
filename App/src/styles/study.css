@@ -41,7 +41,7 @@ body.font-scope-all { font-family: var(--font-reader, var(--font-sans)); }
 .trans-item-key { font-weight: 600; font-size: 13px; }
 .trans-item-full { font-size: 11px; color: var(--text-muted); }
 .trans-item-note { font-size: 10px; color: var(--text-muted); font-style: italic; }
-.trans-dropdown-menu { max-height: 70vh; overflow-y: auto; min-width: 280px; }
+.trans-dropdown-menu { overflow-y: auto; z-index: 900; }
 
 /* Books dropdown */
 .book-tabs { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 8px; }

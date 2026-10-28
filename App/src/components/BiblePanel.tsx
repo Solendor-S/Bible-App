@@ -49,21 +49,37 @@ function TranslationPicker({ value, onChange, exclude, allowEsv = true, onSetupE
   allowEsv?: boolean
   onSetupEsv?: () => void
 }) {
-  const [open, setOpen] = useState(false)
+  const [pos, setPos] = useState<React.CSSProperties | null>(null)
   const ref = useRef<HTMLDivElement>(null)
-  useOutsideClick(ref, open, () => setOpen(false))
+  useOutsideClick(ref, !!pos, () => setPos(null))
+  // Fixed-position menu, clamped to the window: an absolute one gets clipped by the
+  // scrolling split pane and runs off the right edge.
+  function toggle() {
+    if (pos) { setPos(null); return }
+    const r = ref.current!.getBoundingClientRect()
+    const width = 300, margin = 8
+    const below = window.innerHeight - r.bottom - margin
+    const above = r.top - margin
+    const up = below < 320 && above > below
+    setPos({
+      position: 'fixed', width,
+      left: Math.max(margin, Math.min(r.left, window.innerWidth - width - margin)),
+      ...(up ? { bottom: window.innerHeight - r.top + 4 } : { top: r.bottom + 4 }),
+      maxHeight: Math.min(560, (up ? above : below) - 4),
+    })
+  }
   return (
     <div className="trans-dropdown" ref={ref}>
-      <button className="trans-select trans-dropdown-btn" onClick={() => setOpen(o => !o)} title={TRANSLATION_MAP[value as Translation]?.full}>
+      <button className="trans-select trans-dropdown-btn" onClick={toggle} title={TRANSLATION_MAP[value as Translation]?.full}>
         {TRANSLATION_MAP[value as Translation]?.label ?? value} ▾
       </button>
-      {open && (
-        <div className="trans-dropdown-menu">
+      {pos && (
+        <div className="trans-dropdown-menu" style={pos}>
           {TRANSLATION_GROUPS.map(g => (
             <div key={g.label} className="trans-group">
               <div className="book-group-label">{g.label}</div>
               {g.keys.filter(k => k !== exclude && (allowEsv || !TRANSLATION_MAP[k].apiOnly)).map(k => (
-                <button key={k} className={`trans-item${k === value ? ' trans-item--active' : ''}`} onClick={() => { onChange(k); setOpen(false) }}>
+                <button key={k} className={`trans-item${k === value ? ' trans-item--active' : ''}`} onClick={() => { onChange(k); setPos(null) }}>
                   <span className="trans-item-key">{TRANSLATION_MAP[k].label}</span>
                   <span className="trans-item-full">{TRANSLATION_MAP[k].full}</span>
                   {INCOMPLETE_DATASET_NOTE[k] && <span className="trans-item-note">{INCOMPLETE_DATASET_NOTE[k]}</span>}
@@ -72,7 +88,7 @@ function TranslationPicker({ value, onChange, exclude, allowEsv = true, onSetupE
             </div>
           ))}
           {allowEsv && onSetupEsv && (
-            <button className="trans-dropdown-setup" onClick={() => { setOpen(false); onSetupEsv() }}>Set up the ESV…</button>
+            <button className="trans-dropdown-setup" onClick={() => { setPos(null); onSetupEsv() }}>Set up the ESV…</button>
           )}
         </div>
       )}
