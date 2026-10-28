@@ -15,6 +15,15 @@ async function fatherOnVerse(father: string, book: string, chapter: number, vers
   return e && e.book === book && e.chapter === chapter && e.verse === verse ? e : null
 }
 
+/** Cancel a request when the model has sent nothing at all (no thoughts, no text) for this long. */
+const STALL_MS = 120_000
+const PHASE_LABEL: Record<string, (who: string) => string> = {
+  searching: () => 'Searching the library for relevant verses and fathers…',
+  starting: () => 'Starting Ollama…',
+  waiting: who => `Waiting for ${who} to respond…`,
+  thinking: who => `${who} is thinking…`,
+  writing: who => `${who} is writing…`,
+}
 const AI_PANEL_MIN = 200
 const AI_PANEL_DEFAULT = 320
 const GEMINI_KEY_STORAGE = 'gemini-api-key'
@@ -41,6 +50,11 @@ export function AiPanel({ height, activeVerse, onHeightChange, onNavigate, onSho
   const [aiMode, setAiMode] = useState<'scholar' | 'context'>('scholar')
   const [streaming, setStreaming] = useState(false)
   const [streamingContent, setStreamingContent] = useState('')
+  // What the model is doing right now — so a long think doesn't look like a hang
+  const [phase, setPhase] = useState<'searching' | 'starting' | 'waiting' | 'thinking' | 'writing' | null>(null)
+  const [thoughts, setThoughts] = useState('')
+  const [elapsed, setElapsed] = useState(0)
+  const abortRef = useRef<{ ctrl: AbortController; reason: 'stopped' | 'timeout' | null } | null>(null)
   const [provider, setProvider] = useState<Provider>(() =>
     (localStorage.getItem(PROVIDER_STORAGE) as Provider) ?? 'ollama'
   )
@@ -163,6 +177,24 @@ export function AiPanel({ height, activeVerse, onHeightChange, onNavigate, onSho
     window.addEventListener('mouseup', onUp)
   }
 
+  useEffect(() => {
+    if (!streaming) return
+    const start = Date.now()
+    setElapsed(0)
+    const id = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - start) / 1000))
+      const a = abortRef.current
+      if (a && Date.now() - lastActivity.current > STALL_MS) { a.reason = 'timeout'; a.ctrl.abort() }
+    }, 1000)
+    return () => clearInterval(id)
+  }, [streaming])
+  const lastActivity = useRef(0)
+
+  function stop() {
+    const a = abortRef.current
+    if (a) { a.reason = 'stopped'; a.ctrl.abort() }
+  }
+
   async function handleSend() {
     const text = input.trim()
     if (!text || streaming) return
@@ -183,9 +215,15 @@ export function AiPanel({ height, activeVerse, onHeightChange, onNavigate, onSho
     setInput('')
     setStreaming(true)
     setStreamingContent('')
+    setThoughts('')
+    const abort = { ctrl: new AbortController(), reason: null as 'stopped' | 'timeout' | null }
+    abortRef.current = abort
+    lastActivity.current = Date.now()
+    const onThought = (t: string) => { lastActivity.current = Date.now(); setPhase('thinking'); setThoughts(prev => prev + t) }
 
     let contextLines: string[] = []
     if (aiMode === 'scholar') {
+      setPhase('searching')
       try {
         const [verses, commentaryResults] = await Promise.all([
           searchVerses(bibleDb, text, 'KJV', [], 5, true),
@@ -225,14 +263,17 @@ export function AiPanel({ height, activeVerse, onHeightChange, onNavigate, onSho
           })),
           { role: 'user' as const, content: userContent },
         ]
-        for await (const chunk of streamGemini(geminiMessages, systemPrompt, geminiModel, geminiKey)) {
+        setPhase('waiting')
+        lastActivity.current = Date.now()
+        for await (const chunk of streamGemini(geminiMessages, systemPrompt, geminiModel, geminiKey, { signal: abort.ctrl.signal, onThought })) {
+          lastActivity.current = Date.now()
+          setPhase('writing')
           fullContent += chunk
           setStreamingContent(fullContent)
         }
       } else {
-        setStreamingContent('Starting AI Scholar…')
+        setPhase('starting')
         const ollamaStatus = await window.api.ensureOllama()
-        setStreamingContent('')
         if (!ollamaStatus.success) throw new Error(ollamaStatus.error ?? 'Could not start Ollama.')
         if (!ollamaStatus.alreadyRunning) await new Promise(r => setTimeout(r, 800))
 
@@ -241,18 +282,27 @@ export function AiPanel({ height, activeVerse, onHeightChange, onNavigate, onSho
           ...newMessages.slice(0, -1).map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),
           { role: 'user' as const, content: userContent },
         ]
-        for await (const chunk of streamChat(ollamaMessages, selectedModel)) {
+        setPhase('waiting')
+        lastActivity.current = Date.now()
+        for await (const chunk of streamChat(ollamaMessages, selectedModel, { signal: abort.ctrl.signal, onThought })) {
+          lastActivity.current = Date.now()
+          setPhase('writing')
           fullContent += chunk
           setStreamingContent(fullContent)
         }
       }
     } catch (err: any) {
       const msg = err?.message ?? ''
-      if (provider === 'gemini') {
+      if (abort.reason === 'stopped') {
+        fullContent = (fullContent ? fullContent + '\n\n' : '') + '_Stopped._'
+      } else if (abort.reason === 'timeout') {
+        fullContent = (fullContent ? fullContent + '\n\n' : '') +
+          `⚠️ No response from ${provider === 'gemini' ? 'Gemini' : 'Ollama'} for ${STALL_MS / 60000} minutes, so the request was cancelled. Try again, or pick a lighter model.`
+      } else if (provider === 'gemini') {
         if (msg.includes('API_KEY_INVALID') || msg.includes('400')) {
           fullContent = `⚠️ Invalid Gemini API key. Click **API Key** to update it.`
         } else if (msg.includes('429') || msg.includes('quota')) {
-          fullContent = `⚠️ Gemini rate limit reached. Free tier: 2.5 Flash allows 1,500 requests/day and 15/minute. Try again shortly or switch to a less-used model.`
+          fullContent = `⚠️ Gemini free-tier rate limit reached. Wait a minute, or switch to another model (each has its own limit — see aistudio.google.com/rate-limit).`
         } else {
           fullContent = `⚠️ Gemini error: ${msg}`
         }
@@ -280,6 +330,8 @@ export function AiPanel({ height, activeVerse, onHeightChange, onNavigate, onSho
     setMessages(finalMessages)
     setStreaming(false)
     setStreamingContent('')
+    setPhase(null)
+    abortRef.current = null
 
     const sessionId = activeSessionId ?? crypto.randomUUID()
     const existingSession = sessions.find(s => s.id === sessionId)
@@ -344,7 +396,20 @@ export function AiPanel({ height, activeVerse, onHeightChange, onNavigate, onSho
                 alwaysLinkCitations={alwaysLinkCitations}
               />
             ))}
-            {streaming && (
+            {streaming && phase && (
+              <div className={`ai-status ai-status--${phase}`}>
+                <span className="ai-status-dot" />
+                <span className="ai-status-label">{PHASE_LABEL[phase](provider === 'gemini' ? 'Gemini' : 'Ollama')}</span>
+                <span className="ai-status-time">{elapsed}s</span>
+                {thoughts && (
+                  <details className="ai-thoughts" open={phase === 'thinking'}>
+                    <summary>Thought summary</summary>
+                    <div className="ai-thoughts-body">{thoughts}</div>
+                  </details>
+                )}
+              </div>
+            )}
+            {streaming && streamingContent && (
               <AiChatMessage
                 key="streaming"
                 message={{ id: 'streaming', role: 'assistant', content: streamingContent, timestamp: Date.now() }}
@@ -388,14 +453,11 @@ export function AiPanel({ height, activeVerse, onHeightChange, onNavigate, onSho
                 rows={2}
                 disabled={streaming}
               />
-              <button
-                className="ai-send-btn"
-                onClick={handleSend}
-                disabled={streaming || !input.trim()}
-                title="Send (Enter)"
-              >
-                {streaming ? '…' : '↑'}
-              </button>
+              {streaming ? (
+                <button className="ai-send-btn ai-send-btn--stop" onClick={stop} title="Stop">■</button>
+              ) : (
+                <button className="ai-send-btn" onClick={handleSend} disabled={!input.trim()} title="Send (Enter)">↑</button>
+              )}
             </div>
             <div className="ai-model-bar">
               <div className="ai-provider-toggle">

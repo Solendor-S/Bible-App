@@ -21,11 +21,16 @@ export interface OllamaMessage {
   content: string
 }
 
-export async function* streamChat(messages: OllamaMessage[], model: string = DEFAULT_MODEL): AsyncGenerator<string> {
+export async function* streamChat(
+  messages: OllamaMessage[],
+  model: string = DEFAULT_MODEL,
+  { signal, onThought }: { signal?: AbortSignal; onThought?: (text: string) => void } = {},
+): AsyncGenerator<string> {
   const response = await fetch(OLLAMA_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model, messages, stream: true })
+    body: JSON.stringify({ model, messages, stream: true }),
+    signal,
   })
 
   if (!response.ok) {
@@ -46,6 +51,8 @@ export async function* streamChat(messages: OllamaMessage[], model: string = DEF
       if (!line.trim()) continue
       try {
         const json = JSON.parse(line)
+        // Thinking models (qwen3, gemma4…) stream their reasoning in message.thinking
+        if (json?.message?.thinking) onThought?.(json.message.thinking)
         const delta = json?.message?.content
         if (delta) yield delta
       } catch {

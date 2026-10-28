@@ -36,6 +36,20 @@ export function buildFallbackSearchUrl(fatherName: string, workTitle: string): s
   return `https://www.google.com/search?q=${q}+site:newadvent.org+OR+site:ccel.org+OR+site:tertullian.org`
 }
 
+export interface StreamOptions {
+  signal?: AbortSignal
+  /** Thought-summary text from thinking models, as it arrives. */
+  onThought?: (text: string) => void
+}
+
+interface GeminiPart { text?: string; thought?: boolean }
+
+/** Answer text of a response — every non-thought part. Thinking models often put a
+ *  thought or signature part first, so reading parts[0] alone returns nothing. */
+function answerText(parts: GeminiPart[] | undefined): string {
+  return (parts ?? []).filter(p => !p.thought && p.text).map(p => p.text).join('')
+}
+
 export async function fetchGeminiOnce(
   prompt: string,
   model: string,
@@ -44,7 +58,8 @@ export async function fetchGeminiOnce(
   const url = `${BASE}/${model}:generateContent?key=${apiKey}`
   const body = {
     contents: [{ role: 'user', parts: [{ text: prompt }] }],
-    generationConfig: { temperature: 0, maxOutputTokens: 200 },
+    // Headroom for thinking models: thought tokens count against maxOutputTokens
+    generationConfig: { temperature: 0, maxOutputTokens: 2048 },
   }
   const response = await fetch(url, {
     method: 'POST',
@@ -53,7 +68,15 @@ export async function fetchGeminiOnce(
   })
   if (!response.ok) throw new Error(`Gemini ${response.status}`)
   const json = await response.json()
-  return (json?.candidates?.[0]?.content?.parts?.[0]?.text ?? '').trim()
+  return answerText(json?.candidates?.[0]?.content?.parts).trim()
+}
+
+const FINISH_REASON_MESSAGE: Record<string, string> = {
+  SAFETY: 'Gemini withheld the answer under its safety filter. Try rephrasing the question.',
+  RECITATION: 'Gemini stopped because the answer would quote a source too closely. Try rephrasing.',
+  MAX_TOKENS: 'Gemini used its whole output budget thinking and returned no answer. Try a narrower question.',
+  PROHIBITED_CONTENT: 'Gemini declined to answer this request.',
+  BLOCKLIST: 'Gemini declined to answer this request.',
 }
 
 export async function* streamGemini(
@@ -61,6 +84,7 @@ export async function* streamGemini(
   systemPrompt: string,
   model: string,
   apiKey: string,
+  { signal, onThought }: StreamOptions = {},
 ): AsyncGenerator<string> {
   const url = `${BASE}/${model}:streamGenerateContent?alt=sse&key=${apiKey}`
 
@@ -70,13 +94,14 @@ export async function* streamGemini(
       role: m.role,
       parts: [{ text: m.content }],
     })),
-    generationConfig: { temperature: 0.7 },
+    generationConfig: { temperature: 0.7, thinkingConfig: { includeThoughts: true } },
   }
 
   const response = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
+    signal,
   })
 
   if (!response.ok) {
@@ -92,6 +117,8 @@ export async function* streamGemini(
   const reader = response.body!.getReader()
   const decoder = new TextDecoder()
   let buffer = ''
+  let gotText = false
+  let finishReason = ''
 
   while (true) {
     const { done, value } = await reader.read()
@@ -100,14 +127,22 @@ export async function* streamGemini(
     const lines = buffer.split('\n')
     buffer = lines.pop() ?? ''
     for (const line of lines) {
-      if (!line.startsWith('data: ')) continue
-      const data = line.slice(6).trim()
-      if (data === '[DONE]') return
-      try {
-        const json = JSON.parse(data)
-        const text = json?.candidates?.[0]?.content?.parts?.[0]?.text
-        if (text) yield text
-      } catch { /* ignore malformed */ }
+      if (!line.startsWith('data:')) continue
+      const data = line.slice(5).trim()
+      if (data === '[DONE]') break
+      let json: any
+      try { json = JSON.parse(data) } catch { continue }
+      const cand = json?.candidates?.[0]
+      if (json?.promptFeedback?.blockReason) finishReason = json.promptFeedback.blockReason
+      if (cand?.finishReason) finishReason = cand.finishReason
+      for (const part of (cand?.content?.parts ?? []) as GeminiPart[]) {
+        if (!part.text) continue
+        if (part.thought) onThought?.(part.text)
+        else { gotText = true; yield part.text }
+      }
     }
+  }
+  if (!gotText) {
+    throw new Error(FINISH_REASON_MESSAGE[finishReason] ?? `Gemini returned no answer${finishReason ? ` (${finishReason})` : ''}.`)
   }
 }
