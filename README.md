@@ -10,27 +10,24 @@ Grab the installer for your platform from the **[latest release](https://github.
 
 ## Features
 
-- **KJV Bible** — full text, navigable by book/chapter/verse with browser-style back/forward history
-- **Book browser** — dropdown grouped by category (Torah, Gospels, Epistles, Prophets, etc.) alongside the passage search bar
-- **Church Fathers commentary** — 59,000+ entries from catenabible.com, CCEL Catena Aurea, and hand-curated sources; shown per verse, sorted chronologically
-- **Overview tab** — verse notes, chapter summaries with themes, and pericope (passage grouping) context sourced from bibleref.com
-- **Word study** — click any word to see the underlying Greek (NT) or Hebrew (OT) with Strongs concordance, BDB/Thayer's lexicon entries, morphology, and textual variants
-- **Cross-references** — related verses shown inline per selected verse
-- **Parallel translations** — compare two translations side by side
-- **Concordance** — search every occurrence of any word across the Bible
-- **Nave's Topical Bible** — browse topics linked to any verse
-- **Apocrypha** — full text of deuterocanonical books
-- **Historical context** — Josephus (*Antiquities* and *Jewish War*) keyed to verses
-- **Maps** — biblical geography referenced to the selected passage
-- **Councils & Heresies** — reference tables of ecumenical councils and early church heresies
-- **Verse highlights** — color-code verses (Important, Conviction, Promise, Blessing)
-- **Bookmarks** — save and revisit any verse
-- **Notes** — attach personal notes to verses, organised in notebooks
-- **Search** — full-text search across verses and Fathers commentary
-- **Red-letter mode** — toggle Christ's words in red
-- **AI Scholar** — ask questions about the text and Fathers using a local Ollama model
-- **Chat sessions** — persistent AI conversation history
-- **Built-in updater** — check and apply updates from within the app
+**Reading**
+- **19 translations + ESV** — KJV, KJV+ / I_KJV+ (Strong's), ASV, WEB, BSB, ESV (free Crossway key), SBLGNT, TAGNT, TR / TR+, TAHOT, WLC / WLC+, Dead Sea Scrolls, LXX / LXX+, Brenton and Apostolic Bible English LXX
+- **Parallel column and split view** — a second translation beside the text, or a second passage side by side
+- **Apocrypha and 22 early church texts** — Deuterocanon, broader and Ethiopian canons; Didache, 1–2 Clement, Ignatius, Polycarp, Barnabas, Diognetus, Justin, Tertullian, Irenaeus' *Against Heresies* — with their scripture references
+- **Reading aids** — red letter, reading mode (prose), focus mode, OT quotations in capitals, psalm headings, KJV / BSB / Brenton footnotes, OT cross-reference markers, book introductions
+- **Strong's everywhere** — click a tag for the entry, every occurrence, its English renderings, or a full word study
+
+**Study panel** (drag tabs to reorder)
+- **Church Fathers** — 60,000+ hand-picked New Advent citations (55 fathers) plus an 80,000-entry legacy archive; consensus by tradition, corpus search, browse by father with an influence network
+- **Words** — interlinear Greek/Hebrew/LXX from six sources, Strong's, Thayer's/BDB, morphology, scripture index
+- **Aquinas** — Catena Aurea on the Gospels, the Summa Theologica and Contra Gentiles, a Thomistic metaphysics primer
+- **Doctrine** — how 13 doctrines developed, the fathers grouped by era
+- **Cross-Refs, Overview, Historical** (Josephus, extra-biblical sources, textual variants), **Topics** (Nave's)
+- **Church History** — councils, heresies, schisms, creeds, persecutions, canon formation, a unified timeline
+- **Map** — biblical journeys, where the fathers lived, and the letters they sent
+- **Library** — reading plans (templates or custom, streaks, calendar), bookmarks, highlights, notes in notebooks, reading history
+
+**Also** — full search (exact / fuzzy / phrase / all words, Greek and Hebrew script, Strong's numbers, scopes, per-book breakdown), three themes, font and spacing settings, a first-run tour, the optional **AI Scholar** (local Ollama or Gemini), and automatic updates.
 
 ## Install
 
@@ -106,9 +103,10 @@ If Ollama isn't running, the rest of the app works fine without it.
 
 | Source | Entries | Notes |
 |--------|---------|-------|
-| [catenabible.com](https://www.catenabible.com) | ~52,700 | Scraped via their API |
-| [CCEL Catena Aurea](https://www.ccel.org) | ~6,600 | Aquinas's compilation of Fathers on the Gospels |
-| Hand-curated | ~55 | Selected patristic excerpts |
+| [New Advent](https://www.newadvent.org/fathers/) | 60,376 | Citations parsed from tagged scripture links, 55 fathers |
+| Legacy archive (catenabible.com, CCEL, HCF, e-Catena) | 80,404 | Wider range, less tightly matched to each verse |
+| Catena Aurea (Parker/Newman 1841) | 70,085 | Aquinas's compilation on the Gospels |
+| Summa Theologica (1920) / Contra Gentiles (Rickaby 1905) | 4,082 articles | Public domain translations |
 
 ### Word Study
 
@@ -135,22 +133,16 @@ If Ollama isn't running, the rest of the app works fine without it.
 
 ## Rebuilding the Database
 
-The compiled database (`App/data/bible.db`) is included via Git LFS. To rebuild from source:
+The compiled database (`App/data/bible.db`, Git LFS) is built from the Android app's
+(Patristica) databases — its bundled core plus every downloadable pack — with Nave's added:
 
 ```bash
 cd App
-npm run build-db                # Rebuild from included raw data files
-npm run fetch-catenabible-api   # Re-scrape catenabible.com (slow)
-npm run fetch-ccel              # Re-fetch CCEL Catena Aurea
-npm run fetch-all               # Fetch all + rebuild
+npm run import-android   # reads C:/Projects/BibleAndroidApp/Patristica read-only; self-checks row counts
 ```
 
-To re-scrape bibleref.com overview data:
-```bash
-npm run scrape-bibleref-test    # Genesis only (~25 min, for testing)
-npm run scrape-bibleref         # Full Bible (~8–9 hours)
-npm run scrape-bibleref-resume  # Resume interrupted scrape
-```
+The older desktop scrape pipeline (`npm run build-db`, `fetch-*`, `scrape-*`) still exists but
+produces the previous, smaller dataset — prefer `import-android`.
 
 ## Building a Distributable
 
@@ -170,5 +162,5 @@ Installers are written to `App/dist-installer/`. Auto-update is wired to GitHub 
 ## Tech Stack
 
 - **Electron** + **Vite** + **React** + **TypeScript**
-- **sql.js** (SQLite compiled to WebAssembly) for the database
+- **better-sqlite3** — read-only `bible.db` plus a per-user `user.db` (bookmarks, notes, plans, settings)
 - **Ollama** (local) for AI inference
