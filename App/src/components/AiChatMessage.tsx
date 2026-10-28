@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import type { ChatMessage, ResolvedCitation } from '../types'
-import { lookupWorkByTitle } from '../lib/sourceLinks'
+import { lookupWorkByTitle } from '../lib/aiWorkLinks'
 import { buildFallbackSearchUrl } from '../lib/geminiClient'
 
 interface CitationPopup {
@@ -142,7 +142,7 @@ export function AiChatMessage({ message, streaming, onNavigateVerse, onNavigateF
           <div className="citation-popup-work">{popup.workTitle}</div>
           <button
             className="citation-popup-link"
-            onClick={() => { window.bibleApi.openExternal(popup.url); setPopup(null) }}
+            onClick={() => { window.api.openExternal(popup.url); setPopup(null) }}
           >
             {linkLabel(popup.url)}
           </button>

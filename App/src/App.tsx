@@ -1,318 +1,254 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { NavigationBar } from './components/NavigationBar'
 import { BiblePanel } from './components/BiblePanel'
 import { CommentaryPanel } from './components/CommentaryPanel'
 import type { RightTab } from './components/CommentaryPanel'
+import type { LibraryTab } from './components/LibraryPanel'
 import { SearchModal } from './components/SearchModal'
 import { ConcordanceModal } from './components/ConcordanceModal'
 import { ParallelModal } from './components/ParallelModal'
 import { ChangelogModal } from './components/ChangelogModal'
+import { SettingsModal } from './components/SettingsModal'
+import { TutorialModal } from './components/TutorialModal'
+import { ScripturePreviewModal } from './components/ScripturePreviewModal'
+import type { PreviewTarget } from './components/ScripturePreviewModal'
 import { AiPanel } from './components/AiPanel'
 import { AddNoteModal } from './components/AddNoteModal'
 import type { NoteTarget } from './components/AddNoteModal'
-import { ApocryphaPanel } from './components/ApocryphaPanel'
-import { EarlyTextsPanel } from './components/EarlyTextsPanel'
 import { parsePassage } from './lib/parsePassage'
-import { sqlTranslation } from './lib/esv'
-import type { WordHighlight } from './components/WordStudyPanel'
-import type { Bookmark, CommentarySearchResult, PassageRef, SelectedVerse } from './types'
+import type { WordHighlight } from './lib/wordHighlight'
+import { userDb } from './db/sqlite'
+import { getBookmarks } from './db/queries'
+import type { CommentaryEntryWithRef } from './db/queries'
+import { usePref, usePrefs } from './context/Prefs'
+import { isValidTranslation, sqlTranslation } from './data/translations'
+import type { PassageRef, SelectedVerse } from './types'
 import './styles/theme.css'
+import './styles/study.css'
 
-const DEFAULT_PASSAGES: PassageRef[] = [{ book: 'John', chapter: 1, raw: 'John 1' }]
-const DEFAULT_ACTIVE: SelectedVerse = { book: 'John', chapter: 1, verse: 1 }
 const AI_PANEL_DEFAULT = 320
+const LINE_HEIGHT = { compact: 1.45, normal: 1.65, relaxed: 1.9, spacious: 2.25 }
+const FONT_STACK = {
+  serif: "Georgia, 'Times New Roman', serif",
+  default: "'Segoe UI', system-ui, sans-serif",
+  sans: "'Segoe UI', system-ui, sans-serif",
+  light: "'Segoe UI Light', 'Segoe UI', system-ui, sans-serif",
+  condensed: "'Arial Narrow', 'Roboto Condensed', sans-serif-condensed, sans-serif",
+  mono: "Consolas, 'Courier New', monospace",
+}
+const TITLEBAR = { dark: ['#1e1e1e', '#9ca3af'], light: ['#ede8de', '#5a5040'], highContrast: ['#0a0a0a', '#dddddd'] } as const
 
-type NavEntry = { book: string; chapter: number; verse: number }
+type NavEntry = SelectedVerse
+
+function initialPassages(startupMode: string, last: string): PassageRef[] {
+  const parsed = startupMode === 'resume' && last ? parsePassage(last) : []
+  return parsed.length ? parsed : parsePassage('John 1')
+}
 
 export default function App() {
-  const [passages, setPassages] = useState<PassageRef[]>(DEFAULT_PASSAGES)
-  const [activeVerse, setActiveVerse] = useState<SelectedVerse>(DEFAULT_ACTIVE)
+  const { prefs, set } = usePrefs()
+  const [passages, setPassages] = useState<PassageRef[]>(() => initialPassages(prefs.startup_mode, prefs.last_passage))
+  const [activeVerse, setActiveVerse] = useState<SelectedVerse>(() => ({ book: passages[0].book, chapter: passages[0].chapter, verse: passages[0].verseStart ?? 1 }))
+  const [navHistory, setNavHistory] = useState<NavEntry[]>([activeVerse])
+  const [navIdx, setNavIdx] = useState(0)
+  const navRef = useRef({ idx: 0, history: navHistory })
+  navRef.current = { idx: navIdx, history: navHistory }
+
+  const [rightTab, setRightTab] = useState<RightTab>('fathers')
+  const [libraryTab, setLibraryTab] = useState<LibraryTab>('plans')
   const [searchOpen, setSearchOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [changelog, setChangelog] = useState<{ only?: string } | null>(null)
+  const [tutorialOpen, setTutorialOpen] = useState(!prefs.onboarding_done)
   const [aiPanelHeight, setAiPanelHeight] = useState(0)
-  const [featuredEntry, setFeaturedEntry] = useState<CommentarySearchResult | null>(null)
+  const [featuredEntry, setFeaturedEntry] = useState<CommentaryEntryWithRef | null>(null)
   const [updateInfo, setUpdateInfo] = useState<{ current: string; latest: string } | null>(null)
-  const [rightTab, setRightTab] = useState<RightTab>('commentary')
   const [wordHighlight, setWordHighlight] = useState<WordHighlight | null>(null)
-  const [changelogOpen, setChangelogOpen] = useState(false)
   const [noteTarget, setNoteTarget] = useState<NoteTarget | null>(null)
-  const [notesRefreshToken, setNotesRefreshToken] = useState(0)
-  const [leftTab, setLeftTab] = useState<'canon' | 'apocrypha' | 'early'>('canon')
   const [concordanceWord, setConcordanceWord] = useState<string | null>(null)
   const [jumpToStrongs, setJumpToStrongs] = useState<string | null>(null)
-  const [redLetterOn, setRedLetterOn] = useState(true)
   const [parallelVerse, setParallelVerse] = useState<SelectedVerse | null>(null)
-  const [navHistory, setNavHistory] = useState<NavEntry[]>([DEFAULT_ACTIVE])
-  const [navIdx, setNavIdx] = useState(0)
-  const navIdxRef = useRef(navIdx)
-  const navHistoryRef = useRef(navHistory)
-  useEffect(() => { navIdxRef.current = navIdx }, [navIdx])
-  useEffect(() => { navHistoryRef.current = navHistory }, [navHistory])
-  const [bookmarks, setBookmarks] = useState<Bookmark[]>([])
-  const bookmarkedKeys = useMemo(
-    () => new Set(bookmarks.map(b => `${b.book}|${b.chapter}|${b.verse}`)),
-    [bookmarks]
-  )
-  const [primaryTrans, setPrimaryTrans] = useState('KJV')
-  const [compareTrans, setCompareTrans] = useState<string | null>(null)
-  const [availableTranslations, setAvailableTranslations] = useState<string[]>(['KJV'])
-  // Search, concordance and cross-refs all query SQLite, where the ESV has no rows —
-  // they fall back to the KJV rather than returning silently empty results.
-  const sqlTrans = sqlTranslation(primaryTrans)
+  const [preview, setPreview] = useState<PreviewTarget | null>(null)
+  const [browseFather, setBrowseFather] = useState<string | null>(null)
+  const [userVersion, setUserVersion] = useState(0)
+  const [bookmarkedKeys, setBookmarkedKeys] = useState<Set<string>>(new Set())
+  const [theme] = usePref('theme')
+  const [fontSize] = usePref('font_size')
+  const [lineSpacing] = usePref('line_spacing')
+  const [fontFamily] = usePref('font_family')
+  const [fontScope] = usePref('font_scope')
+  const [translation] = usePref('last_used_translation')
 
+  const bumpUser = useCallback(() => setUserVersion(v => v + 1), [])
+
+  // Startup translation (Android: "Same as left off" or a fixed one)
   useEffect(() => {
-    window.bookmarksApi.getAll().then(setBookmarks)
-    window.translationsApi.getList().then(list => {
-      // ESV is virtual: it lives behind Crossway's API, never in bible.db, so
-      // translations:getList can't find it. Appended here instead.
-      if (list.length > 0) setAvailableTranslations(['KJV', ...list, 'ESV'])
+    if (prefs.startup_translation !== 'last' && isValidTranslation(prefs.startup_translation)) set('last_used_translation', prefs.startup_translation)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // What's New: once per installed version, after the first-run tour has been seen
+  useEffect(() => {
+    window.api.getVersion().then(v => {
+      if (!prefs.onboarding_done) { set('whats_new_seen', v); return }
+      if (prefs.whats_new_seen !== v) { set('whats_new_seen', v); setChangelog({ only: v }) }
     })
-  }, [])
-
-  function bookmarkFilter(book: string, chapter: number, verse: number) {
-    return (b: Bookmark) => !(b.book === book && b.chapter === chapter && b.verse === verse)
-  }
-
-  async function handleBookmarkToggle(book: string, chapter: number, verse: number, text: string) {
-    const key = `${book}|${chapter}|${verse}`
-    if (bookmarkedKeys.has(key)) {
-      await window.bookmarksApi.remove(book, chapter, verse)
-      setBookmarks(bs => bs.filter(bookmarkFilter(book, chapter, verse)))
-    } else {
-      const bm: Bookmark = {
-        id: `${book}|${chapter}|${verse}`,
-        book, chapter, verse,
-        verseText: text,
-        createdAt: Date.now(),
-      }
-      await window.bookmarksApi.add(bm)
-      setBookmarks(bs => [bm, ...bs])
-    }
-  }
-
-  async function handleBookmarkRemove(book: string, chapter: number, verse: number) {
-    await window.bookmarksApi.remove(book, chapter, verse)
-    setBookmarks(bs => bs.filter(bookmarkFilter(book, chapter, verse)))
-  }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    window.bibleApi.onUpdateAvailable((info) => setUpdateInfo(info))
-  }, [])
+    getBookmarks(userDb).then(bs => setBookmarkedKeys(new Set(bs.map(b => `${b.book}|${b.chapter}|${b.verse}`))))
+  }, [userVersion])
 
+  useEffect(() => { set('last_passage', passages.map(p => p.raw).filter(Boolean).join('; ')) }, [passages, set])
+
+  // Theme + reading typography
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'f') { e.preventDefault(); setSearchOpen(true) }
-      if (e.altKey && e.key === 'ArrowLeft') { e.preventDefault(); goBack() }
-      if (e.altKey && e.key === 'ArrowRight') { e.preventDefault(); goForward() }
-    }
-    window.addEventListener('keydown', handler)
-    return () => window.removeEventListener('keydown', handler)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+    document.documentElement.dataset.theme = theme
+    const [bg, fg] = TITLEBAR[theme] ?? TITLEBAR.dark
+    window.api.setTitleBarColors(bg, fg)
+  }, [theme])
+  useEffect(() => {
+    const s = document.documentElement.style
+    s.setProperty('--verse-font-size', `${fontSize}px`)
+    s.setProperty('--verse-line-height', String(LINE_HEIGHT[lineSpacing] ?? 1.65))
+    s.setProperty('--font-reader', FONT_STACK[fontFamily] ?? FONT_STACK.serif)
+    document.body.classList.toggle('font-scope-all', fontScope === 'all')
+  }, [fontSize, lineSpacing, fontFamily, fontScope])
+
+  useEffect(() => { window.api.onUpdateAvailable(setUpdateInfo) }, [])
 
   function applyLocation(book: string, chapter: number, verse: number) {
     setPassages(parsePassage(`${book} ${chapter}`))
     setActiveVerse({ book, chapter, verse })
-    setSearchOpen(false)
     setFeaturedEntry(null)
     setWordHighlight(null)
   }
 
-  function handleNavigate(book: string, chapter: number, verse: number) {
+  const handleNavigate = useCallback((book: string, chapter: number, verse: number) => {
     applyLocation(book, chapter, verse)
-    setNavHistory(h => [...h.slice(0, navIdx + 1), { book, chapter, verse }])
-    setNavIdx(i => i + 1)
-  }
+    const { idx, history } = navRef.current
+    setNavHistory([...history.slice(0, idx + 1), { book, chapter, verse }])
+    setNavIdx(idx + 1)
+  }, [])
 
-  function goBack() {
-    const idx = navIdxRef.current
-    const history = navHistoryRef.current
-    if (idx <= 0) return
-    const entry = history[idx - 1]
-    setNavIdx(i => i - 1)
+  const goHistory = useCallback((delta: number) => {
+    const { idx, history } = navRef.current
+    const entry = history[idx + delta]
+    if (!entry) return
+    setNavIdx(idx + delta)
     applyLocation(entry.book, entry.chapter, entry.verse)
-  }
-
-  function goForward() {
-    const idx = navIdxRef.current
-    const history = navHistoryRef.current
-    if (idx >= history.length - 1) return
-    const entry = history[idx + 1]
-    setNavIdx(i => i + 1)
-    applyLocation(entry.book, entry.chapter, entry.verse)
-  }
+  }, [])
 
   function handleNavigatePassages(p: PassageRef[]) {
     setPassages(p)
-    if (p.length > 0) {
-      const book = p[0].book
-      const chapter = p[0].chapter
-      const verse = p[0].verseStart ?? 1
-      setActiveVerse({ book, chapter, verse })
-      setFeaturedEntry(null)
-      setWordHighlight(null)
-      setNavHistory(h => [...h.slice(0, navIdxRef.current + 1), { book, chapter, verse }])
-      setNavIdx(i => i + 1)
+    const { book, chapter } = p[0]
+    const verse = p[0].verseStart ?? 1
+    setActiveVerse({ book, chapter, verse })
+    setFeaturedEntry(null)
+    setWordHighlight(null)
+    const { idx, history } = navRef.current
+    setNavHistory([...history.slice(0, idx + 1), { book, chapter, verse }])
+    setNavIdx(idx + 1)
+  }
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'f') { e.preventDefault(); setSearchOpen(true) }
+      if ((e.ctrlKey || e.metaKey) && e.key === ',') { e.preventDefault(); setSettingsOpen(true) }
+      if (e.altKey && e.key === 'ArrowLeft') { e.preventDefault(); goHistory(-1) }
+      if (e.altKey && e.key === 'ArrowRight') { e.preventDefault(); goHistory(1) }
     }
-  }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [goHistory])
 
-  function handleAddContext(book: string, chapter: number, verse: number) {
-    const start = Math.max(1, verse - 2)
-    const end = verse + 4
-    setPassages(p => [...p, { book, chapter, verseStart: start, verseEnd: end, raw: `${book} ${chapter}:${verse}` }])
-  }
+  const selectVerse = useCallback((book: string, chapter: number, verse: number) => {
+    setActiveVerse({ book, chapter, verse }); setFeaturedEntry(null); setWordHighlight(null)
+  }, [])
 
-  function handleViewParallels(book: string, chapter: number, verse: number) {
-    setParallelVerse({ book, chapter, verse })
-  }
+  const addContext = useCallback((book: string, chapter: number, verse: number) => {
+    setPassages(p => [...p, { book, chapter, verseStart: Math.max(1, verse - 2), verseEnd: verse + 4, raw: `${book} ${chapter}:${verse}` }])
+  }, [])
 
-  function toggleAiPanel() {
-    setAiPanelHeight(h => h > 0 ? 0 : AI_PANEL_DEFAULT)
-  }
-
-  function handleStrongsView(strongs: string) {
-    setRightTab('wordstudy')
-    setJumpToStrongs(strongs)
-  }
+  const openWordStudy = useCallback((strongs: string) => { setRightTab('words'); setJumpToStrongs(strongs) }, [])
+  const showEntry = useCallback((e: CommentaryEntryWithRef) => { setFeaturedEntry(e); setRightTab('fathers') }, [])
+  const finishTour = () => { set('onboarding_done', true); setTutorialOpen(false) }
 
   return (
     <div className="app">
       {updateInfo && (
         <div className="update-toast">
-          <svg className="update-toast-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-            <path d="M12 2v10M12 2l-3 3M12 2l3 3"/>
-            <path d="M3 12a9 9 0 1 0 18 0 9 9 0 0 0-18 0" opacity="0.3"/>
-            <path d="M3 12a9 9 0 0 0 9 9" strokeLinecap="round"/>
-          </svg>
-          <span className="update-toast-text">
-            Update ready — <strong>v{updateInfo.latest}</strong>
-          </span>
-          <button
-            className="update-toast-btn"
-            onClick={() => { window.bibleApi.launchUpdater() }}
-          >
-            Restart &amp; Update
-          </button>
-          <button className="update-toast-dismiss" onClick={() => setUpdateInfo(null)} title="Dismiss">
-            ×
-          </button>
+          <span className="update-toast-text">Update ready — <strong>v{updateInfo.latest}</strong></span>
+          <button className="update-toast-btn" onClick={() => window.api.launchUpdater()}>Restart &amp; Update</button>
+          <button className="update-toast-dismiss" onClick={() => setUpdateInfo(null)} title="Dismiss">×</button>
         </div>
       )}
       <NavigationBar
         passages={passages}
         canBack={navIdx > 0}
         canForward={navIdx < navHistory.length - 1}
-        onBack={goBack}
-        onForward={goForward}
+        onBack={() => goHistory(-1)}
+        onForward={() => goHistory(1)}
         onPassagesChange={handleNavigatePassages}
         onSearchOpen={() => setSearchOpen(true)}
-        onChangelogOpen={() => setChangelogOpen(true)}
+        onSettingsOpen={() => setSettingsOpen(true)}
+        onHelpOpen={() => setTutorialOpen(true)}
         aiOpen={aiPanelHeight > 0}
-        onToggleAi={toggleAiPanel}
+        onToggleAi={() => setAiPanelHeight(h => h > 0 ? 0 : AI_PANEL_DEFAULT)}
       />
       <div className="content">
-        <div className="left-panel-wrap">
-          <div className="canon-tab-bar">
-            <button
-              className={`canon-tab-btn${leftTab === 'canon' ? ' canon-tab-btn--active' : ''}`}
-              onClick={() => setLeftTab('canon')}
-            >
-              Canon
-            </button>
-            <button
-              className={`canon-tab-btn${leftTab === 'apocrypha' ? ' canon-tab-btn--active' : ''}`}
-              onClick={() => setLeftTab('apocrypha')}
-            >
-              Apocrypha
-            </button>
-            <button
-              className={`canon-tab-btn${leftTab === 'early' ? ' canon-tab-btn--active' : ''}`}
-              onClick={() => setLeftTab('early')}
-            >
-              Early Texts
-            </button>
-          </div>
-          {leftTab === 'canon' ? (
-            <BiblePanel
-              passages={passages}
-              activeVerse={activeVerse}
-              wordHighlight={wordHighlight}
-              redLetterOn={redLetterOn}
-              onRedLetterToggle={() => setRedLetterOn(v => !v)}
-              bookmarkedKeys={bookmarkedKeys}
-              primaryTrans={primaryTrans}
-              compareTrans={compareTrans}
-              availableTranslations={availableTranslations}
-              onPrimaryTransChange={setPrimaryTrans}
-              onCompareTransChange={setCompareTrans}
-              onVerseClick={(book, chapter, verse) => { setActiveVerse({ book, chapter, verse }); setFeaturedEntry(null); setWordHighlight(null) }}
-              onNavigate={handleNavigate}
-              onAddNote={(book, chapter, verse, text) => setNoteTarget({ book, chapter, verse, text })}
-              onWordClick={word => setConcordanceWord(word)}
-              onViewParallels={handleViewParallels}
-              onBookmarkToggle={handleBookmarkToggle}
-              onStrongsView={handleStrongsView}
-            />
-          ) : leftTab === 'apocrypha' ? (
-            <ApocryphaPanel />
-          ) : (
-            <EarlyTextsPanel />
-          )}
-        </div>
+        <BiblePanel
+          passages={passages}
+          activeVerse={activeVerse}
+          wordHighlight={wordHighlight}
+          bookmarkedKeys={bookmarkedKeys}
+          userVersion={userVersion}
+          onUserChange={bumpUser}
+          onVerseClick={selectVerse}
+          onNavigate={handleNavigate}
+          onAddNote={(book, chapter, verse) => setNoteTarget({ book, chapter, verse })}
+          onWordClick={w => { const word = w.replace(/^[^a-zA-Z']+|[^a-zA-Z']+$/g, ''); if (word) setConcordanceWord(word) }}
+          onViewParallels={(book, chapter, verse) => setParallelVerse({ book, chapter, verse })}
+          onStrongsView={openWordStudy}
+          onBookmarksChanged={bumpUser}
+        />
         <CommentaryPanel
           selected={activeVerse}
-          featuredEntry={featuredEntry}
-          onClearFeatured={() => setFeaturedEntry(null)}
-          onNavigate={handleNavigate}
           rightTab={rightTab}
           onTabChange={setRightTab}
+          onNavigate={handleNavigate}
+          onSelectVerse={selectVerse}
+          onPreview={(book, chapter, verse) => setPreview({ book, chapter, verse })}
+          featuredEntry={featuredEntry}
+          onClearFeatured={() => setFeaturedEntry(null)}
           onWordSelect={setWordHighlight}
-          notesRefreshToken={notesRefreshToken}
-          bookmarks={bookmarks}
-          onBookmarkRemove={handleBookmarkRemove}
-          translation={sqlTrans}
           jumpToStrongs={jumpToStrongs}
           onJumpHandled={() => setJumpToStrongs(null)}
+          libraryTab={libraryTab}
+          onLibraryTab={setLibraryTab}
+          userVersion={userVersion}
+          onUserChange={bumpUser}
+          onEditNote={(book, chapter, verse) => setNoteTarget({ book, chapter, verse })}
+          browseFather={browseFather}
+          onBrowseFather={setBrowseFather}
         />
       </div>
       {aiPanelHeight > 0 && (
-        <AiPanel
-          height={aiPanelHeight}
-          activeVerse={activeVerse}
-          onHeightChange={setAiPanelHeight}
-          onNavigate={handleNavigate}
-          onShowFatherEntry={setFeaturedEntry}
-        />
+        <AiPanel height={aiPanelHeight} activeVerse={activeVerse} onHeightChange={setAiPanelHeight} onNavigate={handleNavigate} onShowFatherEntry={showEntry} />
       )}
-      <SearchModal
-        open={searchOpen}
-        onClose={() => setSearchOpen(false)}
-        onNavigate={loc => handleNavigate(loc.book, loc.chapter, loc.verse)}
-        onAdd={handleAddContext}
-        translation={sqlTrans}
-      />
-      <ChangelogModal open={changelogOpen} onClose={() => setChangelogOpen(false)} />
+      <SearchModal open={searchOpen} onClose={() => setSearchOpen(false)} onNavigate={handleNavigate}
+        onOpenWordStudy={openWordStudy} onShowEntry={showEntry} initialTranslation={sqlTranslation(translation)} />
+      <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} onOpenChangelog={() => { setSettingsOpen(false); setChangelog({}) }} />
+      <ChangelogModal open={!!changelog} onlyVersion={changelog?.only} onClose={() => setChangelog(null)} />
+      <TutorialModal open={tutorialOpen} onFinish={finishTour} onDecline={finishTour} />
+      <ScripturePreviewModal target={preview} onClose={() => setPreview(null)} onNavigate={handleNavigate} />
       {concordanceWord && (
-        <ConcordanceModal
-          word={concordanceWord}
-          onClose={() => setConcordanceWord(null)}
-          onNavigate={loc => handleNavigate(loc.book, loc.chapter, loc.verse)}
-          translation={sqlTrans}
-        />
+        <ConcordanceModal word={concordanceWord} onClose={() => setConcordanceWord(null)} onNavigate={loc => handleNavigate(loc.book, loc.chapter, loc.verse)} />
       )}
       {parallelVerse && (
-        <ParallelModal
-          verse={parallelVerse}
-          onClose={() => setParallelVerse(null)}
-          onNavigate={loc => handleNavigate(loc.book, loc.chapter, loc.verse)}
-          onAdd={handleAddContext}
-        />
+        <ParallelModal verse={parallelVerse} onClose={() => setParallelVerse(null)} onNavigate={loc => handleNavigate(loc.book, loc.chapter, loc.verse)} onAdd={addContext} />
       )}
       {noteTarget && (
-        <AddNoteModal
-          target={noteTarget}
-          onClose={() => setNoteTarget(null)}
-          onSaved={() => { setNotesRefreshToken(t => t + 1); setRightTab('notes') }}
-        />
+        <AddNoteModal target={noteTarget} onClose={() => setNoteTarget(null)} onSaved={() => { bumpUser(); setLibraryTab('notes') }} />
       )}
     </div>
   )

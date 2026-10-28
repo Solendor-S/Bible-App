@@ -1,5 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react'
 import type { BibleVerse } from '../types'
+import { stripUsfm } from '../data/redLetter'
+import { cleanBsbText } from '../lib/verseText'
+
+// Copied text is plain: USFM, {italic} braces and ¶ marks stripped (Android ShareModal rules).
+function plainVerse(text: string, translation: string): string {
+  const t = stripUsfm(text).replace(/[{}]/g, '').replace(/¶\s*/g, '')
+  return translation === 'BSB' ? cleanBsbText(t, true) : t
+}
 
 interface Props {
   book: string
@@ -143,11 +151,15 @@ export function CopyRangePopover({ book, chapter, allVerses, translation, initia
       </div>
 
       <div className="copy-range-label">{rangeLabel}</div>
+      <div className="copy-preview">{buildCopyText()}</div>
 
       <div className="copy-popover-actions">
         <button className="copy-btn-primary" onClick={handleCopy}>
           {copied ? 'Copied!' : 'Copy'}
         </button>
+        {'share' in navigator && (
+          <button className="copy-btn-cancel" onClick={() => navigator.share({ text: buildCopyText() }).catch(() => {})}>Share…</button>
+        )}
         <button className="copy-btn-cancel" onClick={onClose}>Cancel</button>
       </div>
     </div>

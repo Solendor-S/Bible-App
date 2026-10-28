@@ -6,6 +6,7 @@
   "copyright": "Copyright © 2026 Sargon Shlimon. All rights reserved.",
   "main": "out/main/index.js",
   "scripts": {
+    "postinstall": "electron-builder install-app-deps",
     "start": "electron-vite dev",
     "dev": "electron-vite dev",
     "build": "electron-vite build",
@@ -13,7 +14,7 @@
     "build:mac": "electron-vite build && electron-builder --mac",
     "package": "electron-vite build && electron-builder --dir",
     "check-esv": "node src/lib/esv.selfcheck.ts",
-    "check-usfm": "node src/lib/usfm.selfcheck.ts",
+    "check-text": "node -r ts-node/register/transpile-only src/lib/verseText.selfcheck.ts",
     "setup-data": "node -r ts-node/register scripts/download-data.ts",
     "import-android": "C:\\Users\\Sargo\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe -I data/import-android.py",
     "build-db": "node -r ts-node/register data/build-db.ts",
@@ -47,13 +48,13 @@
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
-    "@types/leaflet": "^1.9.21",
+    "better-sqlite3": "^11.10.0",
     "electron-updater": "^6.8.9",
-    "leaflet": "^1.9.4",
-    "sql.js": "^1.12.0"
+    "leaflet": "^1.9.4"
   },
   "devDependencies": {
-    "@types/cheerio": "^0.22.35",
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/leaflet": "^1.9.21",
     "@types/node": "^20.11.5",
     "@types/react": "^18.2.48",
     "@types/react-dom": "^18.2.18",
@@ -68,6 +69,7 @@
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "sharp": "^0.34.5",
+    "sql.js": "^1.15.2",
     "ts-node": "^10.9.2",
     "typescript": "^5.3.3",
     "vite": "^5.0.12"

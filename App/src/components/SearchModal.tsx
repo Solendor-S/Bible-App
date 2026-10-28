@@ -1,305 +1,312 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import type { SearchResult, SelectedVerse } from '../types'
+// Search — port of the Android SearchScreen (modes, scope, Greek/Hebrew script, Strong's tags,
+// fuzzy correction, recent searches, jump-to refs, book breakdown, Strong's word map), plus the
+// desktop commentary search tab.
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { bibleDb, userDb } from '../db/sqlite'
+import {
+  addSearchHistory, deleteSearchHistory, detectQueryScript, getCommentaryFatherNames, getSearchHistory,
+  searchAnnotatedByStrongs, searchCommentary, searchOriginalLanguage, searchStrongsByEnglishWord, searchVerses, searchVersesAll,
+  searchVersesFuzzy, SEARCH_STOP_WORDS,
+} from '../db/queries'
+import type { CommentaryEntryWithRef, StrongsWordMatch } from '../db/queries'
+import { matchBookRefs } from '../lib/matchBookRefs'
+import type { BookRef } from '../lib/matchBookRefs'
+import { BOOKS, BOOK_ORDER } from '../data/books'
+import { stripUsfm } from '../data/redLetter'
+import { TRANSLATIONS } from '../data/translations'
 import { escapeRegex } from '../utils/regex'
+import { usePref } from '../context/Prefs'
+import { Chips, Modal } from './Modal'
+import { StrongsDialog } from './StrongsModals'
+import { EntryCard } from './EntryCard'
+import type { SearchResult } from '../types'
 
-type Tab = 'all' | 'scripture' | 'commentary'
+type Nav = (book: string, chapter: number, verse: number) => void
+type Testament = 'all' | 'OT' | 'NT'
+const WORD_TOKEN_RE = /[hg]\d+|[a-z']+/gi
+const OT_BOOKS = BOOKS.filter(b => b.testament === 'OT').map(b => b.name)
+const NT_BOOKS = BOOKS.filter(b => b.testament === 'NT').map(b => b.name)
 
-const PAGE_ALL = 10
-const PAGE_SECTION = 20
+function matchesQueryWords(text: string, qWords: string[]): boolean {
+  const tokens = text.toLowerCase().match(WORD_TOKEN_RE) ?? ([] as string[])
+  return qWords.some(w => {
+    if (tokens.includes(w)) return true
+    const m = w.match(/^([hg])(\d+)$/i)
+    return !!m && tokens.includes((m[1] + String(parseInt(m[2])).padStart(4, '0')).toLowerCase())
+  })
+}
+const sigWords = (q: string[]) => { const s = q.filter(w => !SEARCH_STOP_WORDS.has(w)); return s.length ? s : q }
+const booksFor = (t: Testament, sel: Set<string>) => sel.size ? [...sel] : t === 'OT' ? OT_BOOKS : t === 'NT' ? NT_BOOKS : []
+const formatRef = (r: BookRef) => !r.chapterSpecified ? r.book : !r.verse ? `${r.book} ${r.chapter}` : `${r.book} ${r.chapter}:${r.verse}${r.verseEnd ? `–${r.verseEnd}` : ''}`
 
-
-function highlight(text: string, query: string): React.ReactNode {
-  const words = query.trim().split(/\s+/).filter(Boolean)
-  if (words.length === 0) return text
-  const pattern = new RegExp(`(${words.map(escapeRegex).join('|')})`, 'gi')
-  const parts = text.split(pattern)
-  if (parts.length === 1) return text
-  return parts.map((part, i) =>
-    i % 2 === 1 ? <mark key={i} className="search-highlight">{part}</mark> : part
+function Highlighted({ text, re, onStrongs, searchedTags }: { text: string; re: RegExp | null; onStrongs?: (s: string) => void; searchedTags: Set<string> }) {
+  const clean = stripUsfm(text).replace(/[{}]/g, '').replace(/¶\s*/g, '')
+  const tagged = clean.split(/\b([HG]\d+)\b/)
+  return (
+    <>
+      {tagged.map((seg, i) => {
+        if (i % 2) {
+          if (!onStrongs) return null
+          const bare = seg[0] + parseInt(seg.slice(1))
+          return <sup key={i} className={`strongs-tag${searchedTags.has(bare) ? ' strongs-tag--hit' : ''}`} onClick={e => { e.stopPropagation(); onStrongs(seg) }}>{seg}</sup>
+        }
+        if (!re) return seg
+        return seg.split(re).map((p, j) => j % 2 ? <mark key={`${i}-${j}`}>{p}</mark> : p)
+      })}
+    </>
   )
 }
 
-interface Props {
+export function SearchModal({ open, onClose, onNavigate, onOpenWordStudy, onShowEntry, initialTranslation }: {
   open: boolean
   onClose: () => void
-  onNavigate: (loc: SelectedVerse) => void
-  onAdd?: (book: string, chapter: number, verse: number) => void
-  translation?: string
-}
-
-export function SearchModal({ open, onClose, onNavigate, onAdd, translation = 'KJV' }: Props) {
+  onNavigate: Nav
+  onOpenWordStudy: (strongs: string) => void
+  onShowEntry: (e: CommentaryEntryWithRef) => void
+  initialTranslation: string
+}) {
+  const [tab, setTab] = useState<'scripture' | 'commentary'>('scripture')
   const [query, setQuery] = useState('')
-  const [tab, setTab] = useState<Tab>('all')
-  const [book, setBook] = useState('')
-  const [father, setFather] = useState('')
-  const [results, setResults] = useState<SearchResult | null>(null)
+  const [translation, setTranslation] = useState(initialTranslation)
+  const [mode] = usePref('search_mode')
+  const [biblicalOrder] = usePref('search_biblical_order')
+  const [strongsInSearch] = usePref('strongs_in_search')
+  const [results, setResults] = useState<SearchResult[]>([])
   const [loading, setLoading] = useState(false)
-  const [loadingMore, setLoadingMore] = useState(false)
-  const [focusedIdx, setFocusedIdx] = useState(-1)
-  const [books, setBooks] = useState<string[]>([])
+  const [searched, setSearched] = useState(false)
+  const [script, setScript] = useState<'latin' | 'greek' | 'hebrew'>('latin')
+  const [corrected, setCorrected] = useState<string[]>([])
+  const [testament, setTestament] = useState<Testament>('all')
+  const [books, setBooks] = useState<Set<string>>(new Set())
+  const [scopeOpen, setScopeOpen] = useState(false)
+  const [history, setHistory] = useState<string[]>([])
+  const [breakdown, setBreakdown] = useState<{ book: string; verses: number; matches: number; rows: SearchResult[] }[] | null>(null)
+  const [breakdownBook, setBreakdownBook] = useState<string | null>(null)
+  const [wordMap, setWordMap] = useState<{ word: string; matches: StrongsWordMatch[] }[] | null>(null)
+  const [strongs, setStrongs] = useState<string | null>(null)
+  const [commentary, setCommentary] = useState<CommentaryEntryWithRef[]>([])
   const [fathers, setFathers] = useState<string[]>([])
-  const [added, setAdded] = useState<Set<string>>(new Set())
-
+  const [father, setFather] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
-  const resultsRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!open) { setFocusedIdx(-1); return }
-    setTimeout(() => inputRef.current?.focus(), 50)
-    if (books.length === 0) {
-      window.bibleApi.getBooks().then(bs => setBooks(bs.map(b => b.book)))
-    }
-    if (fathers.length === 0) {
-      window.bibleApi.getFathers().then(setFathers)
-    }
-  }, [open])
-
-  useEffect(() => {
-    if (!query.trim()) { setResults(null); setFocusedIdx(-1); return }
-    const limit = tab === 'all' ? PAGE_ALL : PAGE_SECTION
-    const timer = setTimeout(async () => {
-      setLoading(true)
-      setFocusedIdx(-1)
-      setAdded(new Set())
-      const r = await window.bibleApi.search({ query, tab, book, father, offset: 0, limit, translation })
-      setResults(r)
-      setLoading(false)
-    }, 300)
-    return () => clearTimeout(timer)
-  }, [query, tab, book, father])
-
-  const flatResults = useMemo(() => {
-    if (!results) return [] as Array<{ book: string; chapter: number; verse: number }>
-    const list: Array<{ book: string; chapter: number; verse: number }> = []
-    if (tab !== 'commentary') results.verses.forEach(v => list.push(v))
-    if (tab !== 'scripture') results.commentary.forEach(c => list.push(c))
-    return list
-  }, [results, tab])
-
-  const navigate = useCallback((item: { book: string; chapter: number; verse: number }) => {
-    onNavigate({ book: item.book, chapter: item.chapter, verse: item.verse })
-    onClose()
-  }, [onNavigate, onClose])
+  const lastQuery = useRef('')
 
   useEffect(() => {
     if (!open) return
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { onClose(); return }
-      if (e.key === 'ArrowDown') {
-        e.preventDefault()
-        setFocusedIdx(i => Math.min(i + 1, flatResults.length - 1))
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault()
-        setFocusedIdx(i => Math.max(i - 1, -1))
-        if (focusedIdx <= 0) inputRef.current?.focus()
-      } else if (e.key === 'Enter' && focusedIdx >= 0) {
-        const item = flatResults[focusedIdx]
-        if (item) navigate(item)
-      }
+    setTranslation(TRANSLATIONS.some(t => t.key === initialTranslation && !t.apiOnly) ? initialTranslation : 'KJV')
+    getSearchHistory(userDb).then(setHistory)
+    setTimeout(() => inputRef.current?.focus(), 0)
+  }, [open, initialTranslation])
+  useEffect(() => { if (tab === 'commentary' && !fathers.length) getCommentaryFatherNames(bibleDb).then(setFathers) }, [tab, fathers.length])
+
+  const q = query.trim()
+  const bookRefs = useMemo(() => tab === 'scripture' ? matchBookRefs(q) : [], [q, tab])
+  const wordBoundary = mode === 'exact_words' || mode === 'exact_all_words'
+  const highlightRe = useMemo(() => {
+    if (script !== 'latin') return null
+    let terms = corrected.length ? corrected : lastQuery.current.split(/\s+/).filter(Boolean)
+    if (wordBoundary) { const s = terms.filter(w => !SEARCH_STOP_WORDS.has(w.toLowerCase())); if (s.length) terms = s }
+    if (!terms.length) return null
+    const esc = terms.map(escapeRegex).join('|')
+    return wordBoundary ? new RegExp(`(\\b(?:${esc})\\b)`, 'gi') : new RegExp(`(${esc})`, 'gi')
+  }, [script, corrected, wordBoundary, results])
+  const searchedTags = useMemo(() => new Set(lastQuery.current.split(/\s+/).map(w => w.match(/^([hg])(\d+)$/i)).filter(Boolean).map(m => m![1].toUpperCase() + parseInt(m![2]))), [results])
+  const shown = useMemo(() => !biblicalOrder ? results : [...results].sort((a, b) =>
+    (BOOK_ORDER.get(a.book) ?? 999) - (BOOK_ORDER.get(b.book) ?? 999) || a.chapter - b.chapter || a.verse - b.verse), [results, biblicalOrder])
+
+  const filterRows = useCallback((rows: SearchResult[], text: string) => {
+    const qw = text.toLowerCase().split(/\s+/).filter(Boolean)
+    if (mode === 'exact_words') { const sw = sigWords(qw); return rows.filter(r => matchesQueryWords(r.text, sw)) }
+    if (mode === 'exact_all_words') { const sw = sigWords(qw); return rows.filter(r => { const t = r.text.toLowerCase().match(WORD_TOKEN_RE) ?? ([] as string[]); return sw.every(w => t.includes(w)) }) }
+    if (mode === 'exact_phrase') return rows.filter(r => r.text.toLowerCase().includes(text.toLowerCase()))
+    return rows
+  }, [mode])
+
+  const doSearch = useCallback(async (text: string, trans = translation, test = testament, sel = books) => {
+    const t = text.trim()
+    if (!t) return
+    setLoading(true); setSearched(true); setCorrected([]); setBreakdown(null)
+    lastQuery.current = t
+    addSearchHistory(userDb, t)
+    setHistory(h => [t, ...h.filter(x => x !== t)].slice(0, 20))
+    if (tab === 'commentary') {
+      const rows = await searchCommentary(bibleDb, t)
+      setCommentary(rows); setLoading(false); return
     }
-    window.addEventListener('keydown', handler)
-    return () => window.removeEventListener('keydown', handler)
-  }, [open, onClose, focusedIdx, flatResults, navigate])
+    const bks = booksFor(test, sel)
+    const sc = detectQueryScript(t)
+    setScript(sc)
+    if (sc !== 'latin') { setResults(await searchOriginalLanguage(bibleDb, t, sc, bks, trans)); setLoading(false); return }
+    if (/^[hg]\d+$/i.test(t) && ['TR+', 'WLC+', 'LXX+'].includes(trans)) { setResults(await searchAnnotatedByStrongs(bibleDb, t, trans, bks)); setLoading(false); return }
+    const rows = await searchVerses(bibleDb, t, trans, bks, 200, wordBoundary)
+    if (mode !== 'fuzzy') { setResults(filterRows(rows, t)); setLoading(false); return }
+    // Fuzzy: correct each typo'd word individually, then re-search
+    const qw = t.toLowerCase().split(/\s+/).filter(Boolean)
+    const hasTypo = qw.some(w => w.length >= 4 && !rows.some(r => r.text.toLowerCase().includes(w)))
+    if (hasTypo || !rows.length) {
+      const fixed = await Promise.all(qw.map(async w => w.length < 4 || rows.some(r => r.text.toLowerCase().includes(w)) ? w
+        : (await searchVersesFuzzy(bibleDb, w, trans, bks))[0]?.closestWords[0] ?? w))
+      if (fixed.some((w, i) => w !== qw[i])) {
+        const again = await searchVerses(bibleDb, fixed.join(' '), trans, bks, 200, false)
+        setResults(again.length ? again : rows)
+        if (again.length) setCorrected(fixed)
+      } else setResults(rows)
+    } else setResults(rows)
+    setLoading(false)
+  }, [translation, testament, books, tab, wordBoundary, mode, filterRows])
 
-  useEffect(() => {
-    if (focusedIdx < 0 || !resultsRef.current) return
-    const el = resultsRef.current.querySelector(`[data-idx="${focusedIdx}"]`) as HTMLElement
-    el?.scrollIntoView({ block: 'nearest' })
-  }, [focusedIdx])
+  async function openBreakdown() {
+    setBreakdown([])
+    const all = filterRows(await searchVersesAll(bibleDb, lastQuery.current, translation, booksFor(testament, books), wordBoundary), lastQuery.current)
+    const qw = lastQuery.current.toLowerCase().split(/\s+/).filter(Boolean)
+    const m = new Map<string, { verses: number; matches: number; rows: SearchResult[] }>()
+    for (const r of all) {
+      const toks = r.text.toLowerCase().match(WORD_TOKEN_RE) ?? ([] as string[])
+      const e = m.get(r.book) ?? m.set(r.book, { verses: 0, matches: 0, rows: [] }).get(r.book)!
+      e.verses++; e.matches += qw.reduce((s, w) => s + toks.filter(x => x === w).length, 0); e.rows.push(r)
+    }
+    setBreakdown([...m.entries()].map(([book, v]) => ({ book, ...v })).sort((a, b) => (BOOK_ORDER.get(a.book) ?? 999) - (BOOK_ORDER.get(b.book) ?? 999)))
+  }
 
-  const loadMore = useCallback(async () => {
-    if (!results || !query.trim() || tab === 'all') return
-    const offset = tab === 'scripture' ? results.verses.length : results.commentary.length
-    setLoadingMore(true)
-    const r = await window.bibleApi.search({ query, tab, book, father, offset, limit: PAGE_SECTION, translation })
-    setResults(prev => {
-      if (!prev) return r
-      return {
-        verses: tab === 'scripture' ? [...prev.verses, ...r.verses] : prev.verses,
-        commentary: tab === 'commentary' ? [...prev.commentary, ...r.commentary] : prev.commentary,
-        totalVerses: r.totalVerses,
-        totalCommentary: r.totalCommentary,
-      }
-    })
-    setLoadingMore(false)
-  }, [results, query, tab, book, father])
+  async function openWordMap() {
+    setWordMap([])
+    const words = [...new Set(q.toLowerCase().split(/\s+/).filter(w => w && !SEARCH_STOP_WORDS.has(w)))]
+    setWordMap(await Promise.all(words.map(async word => ({ word, matches: await searchStrongsByEnglishWord(bibleDb, word) }))))
+  }
 
-  if (!open) return null
-
-  const hasMore = tab === 'scripture'
-    ? (results?.totalVerses ?? 0) > (results?.verses.length ?? 0)
-    : tab === 'commentary'
-    ? (results?.totalCommentary ?? 0) > (results?.commentary.length ?? 0)
-    : false
-
-  const total = tab === 'scripture'
-    ? (results?.totalVerses ?? 0)
-    : tab === 'commentary'
-    ? (results?.totalCommentary ?? 0)
-    : (results?.totalVerses ?? 0) + (results?.totalCommentary ?? 0)
-
-  let globalIdx = -1
+  const go: Nav = (b, c, v) => { onClose(); onNavigate(b, c, v) }
+  const hasScope = testament !== 'all' || books.size > 0
+  const scopeLabel = books.size ? (books.size <= 2 ? [...books].join(', ') : `${books.size} books`) : testament === 'OT' ? 'Old Testament' : testament === 'NT' ? 'New Testament' : 'All Books'
+  const commentaryShown = father ? commentary.filter(c => c.father_name === father) : commentary
 
   return (
-    <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose() }}>
-      <div className="modal">
-
-        <div className="modal-search-bar">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
-          </svg>
-          <input
-            ref={inputRef}
-            className="modal-input"
-            placeholder="Search scripture and commentary..."
-            value={query}
-            onChange={e => { setQuery(e.target.value); setFocusedIdx(-1) }}
-          />
-          <button className="modal-close" onClick={onClose}>✕</button>
+    <Modal open={open} onClose={onClose} wide className="search-dlg" title={
+      <Chips value={tab} onChange={t => { setTab(t); setSearched(false) }} options={[{ value: 'scripture', label: 'Scripture' }, { value: 'commentary', label: 'Commentary' }]} />
+    }>
+      <div className="search-bar">
+        <input ref={inputRef} className="modal-input" value={query} onChange={e => setQuery(e.target.value)} spellCheck={false}
+          placeholder={tab === 'scripture' ? 'Search the Bible… (words, phrase, Greek/Hebrew, or G26 / H430)' : 'Search all Church Fathers commentary…'}
+          onKeyDown={e => e.key === 'Enter' && doSearch(query)} />
+        <button className="btn btn--primary" onClick={() => doSearch(query)}>Search</button>
+      </div>
+      {tab === 'scripture' && (
+        <div className="search-filters">
+          <button className={`btn btn--small${hasScope ? ' btn--primary' : ''}`} onClick={() => setScopeOpen(o => !o)}>⏷ {scopeLabel}</button>
+          <select className="map-select" value={translation} onChange={e => { setTranslation(e.target.value); if (searched) doSearch(query, e.target.value) }}>
+            {TRANSLATIONS.filter(t => !t.apiOnly).map(t => <option key={t.key} value={t.key}>{t.label} — {t.full}</option>)}
+          </select>
+          <span className="muted">Mode: {mode.replace(/_/g, ' ')} (Settings)</span>
         </div>
-
-        <div className="search-tabs">
-          {(['all', 'scripture', 'commentary'] as Tab[]).map(t => (
-            <button
-              key={t}
-              className={`search-tab${tab === t ? ' search-tab--active' : ''}`}
-              onClick={() => setTab(t)}
-            >
-              {t === 'all' ? 'All' : t === 'scripture' ? 'Scripture' : 'Commentary'}
-            </button>
-          ))}
+      )}
+      {tab === 'commentary' && fathers.length > 0 && (
+        <div className="search-filters">
+          <select className="map-select" value={father} onChange={e => setFather(e.target.value)}>
+            <option value="">All fathers</option>
+            {fathers.map(f => <option key={f} value={f}>{f}</option>)}
+          </select>
         </div>
+      )}
+      {scopeOpen && tab === 'scripture' && (
+        <div className="conc-filter">
+          <Chips value={testament} onChange={t => { setTestament(t); setBooks(new Set()) }} options={[{ value: 'all', label: 'All' }, { value: 'OT', label: 'Old Testament' }, { value: 'NT', label: 'New Testament' }]} />
+          {testament !== 'all' && <div className="chip-wrap">{(testament === 'OT' ? OT_BOOKS : NT_BOOKS).map(b => (
+            <button key={b} className={`chip chip--small${books.has(b) ? ' chip--active' : ''}`} onClick={() => setBooks(s => { const n = new Set(s); n.has(b) ? n.delete(b) : n.add(b); return n })}>{b}</button>
+          ))}</div>}
+          <div className="dlg-actions">
+            <button className="btn" onClick={() => { setTestament('all'); setBooks(new Set()) }}>Clear</button>
+            <button className="btn btn--primary" onClick={() => { setScopeOpen(false); if (searched) doSearch(query) }}>Apply</button>
+          </div>
+        </div>
+      )}
 
-        {query.trim() && (
-          <div className="search-filters">
-            <select className="search-filter-select" value={book} onChange={e => setBook(e.target.value)}>
-              <option value="">All Books</option>
-              {books.map(b => <option key={b} value={b}>{b}</option>)}
-            </select>
-            {tab !== 'scripture' && (
-              <select className="search-filter-select" value={father} onChange={e => setFather(e.target.value)}>
-                <option value="">All Fathers</option>
-                {fathers.map(f => <option key={f} value={f}>{f}</option>)}
-              </select>
-            )}
+      {bookRefs.length > 0 && (
+        <div className="jump-row"><span className="section-label">Jump to</span>
+          {bookRefs.map((r, i) => <button key={i} className="chip chip--small" onClick={() => go(r.book, r.chapter, r.verse ?? 1)}>{formatRef(r)}</button>)}
+        </div>
+      )}
+
+      <div className="modal-results">
+        {!searched && history.length > 0 && (
+          <div>
+            <div className="row-between"><span className="section-label">Recent searches</span>
+              <button className="link-btn" onClick={() => { deleteSearchHistory(userDb); setHistory([]) }}>Clear</button></div>
+            {history.map(h => (
+              <div key={h} className="history-row">
+                <button className="link-btn" onClick={() => { setQuery(h); doSearch(h) }}>{h}</button>
+                <button className="lib-remove" onClick={() => { deleteSearchHistory(userDb, h); setHistory(x => x.filter(y => y !== h)) }}>✕</button>
+              </div>
+            ))}
           </div>
         )}
-
-        <div className="modal-results" ref={resultsRef}>
-          {loading && <div className="modal-status">Searching...</div>}
-
-          {!loading && query.trim() && results && total === 0 && (
-            <div className="modal-status">No results for "{query}"</div>
-          )}
-
-          {!loading && results && total > 0 && (
-            <>
-              <div className="search-result-count">
-                {total.toLocaleString()} result{total !== 1 ? 's' : ''}
-                {tab === 'all' && results.totalVerses > PAGE_ALL && results.totalCommentary > PAGE_ALL && ' (showing first 10 per section)'}
+        {loading && <div className="panel-loading">Searching…</div>}
+        {!loading && searched && tab === 'commentary' && (
+          commentaryShown.length === 0 ? <div className="panel-empty">No commentary matches "{lastQuery.current}"</div> : <>
+            <div className="list-count">{commentaryShown.length}{commentary.length === 150 ? '+' : ''} results</div>
+            {commentaryShown.map(e => (
+              <div key={`${e.id}-${e.book}-${e.chapter}-${e.verse}`} onDoubleClick={() => { onClose(); onShowEntry(e) }}>
+                <EntryCard entry={e} book={e.book} chapter={e.chapter} verse={e.verse} verseRef={`${e.book} ${e.chapter}:${e.verse}`} onNavigate={go} />
               </div>
-
-              {tab !== 'commentary' && results.verses.length > 0 && (
-                <div className="result-group">
-                  <div
-                    className={`result-group-label${tab === 'all' ? ' result-group-label--clickable' : ''}`}
-                    onClick={() => tab === 'all' ? setTab('scripture') : undefined}
-                  >
-                    Scripture ({results.totalVerses.toLocaleString()})
-                    {tab === 'all' && results.totalVerses > PAGE_ALL && (
-                      <span className="result-group-more">View all →</span>
-                    )}
-                  </div>
-                  {results.verses.map((v, i) => {
-                    globalIdx++
-                    const idx = globalIdx
-                    const addKey = `v:${v.book}:${v.chapter}:${v.verse}`
-                    return (
-                      <div key={i} className="parallel-row">
-                        <button
-                          data-idx={idx}
-                          className={`result-item parallel-row-main${focusedIdx === idx ? ' result-item--focused' : ''}`}
-                          onMouseEnter={() => setFocusedIdx(idx)}
-                          onClick={() => navigate(v)}
-                        >
-                          <span className="result-ref">{v.book} {v.chapter}:{v.verse}</span>
-                          <span className="result-text">{highlight(v.text, query)}</span>
-                        </button>
-                        {onAdd && (
-                          <button
-                            className={`parallel-add-btn${added.has(addKey) ? ' parallel-add-btn--done' : ''}`}
-                            title={added.has(addKey) ? 'Added' : 'Add to scripture panel'}
-                            onClick={() => {
-                              if (added.has(addKey)) return
-                              onAdd(v.book, v.chapter, v.verse)
-                              setAdded(s => new Set([...s, addKey]))
-                            }}
-                          >
-                            {added.has(addKey) ? '✓' : '+'}
-                          </button>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
+            ))}
+          </>
+        )}
+        {!loading && searched && tab === 'scripture' && (
+          <>
+            {corrected.length > 0 && <div className="source-note">Showing results for <b>{corrected.join(' ')}</b></div>}
+            <div className="row-between">
+              <span className="list-count">{results.length === 200 ? '200+' : results.length} verse{results.length !== 1 ? 's' : ''}</span>
+              {script === 'latin' && results.length > 0 && (
+                <span>
+                  <button className="link-btn" onClick={openBreakdown}>See all by book</button>{' · '}
+                  <button className="link-btn" onClick={openWordMap}>See Strong's</button>
+                </span>
               )}
-
-              {tab !== 'scripture' && results.commentary.length > 0 && (
-                <div className="result-group">
-                  <div
-                    className={`result-group-label${tab === 'all' ? ' result-group-label--clickable' : ''}`}
-                    onClick={() => tab === 'all' ? setTab('commentary') : undefined}
-                  >
-                    Commentary ({results.totalCommentary.toLocaleString()})
-                    {tab === 'all' && results.totalCommentary > PAGE_ALL && (
-                      <span className="result-group-more">View all →</span>
-                    )}
-                  </div>
-                  {results.commentary.map((c, i) => {
-                    globalIdx++
-                    const idx = globalIdx
-                    const addKey = `c:${c.book}:${c.chapter}:${c.verse}:${i}`
-                    return (
-                      <div key={i} className="parallel-row">
-                        <button
-                          data-idx={idx}
-                          className={`result-item parallel-row-main${focusedIdx === idx ? ' result-item--focused' : ''}`}
-                          onMouseEnter={() => setFocusedIdx(idx)}
-                          onClick={() => navigate(c)}
-                        >
-                          <span className="result-ref">{c.book} {c.chapter}:{c.verse} — {c.father_name}</span>
-                          <span className="result-text">{highlight(c.text, query)}</span>
-                        </button>
-                        {onAdd && (
-                          <button
-                            className={`parallel-add-btn${added.has(addKey) ? ' parallel-add-btn--done' : ''}`}
-                            title={added.has(addKey) ? 'Added' : 'Add to scripture panel'}
-                            onClick={() => {
-                              if (added.has(addKey)) return
-                              onAdd(c.book, c.chapter, c.verse)
-                              setAdded(s => new Set([...s, addKey]))
-                            }}
-                          >
-                            {added.has(addKey) ? '✓' : '+'}
-                          </button>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-
-              {tab !== 'all' && hasMore && (
-                <div className="search-load-more">
-                  <button className="search-load-more-btn" onClick={loadMore} disabled={loadingMore}>
-                    {loadingMore ? 'Loading...' : 'Load More'}
-                  </button>
-                </div>
-              )}
-            </>
-          )}
-        </div>
+            </div>
+            {shown.length === 0 && <div className="panel-empty">No verses found for "{lastQuery.current}"</div>}
+            {shown.map(r => (
+              <button key={`${r.book}${r.chapter}:${r.verse}`} className="search-result" onClick={() => go(r.book, r.chapter, r.verse)}>
+                <span className="conc-ref">{r.book} {r.chapter}:{r.verse}</span>
+                <span className={`conc-text${script === 'hebrew' ? ' verse-rtl' : ''}`}>
+                  <Highlighted text={script === 'latin' ? r.text : r.text} re={script === 'latin' ? highlightRe
+                    : new RegExp(`(${lastQuery.current.split(/\s+/).map(escapeRegex).join('|')})`, 'gi')}
+                    onStrongs={strongsInSearch ? setStrongs : undefined} searchedTags={searchedTags} />
+                </span>
+              </button>
+            ))}
+          </>
+        )}
       </div>
-    </div>
+
+      <Modal open={breakdown !== null} onClose={() => { setBreakdown(null); setBreakdownBook(null) }} wide
+        title={breakdownBook ? <button className="link-btn" onClick={() => setBreakdownBook(null)}>‹ {breakdownBook}</button> : `"${lastQuery.current}" by book`}>
+        {breakdown && !breakdown.length ? <div className="panel-loading">Counting…</div> : breakdownBook
+          ? breakdown!.find(b => b.book === breakdownBook)!.rows.map(r => (
+            <button key={`${r.chapter}:${r.verse}`} className="search-result" onClick={() => { setBreakdown(null); go(r.book, r.chapter, r.verse) }}>
+              <span className="conc-ref">{r.book} {r.chapter}:{r.verse}</span><span className="conc-text"><Highlighted text={r.text} re={highlightRe} searchedTags={searchedTags} /></span>
+            </button>))
+          : breakdown?.map(b => (
+            <button key={b.book} className="variant-row" onClick={() => setBreakdownBook(b.book)}>
+              <span>{b.book}</span><span className="variant-count">{b.verses} verses · {b.matches} matches ›</span>
+            </button>
+          ))}
+      </Modal>
+
+      <Modal open={wordMap !== null} onClose={() => setWordMap(null)} wide title="Strong's for this search">
+        {wordMap && !wordMap.length ? <div className="panel-loading">Looking up…</div> : wordMap?.map(({ word, matches }) => (
+          <div key={word}>
+            <div className="era-header">"{word}"</div>
+            {!matches.length && <div className="muted">No Strong's entries use this word.</div>}
+            {matches.map(m => (
+              <button key={m.number} className="list-row" onClick={() => setStrongs(m.number)}>
+                <span className="list-row-num">{m.number}</span>
+                <span className="list-row-main"><span className="list-row-title">{m.lemma} <span className="muted">{m.translit}</span></span><span className="list-row-sub">{m.kjv_usage}</span></span>
+              </button>
+            ))}
+          </div>
+        ))}
+      </Modal>
+
+      <StrongsDialog strongs={strongs} onClose={() => setStrongs(null)} onNavigate={go}
+        onOpenWordStudy={s => { setStrongs(null); onClose(); onOpenWordStudy(s) }} />
+    </Modal>
   )
 }
+

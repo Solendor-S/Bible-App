@@ -1,4 +1,4 @@
-// Verse ranges where Jesus speaks directly.
+﻿// Verse ranges where Jesus speaks directly.
 // Format: [book, chapter, verseStart, verseEnd]
 // Based on the KJV red-letter tradition.
 
@@ -22,7 +22,7 @@ const RANGES: R[] = [
   ['Matthew', 12, 3, 8], ['Matthew', 12, 11, 12], ['Matthew', 12, 25, 37],
   ['Matthew', 12, 39, 45], ['Matthew', 12, 48, 50],
   ['Matthew', 13, 3, 9], ['Matthew', 13, 11, 23], ['Matthew', 13, 24, 30],
-  ['Matthew', 13, 31, 33], ['Matthew', 13, 37, 43], ['Matthew', 13, 44, 50],
+  ['Matthew', 13, 31, 33], ['Matthew', 13, 37, 43], ['Matthew', 13, 44, 50], ['Matthew', 13, 51, 51],
   ['Matthew', 13, 52, 52], ['Matthew', 13, 57, 57],
   ['Matthew', 14, 16, 16], ['Matthew', 14, 18, 18], ['Matthew', 14, 27, 27],
   ['Matthew', 14, 29, 29], ['Matthew', 14, 31, 31],
@@ -216,15 +216,47 @@ export function isRedLetter(book: string, chapter: number, verse: number): boole
   return RED_LETTER_VERSES.has(`${book}|${chapter}|${verse}`)
 }
 
-export interface Segment { t: string; red: boolean }
+export interface Segment { t: string; red: boolean; italic?: boolean; caps?: boolean }
+
+// USFM \nd ...\nd* = "name of Deity": the divine name, which KJV typesets in
+// caps (LORD / GOD). Honour the marker by uppercasing what it wraps rather than
+// discarding it. Nested markers inside the span are left as-is — uppercasing
+// them (\+w → \+W) would break the strip rules below, which are case-sensitive.
+const ND_SPAN_RE = /\\\+?nd(?![a-z*])([\s\S]*?)\\\+?nd\*/g
+const MARKER_SPLIT_RE = /(\\\+?[a-z]{1,5}\*?)/g
+
+function honourNd(_m: string, inner: string): string {
+  return inner
+    .replace(/^\s+/, '') // opener's trailing space, as the generic strip rule used to eat
+    .split(MARKER_SPLIT_RE)
+    .map((p, i) => (i % 2 ? p : p.toUpperCase()))
+    .join('')
+}
+
+export function stripUsfm(t: string): string {
+  return t
+    .replace(ND_SPAN_RE, honourNd)
+    // KJV+ lost the \nd closer when Strongs numbers were merged in, leaving a bare
+    // "{\+nd} {Lord}" — the name is the brace group right after the opener.
+    .replace(/\{\s*\\\+?nd\s*\}\s*\{([^}]*)\}/g, (_m, name: string) => `{${name.toUpperCase()}}`)
+    .replace(/\\\+?add\*/g, '}')
+    .replace(/\\\+?add\s*/g, '{')
+    .replace(/\\\+?w\*/g, '')
+    .replace(/\\\+?w\s*/g, '')
+    .replace(/\\\+?[a-z]{1,5}\*/g, '')
+    // \s* not \s+ — a marker can be closed by '}' instead of a space (data has
+    // "{\+nd}" / "{\+w}"), and \s+ left those openers rendering as literal text.
+    .replace(/\\\+?[a-z]{1,5}\s*/g, '')
+    // marker-only \add span collapses to an empty italic group; drop it whole so
+    // it doesn't leave a double space between the surrounding words.
+    .replace(/\{\s*\}\s*/g, '')
+}
 
 // Narrator speech-attribution verbs in KJV ("And Jesus said unto them,")
-// "say/sayeth" intentionally excluded — those appear inside Jesus's own speech ("I say unto you").
-const ATTRIB_VERB_RE = /\b(said|saith|answered|spake|cried)\b/i
+const ATTRIB_VERB_RE = /\b(answered|spake|cried|saying)\b/i
 
-// Explicit "Jesus [verb]" attribution — up to 5 words between "Jesus" and the verb
-// handles: "Jesus said", "Jesus answered and said", "Jesus saith unto him"
-const JESUS_ATTRIB_RE = /\bJesus(?:\s+\w+){0,5}?\s+(said|saith|answered|spake|cried)\b/i
+// Explicit "Jesus [verb]" attribution — up to 9 words between "Jesus" and the verb
+const JESUS_ATTRIB_RE = /\bJesus(?:\s+\w+){0,9}?\s+(said|saith|answered|spake|cried)\b/i
 
 function trySplit(text: string, matchEnd: number): Segment[] | null {
   const commaIdx = text.indexOf(',', matchEnd)
@@ -237,26 +269,93 @@ function trySplit(text: string, matchEnd: number): Segment[] | null {
   ]
 }
 
+const wordCount = (s: string) => s.trim().split(/\s+/).filter(Boolean).length
+
+// WEB uses \+w on most words in speech verses (Strong's concordance tagging).
+// Gaps > this threshold are untranslated loanwords/compounds, not narrator text.
+const W_DENSITY_THRESHOLD = 0.7
+
+/**
+ * Parses \+w...\+w* markers into red/black segments, stripping USFM tags from
+ * each segment. Returns null if no markers found.
+ * Dense tagging (>W_DENSITY_THRESHOLD words tagged) means the entire verse is
+ * speech — untagged gaps are just words missing Strong's tags, not narrator text.
+ */
+export function splitByWMarkers(text: string): Segment[] | null {
+  if (!text.includes('\\+w')) return null
+
+  // Pre-process interleaved markers before splitting — render-time only, raw data unchanged.
+  //
+  // Case 1 (e.g. Luke 10:30): \+add wraps a \+w-tagged word, so the italic opener/closer
+  // end up straddling the \+w boundary → split into orphaned { and } segments.
+  // Fix: restructure so the italic marker lives *inside* the red-letter span.
+  // \+add \+w word\+w*\+add*  →  \+w {word}\+w*
+  let t = text.replace(/\\\+add\s+\\\+w\s+([\s\S]*?)\\\+w\*\s*\\\+add\*/g, '\\+w {$1}\\+w*')
+
+  // Case 2 (e.g. 1 John 2:23): \+w markers appear *inside* {} braces (data artifact where
+  // the Strongs closer landed inside an italic/add span).
+  // {\+w} → remove (empty word-marker inside brace adds nothing)
+  t = t.replace(/\{\s*\\\+w\s*\}/g, '')
+  // {word\+w*} → {word}  (strip \+w* closing tag from inside the italic span)
+  t = t.replace(/\{([^}]*?)\\\+w\*\}/g, '{$1}')
+
+  // After preprocessing, bail if no real \+w markers remain (avoids false red-letter coloring)
+  if (!t.includes('\\+w')) return null
+
+  const stripped = stripUsfm(t)
+  const re = /\\\+w\s*([\s\S]*?)\\\+w\*/g
+  const segs: Segment[] = []
+  let last = 0, taggedWords = 0, gapWords = 0
+  let m: RegExpExecArray | null
+  while ((m = re.exec(t)) !== null) {
+    if (m.index > last) {
+      const gap = t.slice(last, m.index)
+      const isPunct = taggedWords > 0 && /^[\s ;:,.!\-—–?'"'"«»]+$/.test(gap)
+      segs.push({ t: stripUsfm(gap), red: isPunct })
+      if (!isPunct) gapWords += wordCount(gap)
+    }
+    segs.push({ t: stripUsfm(m[1]), red: true })
+    taggedWords += wordCount(m[1])
+    last = m.index + m[0].length
+  }
+  if (taggedWords === 0) return null
+  if (last < t.length) {
+    const tail = t.slice(last)
+    const isPunct = /^[\s ;:,.!\-—–?'"'"«»]+$/.test(tail) // taggedWords > 0 guaranteed above
+    segs.push({ t: stripUsfm(tail), red: isPunct })
+    if (!isPunct) gapWords += wordCount(tail)
+  }
+  const isNarratorSeg = (s: Segment) => !s.red && wordCount(s.t) >= 2
+  const startsWithNarrator = segs.length > 0 && isNarratorSeg(segs[0])
+  const endsWithNarrator   = segs.length > 0 && isNarratorSeg(segs[segs.length - 1])
+  if (!startsWithNarrator && !endsWithNarrator && taggedWords / (taggedWords + gapWords) > W_DENSITY_THRESHOLD) {
+    return [{ t: stripped, red: true }]
+  }
+  return segs
+}
+
 /**
  * Splits a red-letter verse into narrator (black) and speech (red) segments.
- * Priority 1: explicit "Jesus [verb]" attribution — handles mixed-speaker verses
- *   where another person speaks before Jesus (e.g. Nathanael then Jesus in John 1:48).
+ * Priority 1: explicit "Jesus [verb]" attribution.
  * Priority 2: first generic speech verb within 120 chars.
  * Fallback: whole verse is speech.
  */
 export function splitRedLetterVerse(text: string): Segment[] {
-  // Priority 1: explicit Jesus subject
   const jm = JESUS_ATTRIB_RE.exec(text)
   if (jm) {
     const result = trySplit(text, jm.index + jm[0].length)
     if (result) return result
   }
 
-  // Priority 2: first generic attribution verb (not too deep)
   const m = ATTRIB_VERB_RE.exec(text)
   if (m && m.index <= 120) {
-    const result = trySplit(text, m.index + m[0].length)
-    if (result) return result
+    // Skip if preceded by a relative clause ("which saith", "that said") —
+    // those attribute the prophecy/text, not the current speaker
+    const pre = text.slice(Math.max(0, m.index - 10), m.index).toLowerCase()
+    if (!pre.includes('which') && !pre.includes('that ')) {
+      const result = trySplit(text, m.index + m[0].length)
+      if (result) return result
+    }
   }
 
   return [{ t: text, red: true }]

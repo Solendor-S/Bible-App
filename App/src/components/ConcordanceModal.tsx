@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import type { SelectedVerse } from '../types'
 import { escapeRegex } from '../utils/regex'
+import { bibleDb } from '../db/sqlite'
+import { getConcordance } from '../db/queries'
+import { stripUsfm } from '../data/redLetter'
 
 interface Props {
   word: string
   onClose: () => void
   onNavigate: (loc: SelectedVerse) => void
-  translation?: string
 }
 
 const PAGE = 100
@@ -20,7 +22,7 @@ function highlight(text: string, word: string): React.ReactNode {
   )
 }
 
-export function ConcordanceModal({ word, onClose, onNavigate, translation = 'KJV' }: Props) {
+export function ConcordanceModal({ word, onClose, onNavigate }: Props) {
   const [allResults, setAllResults] = useState<Array<{ book: string; chapter: number; verse: number; text: string }>>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -36,9 +38,10 @@ export function ConcordanceModal({ word, onClose, onNavigate, translation = 'KJV
     setFocusedIdx(-1)
     setFilterBook(null)
     setFilterOpen(false)
-    window.bibleApi.concordance(word, translation).then(({ total, results }) => {
-      setTotal(total)
-      setAllResults(results)
+    // Whole-word KJV concordance (Android getConcordance); text stripped of USFM for display
+    getConcordance(bibleDb, word.replace(/[^a-zA-Z'-]/g, ''), 10000).then(rows => {
+      setTotal(rows.length)
+      setAllResults(rows.map(r => ({ ...r, text: stripUsfm(r.text).replace(/[{}]/g, '') })))
       setLoading(false)
     })
   }, [word])
@@ -100,7 +103,7 @@ export function ConcordanceModal({ word, onClose, onNavigate, translation = 'KJV
             <div className="concordance-count">
               {filterBook
                 ? `${filtered.length.toLocaleString()} of ${total.toLocaleString()} in ${filterBook}`
-                : `${total.toLocaleString()} occurrence${total !== 1 ? 's' : ''} in the ${translation}`}
+                : `${total.toLocaleString()} occurrence${total !== 1 ? 's' : ''} in the KJV`}
             </div>
           )}
           {!loading && total > 0 && (

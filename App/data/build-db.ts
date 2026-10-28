@@ -6,8 +6,8 @@
 import initSqlJs from 'sql.js'
 import { join } from 'path'
 import { readFileSync, writeFileSync, existsSync } from 'fs'
-import { HISTORICAL_CREATE_SQL, HISTORICAL_SOURCES, HISTORICAL_REFS } from '../electron/historicalData'
-import { APOCRYPHA_CREATE_SQL, APOCRYPHA_BOOKS, APOCRYPHA_VERSES } from '../electron/apocryphaData'
+import { HISTORICAL_CREATE_SQL, HISTORICAL_SOURCES, HISTORICAL_REFS } from './historicalData'
+import { APOCRYPHA_CREATE_SQL, APOCRYPHA_BOOKS, APOCRYPHA_VERSES } from './apocryphaData'
 
 const DB_PATH = join(__dirname, 'bible.db')
 const RAW_DIR = join(__dirname, 'raw')

@@ -1,5 +1,10 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import type { OverviewVerse, OverviewChapter, OverviewPericope, BiblehubChapter, BiblehubPassage, BiblesummaryChapter, SelectedVerse } from '../types'
+import { bibleDb } from '../db/sqlite'
+import {
+  getBiblehubChapter, getBiblehubPassage, getBiblesummaryChapter, getOverviewChapter, getOverviewPericope, getOverviewVerse,
+} from '../db/queries'
+import type { OverviewVerse, OverviewChapter, OverviewPericope, BiblehubChapter, BiblehubPassage, BiblesummaryChapter } from '../db/queries'
+import type { SelectedVerse } from '../types'
 
 type Scope = 'verse' | 'chapter' | 'context'
 
@@ -52,7 +57,7 @@ function SourceSection({ name, children }: { name: string; children: React.React
       {name === 'bibleref' && (
         <button
           className="overview-attribution"
-          onClick={() => window.bibleApi.openExternal('https://www.gotquestions.org')}
+          onClick={() => window.api.openExternal('https://www.gotquestions.org')}
         >
           © Got Questions Ministries · gotquestions.org
         </button>
@@ -82,9 +87,9 @@ export function OverviewPanel({ selected }: Props) {
     setBiblesummaryData(null)
     const { book, chapter } = selected
     Promise.all([
-      window.overviewApi.getChapter(book, chapter).catch(() => null),
-      window.overviewApi.getBiblehubChapter(book, chapter).catch(() => null),
-      window.overviewApi.getBiblesummaryChapter(book, chapter).catch(() => null),
+      getOverviewChapter(bibleDb, book, chapter).catch(() => null),
+      getBiblehubChapter(bibleDb, book, chapter).catch(() => null),
+      getBiblesummaryChapter(bibleDb, book, chapter).catch(() => null),
     ]).then(([ch, bh, bs]) => {
       setChapterData(ch ?? null)
       setBiblehubData(bh ?? null)
@@ -101,9 +106,9 @@ export function OverviewPanel({ selected }: Props) {
     const { book, chapter, verse } = selected
     if (!verse) { setLoading(false); return }
     Promise.all([
-      window.overviewApi.getVerse(book, chapter, verse).catch(() => null),
-      window.overviewApi.getPericope(book, chapter, verse).catch(() => null),
-      window.overviewApi.getBiblehubPassage(book, chapter, verse).catch(() => null),
+      getOverviewVerse(bibleDb, book, chapter, verse).catch(() => null),
+      getOverviewPericope(bibleDb, book, chapter, verse).catch(() => null),
+      getBiblehubPassage(bibleDb, book, chapter, verse).catch(() => null),
     ]).then(([v, p, bhp]) => {
       setVerseData(v ?? null)
       setPericopeData(p ?? null)

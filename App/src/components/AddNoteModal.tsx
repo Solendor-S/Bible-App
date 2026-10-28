@@ -1,144 +1,69 @@
-import React, { useState, useEffect, useRef } from 'react'
-import type { Notebook, Note } from '../types'
+// Per-verse note editor (Android notes, plus desktop notebooks). One note per verse per notebook.
+import { useEffect, useRef, useState } from 'react'
+import { bibleDb, userDb } from '../db/sqlite'
+import { createNotebook, deleteNote, getNote, getNotebooks, getVerseText, saveNote } from '../db/queries'
+import { stripUsfm } from '../data/redLetter'
+import { Modal } from './Modal'
+import type { Notebook } from '../types'
 
-interface NoteTarget {
-  book: string
-  chapter: number
-  verse: number
-  text: string
-}
+export interface NoteTarget { book: string; chapter: number; verse: number }
 
-interface Props {
-  target: NoteTarget
-  onClose: () => void
-  onSaved: () => void
-}
-
-export function AddNoteModal({ target, onClose, onSaved }: Props) {
+export function AddNoteModal({ target, onClose, onSaved }: { target: NoteTarget; onClose: () => void; onSaved: () => void }) {
   const [notebooks, setNotebooks] = useState<Notebook[]>([])
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [notebookId, setNotebookId] = useState(1)
   const [newName, setNewName] = useState('')
-  const [creatingNew, setCreatingNew] = useState(false)
-  const [noteText, setNoteText] = useState('')
-  const [saving, setSaving] = useState(false)
+  const [creating, setCreating] = useState(false)
+  const [text, setText] = useState('')
+  const [existing, setExisting] = useState(false)
+  const [verseText, setVerseText] = useState('')
   const textRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
-    window.notesApi.getNotebooks().then(list => {
-      setNotebooks(list)
-      if (list.length > 0) setSelectedId(list[0].id)
-      else setCreatingNew(true)
-    })
-  }, [])
-
-  useEffect(() => {
+    getNotebooks(userDb).then(setNotebooks)
+    getVerseText(bibleDb, target.book, target.chapter, target.verse).then(t => setVerseText(t ? stripUsfm(t) : ''))
     textRef.current?.focus()
-  }, [])
+  }, [target])
 
-  // Close on Escape
   useEffect(() => {
-    function handler(e: KeyboardEvent) { if (e.key === 'Escape') onClose() }
-    document.addEventListener('keydown', handler)
-    return () => document.removeEventListener('keydown', handler)
-  }, [onClose])
+    getNote(userDb, target.book, target.chapter, target.verse, notebookId).then(n => { setText(n?.text ?? ''); setExisting(!!n) })
+  }, [notebookId, target])
 
-  async function handleSave() {
-    if (saving) return
-    let notebookId = selectedId
-
-    if (creatingNew) {
-      const name = newName.trim()
-      if (!name) return
-      const nb: Notebook = { id: crypto.randomUUID(), name, createdAt: Date.now() }
-      await window.notesApi.saveNotebook(nb)
-      notebookId = nb.id
+  async function save() {
+    let id = notebookId
+    if (creating) {
+      if (!newName.trim()) return
+      id = await createNotebook(userDb, newName.trim())
     }
-
-    if (!notebookId) return
-    setSaving(true)
-
-    const note: Note = {
-      id: crypto.randomUUID(),
-      notebookId,
-      book: target.book,
-      chapter: target.chapter,
-      verse: target.verse,
-      verseText: target.text,
-      noteText: noteText.trim(),
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    }
-    await window.notesApi.saveNote(note)
-    setSaving(false)
-    onSaved()
-    onClose()
+    if (text.trim()) await saveNote(userDb, target.book, target.chapter, target.verse, text.trim(), id)
+    else await deleteNote(userDb, target.book, target.chapter, target.verse, id)
+    onSaved(); onClose()
   }
 
-  const ref = `${target.book} ${target.chapter}:${target.verse}`
-  const canSave = (creatingNew ? newName.trim().length > 0 : !!selectedId)
+  async function remove() {
+    await deleteNote(userDb, target.book, target.chapter, target.verse, notebookId)
+    onSaved(); onClose()
+  }
 
   return (
-    <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose() }}>
-      <div className="add-note-modal">
-        <div className="add-note-header">
-          <span className="add-note-ref">{ref}</span>
-          <button className="modal-close-btn" onClick={onClose}>×</button>
-        </div>
-
-        <p className="add-note-verse-text">"{target.text}"</p>
-
-        <div className="add-note-section-label">Notebook</div>
-        <div className="add-note-notebooks">
-          {notebooks.map(nb => (
-            <button
-              key={nb.id}
-              className={`notebook-chip${selectedId === nb.id && !creatingNew ? ' notebook-chip--active' : ''}`}
-              onClick={() => { setSelectedId(nb.id); setCreatingNew(false) }}
-            >
-              {nb.name}
-            </button>
-          ))}
-          <button
-            className={`notebook-chip notebook-chip--new${creatingNew ? ' notebook-chip--active' : ''}`}
-            onClick={() => { setCreatingNew(true); setSelectedId(null) }}
-          >
-            + New
-          </button>
-        </div>
-
-        {creatingNew && (
-          <input
-            className="add-note-nb-input"
-            placeholder="Notebook name…"
-            value={newName}
-            onChange={e => setNewName(e.target.value)}
-            autoFocus
-          />
+    <Modal open onClose={onClose} title={`Note · ${target.book} ${target.chapter}:${target.verse}`}>
+      {verseText && <p className="note-verse">{verseText}</p>}
+      <div className="note-notebook-row">
+        {creating ? (
+          <input className="panel-search" placeholder="New notebook name" value={newName} onChange={e => setNewName(e.target.value)} autoFocus />
+        ) : (
+          <select className="map-select" value={notebookId} onChange={e => setNotebookId(+e.target.value)}>
+            {notebooks.map(n => <option key={n.id} value={n.id}>{n.name}</option>)}
+          </select>
         )}
-
-        <div className="add-note-section-label">Note</div>
-        <textarea
-          ref={textRef}
-          className="add-note-textarea"
-          placeholder="Write your note…"
-          value={noteText}
-          onChange={e => setNoteText(e.target.value)}
-          rows={5}
-        />
-
-        <div className="add-note-actions">
-          <button className="add-note-cancel" onClick={onClose}>Cancel</button>
-          <button
-            className="add-note-save"
-            onClick={handleSave}
-            disabled={!canSave || saving}
-          >
-            {saving ? 'Saving…' : 'Save Note'}
-          </button>
-        </div>
+        <button className="link-btn" onClick={() => setCreating(c => !c)}>{creating ? 'Choose existing' : '+ New notebook'}</button>
       </div>
-    </div>
+      <textarea ref={textRef} className="note-textarea" rows={7} value={text} onChange={e => setText(e.target.value)}
+        placeholder="Write your note…" onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) save() }} />
+      <div className="dlg-actions">
+        {existing && <button className="btn btn--danger" onClick={remove}>Delete</button>}
+        <button className="btn" onClick={onClose}>Cancel</button>
+        <button className="btn btn--primary" onClick={save} disabled={creating && !newName.trim()}>Save (Ctrl+Enter)</button>
+      </div>
+    </Modal>
   )
 }
-
-export type { NoteTarget }

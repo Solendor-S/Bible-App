@@ -1,6 +1,16 @@
+// Core types — shared with the Android app (Patristica src/types/index.ts), plus desktop extras below.
+
 export interface BibleVerse {
+  book: string
+  chapter: number
   verse: number
   text: string
+}
+
+export interface SelectedVerse {
+  book: string
+  chapter: number
+  verse: number
 }
 
 export interface Footnote {
@@ -10,81 +20,64 @@ export interface Footnote {
   content: string
 }
 
-export interface Book {
-  book: string
-  book_order: number
+export interface BsbFootnote {
+  verse: number
+  word_index: number
+  word: string
+  footnote: string
 }
 
-export interface CrossRef {
-  to_book: string
-  to_chapter: number
-  to_verse: number
-  text: string
-}
-
-// Uniform interlinear word row, returned for any source (Greek or Hebrew).
-// `text` is the original-language word (aliased from the source table's greek/hebrew column).
-export interface WordRow {
-  position: number
-  text: string
-  translit: string | null
-  strongs: string
-  gloss: string | null
-  morph: string | null
-}
-
-export interface StrongsEntry {
-  number: string
-  lemma: string
-  translit: string
-  pronunciation: string
-  definition: string
-  kjv_usage: string
-}
-
-export type Language = 'greek' | 'hebrew'
-
-export interface OverviewVerse {
+export interface ElxxNote {
+  verse: number
+  word_index: number
   note: string
 }
 
-export interface OverviewChapter {
-  themes: string  // JSON string array e.g. '["Creation","Light"]'
-  summary: string
+export interface Book {
+  name: string
+  chapters: number
+  testament: 'OT' | 'NT' | 'APOC' | 'EARLY'
+  group?: string
 }
 
-export interface OverviewPericope {
-  title: string
-  verse_start: number
-  verse_end: number
-  description: string
-}
-
-export interface BiblehubChapter {
-  essay: string
-}
-
-export interface BiblehubPassage {
-  verse_start: number
-  verse_end: number
-  heading: string
+export interface SearchResult {
+  book: string
+  chapter: number
+  verse: number
   text: string
 }
 
-export interface BiblesummaryChapter {
-  summary: string
+export interface Bookmark {
+  book: string
+  chapter: number
+  verse: number
+  createdAt: number
+  position: number
 }
 
-export interface LexiconEntry {
-  number: string
-  lemma: string
-  translit: string
-  pronunciation: string
-  part_of_speech: string
-  strongs_def: string
-  outline: string
-  thayers_text: string  // Thayer's (Greek) or BDB (Hebrew) full text
-  kjv_translations: string
+export interface Highlight {
+  book: string
+  chapter: number
+  verse: number
+  color: string
+  createdAt: number
+}
+
+export interface Note {
+  id: number
+  notebookId: number
+  book: string
+  chapter: number
+  verse: number
+  text: string
+  updatedAt: number
+}
+
+export interface CrossRef {
+  ref_book: string
+  ref_chapter: number
+  ref_verse: number
+  text: string
 }
 
 export interface CommentaryEntry {
@@ -95,57 +88,6 @@ export interface CommentaryEntry {
   full_text: string
   source: string
   source_url: string
-}
-
-export interface SearchResult {
-  verses: Array<{ book: string; chapter: number; verse: number; text: string }>
-  commentary: Array<{ book: string; chapter: number; verse: number; father_name: string; text: string }>
-  totalVerses: number
-  totalCommentary: number
-}
-
-export interface SelectedVerse {
-  book: string
-  chapter: number
-  verse: number
-}
-
-export interface PassageRef {
-  book: string
-  chapter: number
-  verseStart?: number
-  verseEnd?: number
-  raw: string
-  bookOnly?: boolean
-}
-
-export interface ChatMessage {
-  id: string
-  role: 'user' | 'assistant'
-  content: string
-  timestamp: number
-}
-
-export interface ChatSession {
-  id: string
-  title: string
-  createdAt: number
-  messages: ChatMessage[]
-}
-
-export interface HistoricalEntry {
-  id: number
-  source_key: string
-  title: string
-  category: 'ancient_author' | 'archaeology' | 'manuscript' | 'inscription'
-  author: string
-  date_desc: string
-  location: string
-  description: string
-  significance: string
-  citation: string
-  testament: 'ot' | 'nt'
-  sort_year: number
 }
 
 export interface TextualVariant {
@@ -162,66 +104,43 @@ export interface TextualVariant {
   description: string
 }
 
-export interface JosephusEntry {
-  work: string
-  book: number
-  chapter: number
-  section: number
-  text: string
-  ref: string
-  note: string
-}
+// ── Desktop extras ────────────────────────────────────────────────
 
-export interface ApocryphaBook {
-  id: number
-  book: string
-  book_order: number
-  group_label: string
-  chapter_count: number
-}
-
-export interface ApocryphaVerse {
-  verse: number
-  text: string
-}
-
-export interface CommentarySearchResult extends CommentaryEntry {
+export interface PassageRef {
   book: string
   chapter: number
-  verse: number
+  verseStart?: number
+  verseEnd?: number
+  raw: string
+  bookOnly?: boolean
+  /** Which reader corpus the passage belongs to; undefined = canonical Bible. */
+  kind?: 'apocrypha' | 'early'
 }
 
 export interface Notebook {
-  id: string
+  id: number
   name: string
   createdAt: number
 }
 
-export interface Note {
+export interface ChatMessage {
   id: string
-  notebookId: string
-  book: string
-  chapter: number
-  verse: number
-  verseText: string
-  noteText: string
+  role: 'user' | 'assistant'
+  content: string
+  timestamp: number
+}
+
+export interface ChatSession {
+  id: string
+  title: string
   createdAt: number
-  updatedAt: number
+  messages: ChatMessage[]
 }
 
 export interface ResolvedCitation {
   hasDbMatch: boolean
   url?: string
   aiSuggested?: boolean
-}
-
-export interface Bookmark {
-  id: string
-  book: string
-  chapter: number
-  verse: number
-  verseText: string
-  createdAt: number
 }
 
 export interface NavesTopic {
@@ -235,96 +154,30 @@ export interface NavesRef {
   chapter: number
   verse: number
   text: string | null
+  cross_count?: number
 }
 
-export interface Highlight {
-  book: string
-  chapter: number
-  verse: number
-  color: string
-  text: string | null
+export interface Release {
+  tag: string
+  name: string
+  date: string
+  body: string
 }
 
 declare global {
   interface Window {
-    translationsApi: {
-      getList(): Promise<string[]>
-      getVerses(translation: string, book: string, chapter: number): Promise<BibleVerse[]>
-    }
-    bookmarksApi: {
-      getAll(): Promise<Bookmark[]>
-      add(bookmark: Bookmark): Promise<void>
-      remove(book: string, chapter: number, verse: number): Promise<void>
-    }
-    highlightApi: {
-      get(book: string, chapter: number): Promise<Array<{ verse: number; color: string }>>
-      set(book: string, chapter: number, verse: number, color: string): Promise<void>
-      clear(book: string, chapter: number, verse: number): Promise<void>
-      getAll(translation?: string): Promise<Highlight[]>
-    }
-    notesApi: {
-      getNotebooks(): Promise<Notebook[]>
-      saveNotebook(notebook: Notebook): Promise<void>
-      deleteNotebook(id: string): Promise<void>
-      getNotes(notebookId: string): Promise<Note[]>
-      saveNote(note: Note): Promise<void>
-      deleteNote(id: string): Promise<void>
-    }
-    overviewApi: {
-      getVerse(book: string, chapter: number, verse: number): Promise<OverviewVerse | null>
-      getChapter(book: string, chapter: number): Promise<OverviewChapter | null>
-      getPericope(book: string, chapter: number, verse: number): Promise<OverviewPericope | null>
-      getBiblehubChapter(book: string, chapter: number): Promise<BiblehubChapter | null>
-      getBiblehubPassage(book: string, chapter: number, verse: number): Promise<BiblehubPassage | null>
-      getBiblesummaryChapter(book: string, chapter: number): Promise<BiblesummaryChapter | null>
-    }
-    navesApi: {
-      getForVerse(book: string, chapter: number, verse: number): Promise<NavesTopic[]>
-      getTopicRefs(topicId: number, translation?: string): Promise<NavesRef[]>
-      search(query: string): Promise<NavesTopic[]>
-    }
-    bibleApi: {
-      getBooks(): Promise<Book[]>
-      getChapters(book: string): Promise<number[]>
-      getVerses(book: string, chapter: number): Promise<BibleVerse[]>
-      getChapterFootnotes(book: string, chapter: number): Promise<Footnote[]>
-      getCrossRefs(book: string, chapter: number, verse: number, translation?: string): Promise<CrossRef[]>
-      getCrossRefsFull(book: string, chapter: number, verse: number, translation?: string): Promise<CrossRef[]>
-      getWords(source: string, book: string, chapter: number, verse: number): Promise<WordRow[]>
-      getStrongsEntry(type: Language, num: string): Promise<StrongsEntry | null>
-      getLexiconEntry(type: Language, num: string): Promise<LexiconEntry | null>
-      getCommentary(book: string, chapter: number, verse: number): Promise<CommentaryEntry[]>
-      getJosephusForVerse(book: string, chapter: number, verse: number): Promise<JosephusEntry[]>
-      getHistoricalForVerse(book: string, chapter: number, verse: number): Promise<HistoricalEntry[]>
-      getHistoricalAll(): Promise<HistoricalEntry[]>
-      search(params: { query: string; tab?: string; book?: string; father?: string; offset?: number; limit?: number; translation?: string }): Promise<SearchResult>
-      getFathers(): Promise<string[]>
-      concordance(word: string, translation?: string): Promise<{ total: number; results: Array<{ book: string; chapter: number; verse: number; text: string }> }>
+    api: {
+      sql(which: 'bible' | 'user', method: string, sql: string, params?: unknown[]): Promise<any>
       openExternal(url: string): Promise<void>
-      launchUpdater(): Promise<void>
+      setTitleBarColors(color: string, symbolColor: string): Promise<void>
       getVersion(): Promise<string>
-      getReleases(): Promise<{ tag: string; name: string; date: string; body: string }[]>
+      getReleases(): Promise<Release[]>
+      launchUpdater(): Promise<void>
       onUpdateAvailable(cb: (info: { current: string; latest: string }) => void): void
       ensureOllama(): Promise<{ success: boolean; alreadyRunning?: boolean; error?: string }>
-    }
-    apocryphaApi: {
-      getBooks(): Promise<ApocryphaBook[]>
-      getChapters(book: string): Promise<number[]>
-      getVerses(book: string, chapter: number): Promise<ApocryphaVerse[]>
-    }
-    earlyTextsApi: {
-      getBooks(): Promise<{ book: string; chapter_count: number }[]>
-      getChapters(book: string): Promise<number[]>
-      getVerses(book: string, chapter: number): Promise<{ verse: number; text: string }[]>
-      getFootnotes(book: string, chapter: number): Promise<{ marker: number; note: string }[]>
-    }
-    chatApi: {
-      getSessions(): Promise<ChatSession[]>
-      saveSession(session: ChatSession): Promise<void>
-      loadSession(id: string): Promise<ChatSession | null>
-      deleteSession(id: string): Promise<void>
-      searchCommentary(query: string): Promise<CommentarySearchResult[]>
-      searchCommentaryByFather(name: string): Promise<CommentarySearchResult[]>
+      getChatSessions(): Promise<ChatSession[]>
+      saveChatSession(session: ChatSession): Promise<void>
+      loadChatSession(id: string): Promise<ChatSession | null>
     }
   }
 }

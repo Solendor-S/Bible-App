@@ -1,117 +1,18 @@
 import { contextBridge, ipcRenderer } from 'electron'
 
-contextBridge.exposeInMainWorld('bibleApi', {
-  getBooks: () => ipcRenderer.invoke('bible:getBooks'),
-  getChapters: (book: string) => ipcRenderer.invoke('bible:getChapters', book),
-  getVerses: (book: string, chapter: number) => ipcRenderer.invoke('bible:getVerses', book, chapter),
-  getChapterFootnotes: (book: string, chapter: number) => ipcRenderer.invoke('bible:getChapterFootnotes', book, chapter),
-  getCrossRefs: (book: string, chapter: number, verse: number, translation?: string) =>
-    ipcRenderer.invoke('bible:getCrossRefs', book, chapter, verse, translation),
-  getCrossRefsFull: (book: string, chapter: number, verse: number, translation?: string) =>
-    ipcRenderer.invoke('bible:getCrossRefsFull', book, chapter, verse, translation),
-  getWords: (source: string, book: string, chapter: number, verse: number) =>
-    ipcRenderer.invoke('bible:getWords', source, book, chapter, verse),
-  getStrongsEntry: (type: string, num: string) =>
-    ipcRenderer.invoke('bible:getStrongsEntry', type, num),
-  getLexiconEntry: (type: string, num: string) =>
-    ipcRenderer.invoke('bible:getLexiconEntry', type, num),
-  getCommentary: (book: string, chapter: number, verse: number) =>
-    ipcRenderer.invoke('commentary:getForVerse', book, chapter, verse),
-  getJosephusForVerse: (book: string, chapter: number, verse: number) =>
-    ipcRenderer.invoke('josephus:getForVerse', book, chapter, verse),
-  getHistoricalForVerse: (book: string, chapter: number, verse: number) =>
-    ipcRenderer.invoke('historical:getForVerse', book, chapter, verse),
-  getHistoricalAll: () => ipcRenderer.invoke('historical:getAll'),
-  getVariantsForVerse: (book: string, chapter: number, verse: number) =>
-    ipcRenderer.invoke('variants:getForVerse', book, chapter, verse),
-  search: (params: { query: string; tab?: string; book?: string; father?: string; offset?: number; limit?: number; translation?: string }) =>
-    ipcRenderer.invoke('search:query', params),
-  getFathers: () => ipcRenderer.invoke('search:getFathers'),
-  concordance: (word: string, translation?: string) => ipcRenderer.invoke('concordance:search', word, translation),
+contextBridge.exposeInMainWorld('api', {
+  sql: (which: 'bible' | 'user', method: string, sql: string, params?: unknown[]) =>
+    ipcRenderer.invoke('sql', which, method, sql, params),
   openExternal: (url: string) => ipcRenderer.invoke('shell:openExternal', url),
-  launchUpdater: () => ipcRenderer.invoke('app:launchUpdater'),
+  setTitleBarColors: (color: string, symbolColor: string) =>
+    ipcRenderer.invoke('app:setTitleBarColors', color, symbolColor),
   getVersion: () => ipcRenderer.invoke('app:getVersion'),
   getReleases: () => ipcRenderer.invoke('app:getReleases'),
+  launchUpdater: () => ipcRenderer.invoke('app:launchUpdater'),
   onUpdateAvailable: (cb: (info: { current: string; latest: string }) => void) =>
     ipcRenderer.on('app:updateAvailable', (_e, info) => cb(info)),
-  ensureOllama: () => ipcRenderer.invoke('ollama:ensureRunning')
-})
-
-contextBridge.exposeInMainWorld('notesApi', {
-  getNotebooks: () => ipcRenderer.invoke('notes:getNotebooks'),
-  saveNotebook: (notebook: any) => ipcRenderer.invoke('notes:saveNotebook', notebook),
-  deleteNotebook: (id: string) => ipcRenderer.invoke('notes:deleteNotebook', id),
-  getNotes: (notebookId: string) => ipcRenderer.invoke('notes:getNotes', notebookId),
-  saveNote: (note: any) => ipcRenderer.invoke('notes:saveNote', note),
-  deleteNote: (id: string) => ipcRenderer.invoke('notes:deleteNote', id),
-})
-
-contextBridge.exposeInMainWorld('apocryphaApi', {
-  getBooks: () => ipcRenderer.invoke('apocrypha:getBooks'),
-  getChapters: (book: string) => ipcRenderer.invoke('apocrypha:getChapters', book),
-  getVerses: (book: string, chapter: number) => ipcRenderer.invoke('apocrypha:getVerses', book, chapter),
-})
-
-contextBridge.exposeInMainWorld('earlyTextsApi', {
-  getBooks: () => ipcRenderer.invoke('earlyTexts:getBooks'),
-  getChapters: (book: string) => ipcRenderer.invoke('earlyTexts:getChapters', book),
-  getVerses: (book: string, chapter: number) => ipcRenderer.invoke('earlyTexts:getVerses', book, chapter),
-  getFootnotes: (book: string, chapter: number) => ipcRenderer.invoke('earlyTexts:getFootnotes', book, chapter),
-})
-
-contextBridge.exposeInMainWorld('navesApi', {
-  getForVerse: (book: string, chapter: number, verse: number) =>
-    ipcRenderer.invoke('naves:getForVerse', book, chapter, verse),
-  getTopicRefs: (topicId: number, translation?: string) =>
-    ipcRenderer.invoke('naves:getTopicRefs', topicId, translation),
-  search: (query: string) =>
-    ipcRenderer.invoke('naves:search', query),
-})
-
-contextBridge.exposeInMainWorld('translationsApi', {
-  getList: () => ipcRenderer.invoke('translations:getList'),
-  getVerses: (translation: string, book: string, chapter: number) =>
-    ipcRenderer.invoke('translations:getVerses', translation, book, chapter),
-})
-
-contextBridge.exposeInMainWorld('bookmarksApi', {
-  getAll: () => ipcRenderer.invoke('bookmarks:getAll'),
-  add: (bm: any) => ipcRenderer.invoke('bookmarks:add', bm),
-  remove: (book: string, chapter: number, verse: number) =>
-    ipcRenderer.invoke('bookmarks:remove', book, chapter, verse),
-})
-
-contextBridge.exposeInMainWorld('highlightApi', {
-  get: (book: string, chapter: number) => ipcRenderer.invoke('highlights:get', book, chapter),
-  set: (book: string, chapter: number, verse: number, color: string) =>
-    ipcRenderer.invoke('highlights:set', book, chapter, verse, color),
-  clear: (book: string, chapter: number, verse: number) =>
-    ipcRenderer.invoke('highlights:clear', book, chapter, verse),
-  getAll: (translation?: string) => ipcRenderer.invoke('highlights:getAll', translation),
-})
-
-contextBridge.exposeInMainWorld('overviewApi', {
-  getVerse: (book: string, chapter: number, verse: number) =>
-    ipcRenderer.invoke('overview:getVerse', book, chapter, verse),
-  getChapter: (book: string, chapter: number) =>
-    ipcRenderer.invoke('overview:getChapter', book, chapter),
-  getPericope: (book: string, chapter: number, verse: number) =>
-    ipcRenderer.invoke('overview:getPericope', book, chapter, verse),
-  getBiblehubChapter: (book: string, chapter: number) =>
-    ipcRenderer.invoke('overview:getBiblehubChapter', book, chapter),
-  getBiblehubPassage: (book: string, chapter: number, verse: number) =>
-    ipcRenderer.invoke('overview:getBiblehubPassage', book, chapter, verse),
-  getBiblesummaryChapter: (book: string, chapter: number) =>
-    ipcRenderer.invoke('overview:getBiblesummaryChapter', book, chapter),
-})
-
-contextBridge.exposeInMainWorld('chatApi', {
-  getSessions: () => ipcRenderer.invoke('chat:getSessions'),
-  saveSession: (session: any) => ipcRenderer.invoke('chat:saveSession', session),
-  loadSession: (id: string) => ipcRenderer.invoke('chat:loadSession', id),
-  deleteSession: (id: string) => ipcRenderer.invoke('chat:deleteSession', id),
-  searchCommentary: (query: string) => ipcRenderer.invoke('commentary:search', query),
-  searchCommentaryByFather: (name: string) => ipcRenderer.invoke('commentary:searchByFather', name),
-  searchCommentaryByFatherAndVerse: (name: string, book: string, chapter: number, verse: number) =>
-    ipcRenderer.invoke('commentary:searchByFatherAndVerse', name, book, chapter, verse)
+  ensureOllama: () => ipcRenderer.invoke('ollama:ensureRunning'),
+  getChatSessions: () => ipcRenderer.invoke('chat:getSessions'),
+  saveChatSession: (session: unknown) => ipcRenderer.invoke('chat:saveSession', session),
+  loadChatSession: (id: string) => ipcRenderer.invoke('chat:loadSession', id),
 })

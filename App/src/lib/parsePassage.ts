@@ -1,4 +1,27 @@
 import type { PassageRef } from '../types'
+import { APOCRYPHA_BOOKS, EARLY_TEXTS } from '../data/books'
+
+// Apocrypha and early-text titles are matched literally before the canonical parser runs:
+// several contain digits or dashes ("Psalm 151", "Against Heresies Book 3") the regexes can't take.
+const EXTRA_BOOKS = [
+  ...APOCRYPHA_BOOKS.map(b => ({ name: b.name, kind: 'apocrypha' as const })),
+  ...EARLY_TEXTS.map(b => ({ name: b.name, kind: 'early' as const })),
+].sort((a, b) => b.name.length - a.name.length)
+
+function parseExtraBook(token: string): PassageRef | null {
+  const lower = token.toLowerCase()
+  const hit = EXTRA_BOOKS.find(b => lower === b.name.toLowerCase() || lower.startsWith(b.name.toLowerCase() + ' '))
+  if (!hit) return null
+  const rest = token.slice(hit.name.length).trim()
+  if (!rest) return { book: hit.name, chapter: 1, raw: token, kind: hit.kind }
+  const m = rest.match(/^(\d+)(?::(\d+)(?:-(\d+))?)?$/)
+  if (!m) return null
+  return {
+    book: hit.name, chapter: parseInt(m[1], 10), raw: token, kind: hit.kind,
+    verseStart: m[2] ? parseInt(m[2], 10) : undefined,
+    verseEnd: m[3] ? parseInt(m[3], 10) : undefined,
+  }
+}
 
 const CANONICAL_BOOKS = [
   'Genesis', 'Exodus', 'Leviticus', 'Numbers', 'Deuteronomy',
@@ -188,6 +211,9 @@ export function parsePassage(input: string): PassageRef[] {
   let prevBook: string | null = null
 
   for (const token of tokens) {
+    const extra = parseExtraBook(token)
+    if (extra) { results.push(extra); prevBook = null; continue }
+
     // Cross-chapter range with explicit book: "1 thes 4:10-5:2" / "john 1:45-3:1"
     const cross = token.match(CROSS_CHAPTER_RE)
     if (cross) {

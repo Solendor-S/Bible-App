@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react'
-import { stripUsfm } from '../lib/usfm'
+import { stripUsfm } from '../data/redLetter'
+import { bibleDb } from '../db/sqlite'
+import { getCrossRefs } from '../db/queries'
 import type { CrossRef, SelectedVerse } from '../types'
 
 interface Props {
@@ -17,7 +19,7 @@ export function ParallelModal({ verse, onClose, onNavigate, onAdd }: Props) {
   useEffect(() => {
     setLoading(true)
     setAdded(new Set())
-    window.bibleApi.getCrossRefs(verse.book, verse.chapter, verse.verse).then(r => {
+    getCrossRefs(bibleDb, verse.book, verse.chapter, verse.verse).then(r => {
       setRefs(r)
       setLoading(false)
     })
@@ -56,11 +58,11 @@ export function ParallelModal({ verse, onClose, onNavigate, onAdd }: Props) {
               <button
                 className="parallel-row-main"
                 onClick={() => {
-                  onNavigate({ book: r.to_book, chapter: r.to_chapter, verse: r.to_verse })
+                  onNavigate({ book: r.ref_book, chapter: r.ref_chapter, verse: r.ref_verse })
                   onClose()
                 }}
               >
-                <span className="result-ref">{r.to_book} {r.to_chapter}:{r.to_verse}</span>
+                <span className="result-ref">{r.ref_book} {r.ref_chapter}:{r.ref_verse}</span>
                 <span className="result-text">{stripUsfm(r.text)}</span>
               </button>
               <button
@@ -68,7 +70,7 @@ export function ParallelModal({ verse, onClose, onNavigate, onAdd }: Props) {
                 title={added.has(i) ? 'Added' : 'Add to scripture panel'}
                 onClick={() => {
                   if (added.has(i)) return
-                  onAdd(r.to_book, r.to_chapter, r.to_verse)
+                  onAdd(r.ref_book, r.ref_chapter, r.ref_verse)
                   setAdded(s => new Set([...s, i]))
                 }}
               >

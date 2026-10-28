@@ -93,7 +93,7 @@ export function EsvSetupModal({ open, onClose }: Props) {
               {step.link && (
                 <button
                   className="esv-link-btn"
-                  onClick={() => window.bibleApi.openExternal(step.link!.url)}
+                  onClick={() => window.api.openExternal(step.link!.url)}
                 >
                   {step.link.label} ↗
                 </button>

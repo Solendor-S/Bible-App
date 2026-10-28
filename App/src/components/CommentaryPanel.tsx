@@ -1,343 +1,191 @@
-import React, { useState, useRef, useEffect } from 'react'
-import {
-  DndContext,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  DragOverlay,
-  closestCenter,
-} from '@dnd-kit/core'
+// Study panel — hosts every study tab (Android StudyScreen + Library) in the desktop right pane.
+import { useEffect, useRef, useState } from 'react'
+import { DndContext, DragOverlay, PointerSensor, closestCenter, useSensor, useSensors } from '@dnd-kit/core'
 import type { DragEndEvent, DragStartEvent } from '@dnd-kit/core'
-import {
-  SortableContext,
-  useSortable,
-  horizontalListSortingStrategy,
-  arrayMove,
-} from '@dnd-kit/sortable'
+import { SortableContext, arrayMove, horizontalListSortingStrategy, useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { useCommentary } from '../hooks/useCommentary'
-import { getFatherDates, getFatherSortYear } from '../lib/fatherDates'
-import { getSourceUrl } from '../lib/sourceLinks'
+import { bibleDb } from '../db/sqlite'
+import { getMaxVerse, getVerseText } from '../db/queries'
+import type { CommentaryEntryWithRef } from '../db/queries'
+import { stripUsfm } from '../data/redLetter'
+import { usePref } from '../context/Prefs'
+import { OverviewPanel } from './OverviewPanel'
+import { FathersPanel } from './FathersPanel'
 import { CrossRefsPanel } from './CrossRefsPanel'
 import { WordStudyPanel } from './WordStudyPanel'
-import type { WordHighlight } from './WordStudyPanel'
-import { JosephusPanel } from './JosephusPanel'
-import { NotesPanel } from './NotesPanel'
+import { AquinasPanel } from './AquinasPanel'
+import { DoctrinePanel } from './DoctrinePanel'
+import { HistoricalPanel } from './HistoricalPanel'
+import { ChurchHistoryPanel } from './ChurchHistoryPanel'
 import { TopicsPanel } from './TopicsPanel'
-import { BookmarksPanel } from './BookmarksPanel'
-import { HighlightsPanel } from './HighlightsPanel'
 import { MapPanel } from './MapPanel'
-import { CouncilsPanel } from './CouncilsPanel'
-import { HeresiesPanel } from './HeresiesPanel'
-import { OverviewPanel } from './OverviewPanel'
-import type { Bookmark, CommentaryEntry, CommentarySearchResult, SelectedVerse } from '../types'
+import { LibraryPanel } from './LibraryPanel'
+import type { LibraryTab } from './LibraryPanel'
+import { EntryCard } from './EntryCard'
+import type { WordHighlight } from '../lib/wordHighlight'
+import type { SelectedVerse } from '../types'
 
-export type RightTab = 'commentary' | 'crossrefs' | 'wordstudy' | 'firstcentury' | 'notes' | 'topics' | 'bookmarks' | 'highlights' | 'map' | 'councils' | 'heresies' | 'overview'
-
-interface Props {
-  selected: SelectedVerse
-  featuredEntry?: CommentarySearchResult | null
-  onClearFeatured?: () => void
-  onNavigate?: (book: string, chapter: number, verse: number) => void
-  rightTab: RightTab
-  onTabChange: (tab: RightTab) => void
-  onWordSelect?: (info: WordHighlight | null) => void
-  notesRefreshToken?: number
-  bookmarks?: Bookmark[]
-  onBookmarkRemove?: (book: string, chapter: number, verse: number) => void
-  translation?: string
-  jumpToStrongs?: string | null
-  onJumpHandled?: () => void
-}
-
-function EntryView({
-  entry,
-  book,
-  chapter,
-}: {
-  entry: CommentaryEntry
-  book: string
-  chapter: number
-}) {
-  const [expanded, setExpanded] = useState(false)
-  const url = getSourceUrl(entry.father_name, book, chapter, entry.source_url, entry.excerpt)
-  return (
-    <div className="commentary-entry">
-      <div className="commentary-header">
-        <div className="commentary-father">
-          <span className="father-name">{entry.father_name}</span>
-          <span className="father-era">{getFatherDates(entry.father_name, entry.father_era)}</span>
-        </div>
-        {url && (
-          <button
-            className="source-link-btn"
-            onClick={() => window.bibleApi.openExternal(url)}
-            title="Read full text online"
-          >
-            Read full text ↗
-          </button>
-        )}
-      </div>
-      <p className="commentary-excerpt">
-        {expanded ? entry.full_text : entry.excerpt}
-      </p>
-      {entry.full_text.length > entry.excerpt.length && (
-        <button
-          className="expand-inline-btn"
-          onClick={() => setExpanded(e => !e)}
-        >
-          {expanded ? '▲ Show less' : '▼ Show more'}
-        </button>
-      )}
-      {entry.source && (
-        <p className="commentary-source">{entry.source}</p>
-      )}
-    </div>
-  )
-}
+export type RightTab = 'overview' | 'fathers' | 'crossrefs' | 'words' | 'aquinas' | 'doctrine' | 'historical' | 'church' | 'topics' | 'map' | 'library'
+type Nav = (book: string, chapter: number, verse: number) => void
 
 const DEFAULT_TABS: { id: RightTab; label: string }[] = [
-  { id: 'overview',   label: 'Overview' },
-  { id: 'commentary', label: 'Fathers' },
-  { id: 'crossrefs',  label: 'Cross-Refs' },
-  { id: 'wordstudy',  label: 'Words' },
-  { id: 'firstcentury', label: 'History' },
-  { id: 'notes',      label: 'Notes' },
-  { id: 'topics',     label: 'Topics' },
-  { id: 'bookmarks',  label: 'Saved' },
-  { id: 'highlights', label: 'Highlights' },
-  { id: 'map',        label: 'Map' },
-  { id: 'councils',   label: 'Councils' },
-  { id: 'heresies',   label: 'Heresies' },
+  { id: 'words', label: 'Words' },
+  { id: 'overview', label: 'Overview' },
+  { id: 'fathers', label: 'Church Fathers' },
+  { id: 'crossrefs', label: 'Cross-Refs' },
+  { id: 'aquinas', label: 'Aquinas' },
+  { id: 'doctrine', label: 'Doctrine' },
+  { id: 'historical', label: 'Historical' },
+  { id: 'church', label: 'Church History' },
+  { id: 'topics', label: 'Topics' },
+  { id: 'map', label: 'Map' },
+  { id: 'library', label: 'Library' },
 ]
+const TAB_IDS = new Set(DEFAULT_TABS.map(t => t.id))
 
-const STORAGE_KEY = 'panel-tab-order'
-
-function loadTabOrder(): { id: RightTab; label: string }[] {
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY)
-    if (!saved) return DEFAULT_TABS
-    const ids: RightTab[] = JSON.parse(saved)
-    const map = Object.fromEntries(DEFAULT_TABS.map(t => [t.id, t]))
-    const restored = ids.filter(id => id in map).map(id => map[id])
-    const missing = DEFAULT_TABS.filter(t => !ids.includes(t.id))
-    return [...restored, ...missing]
-  } catch {
-    return DEFAULT_TABS
-  }
-}
-
-function SortableTab({
-  tab,
-  isActive,
-  isDragging,
-  onClick,
-}: {
-  tab: { id: RightTab; label: string }
-  isActive: boolean
-  isDragging: boolean
-  onClick: () => void
-}) {
+function SortableTab({ tab, active, dragging, onClick }: { tab: { id: RightTab; label: string }; active: boolean; dragging: boolean; onClick: () => void }) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: tab.id })
   return (
-    <button
-      ref={setNodeRef}
-      className={`panel-tab${isActive ? ' panel-tab--active' : ''}${isDragging ? ' panel-tab--dragging' : ''}`}
-      style={{ transform: CSS.Transform.toString(transform), transition, touchAction: 'none' }}
-      onClick={onClick}
-      {...attributes}
-      {...listeners}
-    >
+    <button ref={setNodeRef} className={`panel-tab${active ? ' panel-tab--active' : ''}${dragging ? ' panel-tab--dragging' : ''}`}
+      style={{ transform: CSS.Transform.toString(transform), transition, touchAction: 'none' }} onClick={onClick} {...attributes} {...listeners}>
       {tab.label}
     </button>
   )
 }
 
-function TabHeader({
-  rightTab,
-  onTabChange,
-}: {
-  rightTab: RightTab
-  onTabChange: (tab: RightTab) => void
-}) {
-  const [tabs, setTabs] = useState(loadTabOrder)
+function TabHeader({ rightTab, onTabChange }: { rightTab: RightTab; onTabChange: (t: RightTab) => void }) {
+  const [saved, setSaved] = usePref('panel_tab_order')
+  // Unknown ids (from older versions) drop out; new tabs append
+  const order = (() => {
+    try {
+      const ids = (JSON.parse(saved || '[]') as string[]).filter(id => TAB_IDS.has(id as RightTab))
+      return [...ids, ...DEFAULT_TABS.map(t => t.id).filter(id => !ids.includes(id))].map(id => DEFAULT_TABS.find(t => t.id === id)!)
+    } catch { return DEFAULT_TABS }
+  })()
   const [activeId, setActiveId] = useState<RightTab | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
-  const [canScrollLeft, setCanScrollLeft] = useState(false)
-  const [canScrollRight, setCanScrollRight] = useState(false)
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } })
-  )
-
-  const checkScroll = () => {
-    const el = scrollRef.current
-    if (!el) return
-    setCanScrollLeft(el.scrollLeft > 0)
-    setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 1)
-  }
+  const [edges, setEdges] = useState({ left: false, right: false })
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
 
   useEffect(() => {
-    checkScroll()
     const el = scrollRef.current
     if (!el) return
-    const onWheel = (e: WheelEvent) => {
-      if (e.deltaY === 0) return
-      e.preventDefault()
-      el.scrollBy({ left: e.deltaY, behavior: 'smooth' })
-    }
-    el.addEventListener('scroll', checkScroll, { passive: true })
+    const check = () => setEdges({ left: el.scrollLeft > 0, right: el.scrollLeft + el.clientWidth < el.scrollWidth - 1 })
+    const onWheel = (e: WheelEvent) => { if (e.deltaY) { e.preventDefault(); el.scrollBy({ left: e.deltaY, behavior: 'smooth' }) } }
+    check()
+    el.addEventListener('scroll', check, { passive: true })
     el.addEventListener('wheel', onWheel, { passive: false })
-    const ro = new ResizeObserver(checkScroll)
+    const ro = new ResizeObserver(check)
     ro.observe(el)
-    return () => { el.removeEventListener('scroll', checkScroll); el.removeEventListener('wheel', onWheel); ro.disconnect() }
+    return () => { el.removeEventListener('scroll', check); el.removeEventListener('wheel', onWheel); ro.disconnect() }
   }, [])
 
-  const scroll = (dir: 'left' | 'right') => {
-    const el = scrollRef.current
-    if (!el) return
-    el.scrollBy({ left: dir === 'left' ? -120 : 120, behavior: 'smooth' })
-  }
-
-  const handleDragStart = (e: DragStartEvent) => {
-    setActiveId(e.active.id as RightTab)
-  }
-
-  const handleDragEnd = (e: DragEndEvent) => {
+  const onDragEnd = ({ active, over }: DragEndEvent) => {
     setActiveId(null)
-    const { active, over } = e
     if (!over || active.id === over.id) return
-    setTabs(prev => {
-      const oldIndex = prev.findIndex(t => t.id === active.id)
-      const newIndex = prev.findIndex(t => t.id === over.id)
-      const next = arrayMove(prev, oldIndex, newIndex)
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(next.map(t => t.id)))
-      return next
-    })
+    const ids = order.map(t => t.id)
+    setSaved(JSON.stringify(arrayMove(ids, ids.indexOf(active.id as RightTab), ids.indexOf(over.id as RightTab))))
   }
-
-  const activeTab = activeId ? tabs.find(t => t.id === activeId) : null
+  const dragTab = activeId ? order.find(t => t.id === activeId) : null
 
   return (
-    <DndContext
-      sensors={sensors}
-      collisionDetection={closestCenter}
-      onDragStart={handleDragStart}
-      onDragEnd={handleDragEnd}
-    >
+    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={(e: DragStartEvent) => setActiveId(e.active.id as RightTab)} onDragEnd={onDragEnd}>
       <div className="panel-header panel-header--tabs">
-        {canScrollLeft && (
-          <button className="panel-tabs-arrow panel-tabs-arrow--left" onClick={() => scroll('left')} aria-label="Scroll tabs left">‹</button>
-        )}
-        <SortableContext items={tabs.map(t => t.id)} strategy={horizontalListSortingStrategy}>
+        {edges.left && <button className="panel-tabs-arrow panel-tabs-arrow--left" onClick={() => scrollRef.current?.scrollBy({ left: -120, behavior: 'smooth' })}>‹</button>}
+        <SortableContext items={order.map(t => t.id)} strategy={horizontalListSortingStrategy}>
           <div className="panel-tabs" ref={scrollRef}>
-            {tabs.map(tab => (
-              <SortableTab
-                key={tab.id}
-                tab={tab}
-                isActive={rightTab === tab.id}
-                isDragging={activeId === tab.id}
-                onClick={() => onTabChange(tab.id)}
-              />
-            ))}
+            {order.map(t => <SortableTab key={t.id} tab={t} active={rightTab === t.id} dragging={activeId === t.id} onClick={() => onTabChange(t.id)} />)}
           </div>
         </SortableContext>
-        {canScrollRight && (
-          <button className="panel-tabs-arrow panel-tabs-arrow--right" onClick={() => scroll('right')} aria-label="Scroll tabs right">›</button>
-        )}
+        {edges.right && <button className="panel-tabs-arrow panel-tabs-arrow--right" onClick={() => scrollRef.current?.scrollBy({ left: 120, behavior: 'smooth' })}>›</button>}
       </div>
-      <DragOverlay>
-        {activeTab && (
-          <button className="panel-tab panel-tab--drag-overlay">
-            {activeTab.label}
-          </button>
-        )}
-      </DragOverlay>
+      <DragOverlay>{dragTab && <button className="panel-tab panel-tab--drag-overlay">{dragTab.label}</button>}</DragOverlay>
     </DndContext>
   )
 }
 
-export function CommentaryPanel({ selected, featuredEntry, onClearFeatured, onNavigate, rightTab, onTabChange, onWordSelect, notesRefreshToken, bookmarks = [], onBookmarkRemove, translation = 'KJV', jumpToStrongs, onJumpHandled }: Props) {
-  const { entries, loading } = useCommentary(selected.book, selected.chapter, selected.verse)
-  const [fatherSearch, setFatherSearch] = useState('')
-
-  if (featuredEntry && rightTab === 'commentary') {
-    const verseLabel = `${featuredEntry.book} ${featuredEntry.chapter}:${featuredEntry.verse}`
-    return (
-      <div className="panel commentary-panel">
-        <TabHeader rightTab={rightTab} onTabChange={onTabChange} />
-        <div className="panel-body">
-          <div className="commentary-featured-header">
-            <button className="commentary-back-btn" onClick={onClearFeatured}>← All</button>
-            <span className="commentary-featured-title">{featuredEntry.father_name} on </span>
-            <button
-              className="commentary-verse-chip"
-              onClick={() => onNavigate?.(featuredEntry.book, featuredEntry.chapter, featuredEntry.verse)}
-            >
-              {verseLabel} ↗
-            </button>
-          </div>
-          <EntryView entry={featuredEntry} book={featuredEntry.book} chapter={featuredEntry.chapter} />
-        </div>
+/** Android StudyScreen header: verse ref with ‹ › steppers and a two-line verse preview. */
+function VerseHeader({ selected, onSelectVerse }: { selected: SelectedVerse; onSelectVerse: Nav }) {
+  const [text, setText] = useState<string | null>(null)
+  const [max, setMax] = useState(1)
+  useEffect(() => {
+    getVerseText(bibleDb, selected.book, selected.chapter, selected.verse).then(t => setText(t ? stripUsfm(t).replace(/¶\s*/g, '').replace(/[{}]/g, '') : null))
+    getMaxVerse(bibleDb, selected.book, selected.chapter).then(setMax)
+  }, [selected.book, selected.chapter, selected.verse])
+  return (
+    <div className="study-header">
+      <div className="study-ref">
+        <button className="link-btn" disabled={selected.verse <= 1} onClick={() => onSelectVerse(selected.book, selected.chapter, selected.verse - 1)}>‹</button>
+        <span>{selected.book} {selected.chapter}:{selected.verse}</span>
+        <button className="link-btn" disabled={selected.verse >= max} onClick={() => onSelectVerse(selected.book, selected.chapter, selected.verse + 1)}>›</button>
       </div>
-    )
+      {text && <div className="study-preview">{text}</div>}
+    </div>
+  )
+}
+
+interface Props {
+  selected: SelectedVerse
+  rightTab: RightTab
+  onTabChange: (t: RightTab) => void
+  onNavigate: Nav
+  onSelectVerse: Nav
+  onPreview: Nav
+  featuredEntry: CommentaryEntryWithRef | null
+  onClearFeatured: () => void
+  onWordSelect: (h: WordHighlight | null) => void
+  jumpToStrongs: string | null
+  onJumpHandled: () => void
+  libraryTab: LibraryTab
+  onLibraryTab: (t: LibraryTab) => void
+  userVersion: number
+  onUserChange: () => void
+  onEditNote: (book: string, chapter: number, verse: number) => void
+  browseFather: string | null
+  onBrowseFather: (name: string | null) => void
+}
+
+export function CommentaryPanel(p: Props) {
+  const [returnTab, setReturnTab] = useState<RightTab | null>(null)
+  const openFather = (name: string) => {
+    if (p.rightTab !== 'fathers') setReturnTab(p.rightTab)
+    p.onBrowseFather(name)
+    p.onTabChange('fathers')
   }
 
+  const body = (() => {
+    if (p.featuredEntry && p.rightTab === 'fathers') {
+      const e = p.featuredEntry
+      return (
+        <div className="panel-body">
+          <button className="link-btn" onClick={p.onClearFeatured}>‹ All commentary</button>
+          <EntryCard entry={e} book={e.book} chapter={e.chapter} verse={e.verse} verseRef={`${e.book} ${e.chapter}:${e.verse}`} onNavigate={p.onNavigate} onOpenFather={openFather} />
+        </div>
+      )
+    }
+    switch (p.rightTab) {
+      case 'overview': return <OverviewPanel selected={p.selected} />
+      case 'fathers': return <FathersPanel selected={p.selected} onNavigate={p.onNavigate} browseFather={p.browseFather} onBrowseFather={p.onBrowseFather}
+        returnLabel={returnTab ? DEFAULT_TABS.find(t => t.id === returnTab)?.label : null} onReturn={() => { if (returnTab) p.onTabChange(returnTab); setReturnTab(null) }} />
+      case 'crossrefs': return <CrossRefsPanel selected={p.selected} onNavigate={p.onNavigate} />
+      case 'words': return <WordStudyPanel selected={p.selected} onNavigate={p.onNavigate} onWordSelect={p.onWordSelect} jumpToStrongs={p.jumpToStrongs} onJumpHandled={p.onJumpHandled} />
+      case 'aquinas': return <AquinasPanel selected={p.selected} onNavigate={p.onNavigate} onPreview={p.onPreview} />
+      case 'doctrine': return <DoctrinePanel onNavigate={p.onNavigate} onPreview={p.onPreview} onOpenFather={openFather} />
+      case 'historical': return <HistoricalPanel selected={p.selected} />
+      case 'church': return <ChurchHistoryPanel onPreview={p.onPreview} onOpenFather={openFather} />
+      case 'topics': return <TopicsPanel selected={p.selected} onNavigate={p.onNavigate} />
+      case 'map': return <MapPanel selected={p.selected} onOpenFather={openFather} />
+      case 'library': return <LibraryPanel tab={p.libraryTab} onTabChange={p.onLibraryTab} onNavigate={p.onNavigate}
+        onEditNote={p.onEditNote} version={p.userVersion} onChanged={p.onUserChange} />
+    }
+  })()
+
+  const verseTabs: RightTab[] = ['overview', 'fathers', 'crossrefs', 'words', 'aquinas', 'historical', 'topics']
   return (
     <div className="panel commentary-panel">
-      <TabHeader rightTab={rightTab} onTabChange={onTabChange} location={location} />
-      {(() => {
-        switch (rightTab) {
-          case 'overview':
-            return <OverviewPanel selected={selected} />
-          case 'highlights':
-            return <HighlightsPanel onNavigate={onNavigate} translation={translation} />
-          case 'map':
-            return <MapPanel selected={selected} />
-          case 'bookmarks':
-            return <BookmarksPanel bookmarks={bookmarks} onNavigate={onNavigate} onRemove={(b, c, v) => onBookmarkRemove?.(b, c, v)} />
-          case 'topics':
-            return <TopicsPanel selected={selected} onNavigate={onNavigate} translation={translation} />
-          case 'notes':
-            return <NotesPanel onNavigate={onNavigate ?? (() => {})} refreshToken={notesRefreshToken} />
-          case 'crossrefs':
-            return <CrossRefsPanel selected={selected} onNavigate={onNavigate} translation={translation} />
-          case 'wordstudy':
-            return <WordStudyPanel selected={selected} onWordSelect={onWordSelect} onNavigate={onNavigate} jumpToStrongs={jumpToStrongs} onJumpHandled={onJumpHandled} />
-          case 'firstcentury':
-            return <JosephusPanel selected={selected} />
-          case 'councils':
-            return <CouncilsPanel />
-          case 'heresies':
-            return <HeresiesPanel />
-          default: {
-            const q = fatherSearch.trim().toLowerCase()
-            const filtered = [...entries]
-              .sort((a, b) => getFatherSortYear(a.father_name, a.father_era) - getFatherSortYear(b.father_name, b.father_era))
-              .filter(e => !q || e.father_name.toLowerCase().includes(q))
-            return (
-              <div className="panel-body">
-                {!selected.verse && <div className="panel-empty">Select a verse to see commentary.</div>}
-                {selected.verse && (
-                  <input
-                    className="commentary-father-search"
-                    placeholder="Filter by father name…"
-                    value={fatherSearch}
-                    onChange={e => setFatherSearch(e.target.value)}
-                    spellCheck={false}
-                  />
-                )}
-                {selected.verse && loading && <div className="panel-loading">Loading...</div>}
-                {selected.verse && !loading && entries.length === 0 && <div className="panel-empty">No commentary found for this verse.</div>}
-                {selected.verse && !loading && q && filtered.length === 0 && <div className="panel-empty">No results for "{fatherSearch}".</div>}
-                {filtered.map(entry => (
-                  <EntryView key={entry.id} entry={entry} book={selected.book} chapter={selected.chapter} />
-                ))}
-              </div>
-            )
-          }
-        }
-      })()}
+      <TabHeader rightTab={p.rightTab} onTabChange={p.onTabChange} />
+      {verseTabs.includes(p.rightTab) && <VerseHeader selected={p.selected} onSelectVerse={p.onSelectVerse} />}
+      {body}
     </div>
   )
 }

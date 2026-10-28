@@ -3,5 +3,7 @@
   "references": [
     { "path": "./tsconfig.node.json" },
     { "path": "./tsconfig.web.json" }
-  ]
+  ],
+  // ts-node (data scripts + self-checks): modern target so Set/Map spreads transpile correctly
+  "ts-node": { "compilerOptions": { "module": "commonjs", "target": "ES2022", "esModuleInterop": true, "jsx": "react-jsx" } }
 }

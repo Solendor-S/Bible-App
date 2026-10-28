@@ -1,5 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react'
 import type { NavesTopic, NavesRef, SelectedVerse } from '../types'
+import { bibleDb } from '../db/sqlite'
+import { getNavesForVerse, getNavesTopicRefs, searchNaves } from '../db/queries'
+import { stripUsfm } from '../data/redLetter'
 import { streamChat } from '../lib/ollamaClient'
 
 
@@ -24,7 +27,7 @@ export function TopicsPanel({ selected, onNavigate, translation = 'KJV' }: Props
     if (!selected?.verse) { setVerseTopics([]); return }
     setLoadingVerse(true)
     setExpandedId(null)
-    window.navesApi.getForVerse(selected.book, selected.chapter, selected.verse)
+    getNavesForVerse(bibleDb, selected.book, selected.chapter, selected.verse)
       .then(t => { setVerseTopics(t); setLoadingVerse(false) })
       .catch(() => setLoadingVerse(false))
   }, [selected?.book, selected?.chapter, selected?.verse])
@@ -35,7 +38,7 @@ export function TopicsPanel({ selected, onNavigate, translation = 'KJV' }: Props
     if (!q) { setSearchResults([]); return }
     setSearching(true)
     searchTimer.current = setTimeout(() => {
-      window.navesApi.search(q)
+      searchNaves(bibleDb, q)
         .then(r => { setSearchResults(r); setSearching(false) })
         .catch(() => setSearching(false))
     }, 250)
@@ -45,7 +48,7 @@ export function TopicsPanel({ selected, onNavigate, translation = 'KJV' }: Props
   useEffect(() => {
     if (expandedId === null) { setRefs([]); return }
     setLoadingRefs(true)
-    window.navesApi.getTopicRefs(expandedId, translation)
+    getNavesTopicRefs(bibleDb, expandedId).then(rs => rs.map(r => ({ ...r, text: r.text && stripUsfm(r.text) })))
       .then(r => { setRefs(r); setLoadingRefs(false) })
       .catch(() => setLoadingRefs(false))
   }, [expandedId, translation])
@@ -160,7 +163,7 @@ function TopicRow({ topic, expanded, refs, loadingRefs, onToggle, onNavigate }: 
     setSummaryStatus('Starting Ollama…')
     let ollamaInstalled = false
     try {
-      const ollamaStatus = await window.bibleApi.ensureOllama()
+      const ollamaStatus = await window.api.ensureOllama()
       if (!ollamaStatus.success) throw new Error(ollamaStatus.error ?? 'Could not start Ollama.')
       ollamaInstalled = true
       if (!ollamaStatus.alreadyRunning) {
@@ -203,7 +206,7 @@ function TopicRow({ topic, expanded, refs, loadingRefs, onToggle, onNavigate }: 
     setRanking(true)
     let ollamaInstalled = false
     try {
-      const ollamaStatus = await window.bibleApi.ensureOllama()
+      const ollamaStatus = await window.api.ensureOllama()
       if (!ollamaStatus.success) throw new Error(ollamaStatus.error ?? 'Could not start Ollama.')
       ollamaInstalled = true
       if (!ollamaStatus.alreadyRunning) await new Promise(r => setTimeout(r, 800))

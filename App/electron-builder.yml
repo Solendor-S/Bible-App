@@ -16,8 +16,6 @@ files:
 extraResources:
   - from: data/bible.db
     to: bible.db
-  - from: node_modules/sql.js/dist/sql-wasm.wasm
-    to: sql-wasm.wasm
   - from: ../resources
     to: resources
 

@@ -2,8 +2,18 @@ import React, { useState, useEffect, useRef } from 'react'
 import { AiChatMessage } from './AiChatMessage'
 import { streamChat, buildSystemPrompt, buildHistoricalContextPrompt, OLLAMA_MODELS, DEFAULT_MODEL } from '../lib/ollamaClient'
 import { streamGemini, fetchGeminiOnce, isTrustedUrl, buildFallbackSearchUrl, GEMINI_MODELS, DEFAULT_GEMINI_MODEL } from '../lib/geminiClient'
-import { lookupWorkByTitle } from '../lib/sourceLinks'
-import type { ChatMessage, ChatSession, CommentarySearchResult, ResolvedCitation, SelectedVerse } from '../types'
+import { lookupWorkByTitle } from '../lib/aiWorkLinks'
+import { bibleDb } from '../db/sqlite'
+import { findCommentaryForCitation, searchCommentaryText, searchVerses } from '../db/queries'
+import type { CommentaryEntryWithRef } from '../db/queries'
+import { stripUsfm } from '../data/redLetter'
+import type { ChatMessage, ChatSession, ResolvedCitation, SelectedVerse } from '../types'
+
+/** Commentary entry by this father on exactly this verse, or null. */
+async function fatherOnVerse(father: string, book: string, chapter: number, verse: number) {
+  const e = await findCommentaryForCitation(bibleDb, father, book, chapter, verse)
+  return e && e.book === book && e.chapter === chapter && e.verse === verse ? e : null
+}
 
 const AI_PANEL_MIN = 200
 const AI_PANEL_DEFAULT = 320
@@ -19,7 +29,7 @@ interface Props {
   activeVerse: SelectedVerse
   onHeightChange: (h: number) => void
   onNavigate: (book: string, chapter: number, verse: number) => void
-  onShowFatherEntry: (entry: CommentarySearchResult) => void
+  onShowFatherEntry: (entry: CommentaryEntryWithRef) => void
 }
 
 export function AiPanel({ height, activeVerse, onHeightChange, onNavigate, onShowFatherEntry }: Props) {
@@ -46,7 +56,7 @@ export function AiPanel({ height, activeVerse, onHeightChange, onNavigate, onSho
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
-  useEffect(() => { window.chatApi.getSessions().then(setSessions) }, [])
+  useEffect(() => { window.api.getChatSessions().then(setSessions) }, [])
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
   useEffect(() => { if (streaming) messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [streaming])
 
@@ -84,10 +94,7 @@ export function AiPanel({ height, activeVerse, onHeightChange, onNavigate, onSho
         if (verseRef) {
           const vm = verseRef.match(/^(.+?)\s+(\d+):(\d+)/)
           if (vm) {
-            const results = await window.chatApi.searchCommentaryByFatherAndVerse(
-              fatherName, vm[1].trim(), parseInt(vm[2]), parseInt(vm[3])
-            ).catch(() => [] as CommentarySearchResult[])
-            hasDbMatch = results.length > 0
+            hasDbMatch = !!(await fatherOnVerse(fatherName, vm[1].trim(), parseInt(vm[2]), parseInt(vm[3])).catch(() => null))
           }
         }
         if (hasDbMatch) { updates[key] = { hasDbMatch: true }; continue }
@@ -180,14 +187,14 @@ export function AiPanel({ height, activeVerse, onHeightChange, onNavigate, onSho
     let contextLines: string[] = []
     if (aiMode === 'scholar') {
       try {
-        const [searchResult, commentaryResults] = await Promise.all([
-          window.bibleApi.search(text),
-          window.chatApi.searchCommentary(text)
+        const [verses, commentaryResults] = await Promise.all([
+          searchVerses(bibleDb, text, 'KJV', [], 5, true),
+          searchCommentaryText(bibleDb, text, 5),
         ])
-        if (searchResult.verses.length > 0) {
+        if (verses.length > 0) {
           contextLines.push('Relevant scripture from the database:')
-          searchResult.verses.slice(0, 5).forEach(v => {
-            contextLines.push(`${v.book} ${v.chapter}:${v.verse} — ${v.text}`)
+          verses.forEach(v => {
+            contextLines.push(`${v.book} ${v.chapter}:${v.verse} — ${stripUsfm(v.text)}`)
           })
         }
         if (commentaryResults.length > 0) {
@@ -224,7 +231,7 @@ export function AiPanel({ height, activeVerse, onHeightChange, onNavigate, onSho
         }
       } else {
         setStreamingContent('Starting AI Scholar…')
-        const ollamaStatus = await window.bibleApi.ensureOllama()
+        const ollamaStatus = await window.api.ensureOllama()
         setStreamingContent('')
         if (!ollamaStatus.success) throw new Error(ollamaStatus.error ?? 'Could not start Ollama.')
         if (!ollamaStatus.alreadyRunning) await new Promise(r => setTimeout(r, 800))
@@ -283,25 +290,25 @@ export function AiPanel({ height, activeVerse, onHeightChange, onNavigate, onSho
       createdAt: existingSession?.createdAt ?? Date.now(),
       messages: finalMessages
     }
-    await window.chatApi.saveSession(session)
+    await window.api.saveChatSession(session)
     if (!activeSessionId) setActiveSessionId(sessionId)
     setSessions(prev => [session, ...prev.filter(s => s.id !== sessionId)])
   }
 
   async function handleNavigateFather(fatherName: string, book?: string, chapter?: number, verse?: number) {
     if (book && chapter !== undefined && verse !== undefined) {
-      const results = await window.chatApi.searchCommentaryByFatherAndVerse(fatherName, book, chapter, verse)
-      if (results.length > 0) { onShowFatherEntry(results[0]); return }
+      const e = await fatherOnVerse(fatherName, book, chapter, verse)
+      if (e) { onShowFatherEntry(e); return }
       // No verse-specific match — don't fall back to an unrelated entry
       return
     }
     // No verse context — navigate to first result for this father
-    const results = await window.chatApi.searchCommentaryByFather(fatherName)
-    if (results.length > 0) onShowFatherEntry(results[0])
+    const e = await findCommentaryForCitation(bibleDb, fatherName)
+    if (e) onShowFatherEntry(e)
   }
 
   async function handleLoadSession(id: string) {
-    const session = await window.chatApi.loadSession(id)
+    const session = await window.api.loadChatSession(id)
     if (session) { setMessages(session.messages); setActiveSessionId(id) }
   }
 

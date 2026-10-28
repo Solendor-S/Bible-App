@@ -6,7 +6,7 @@ one file (desktop has no APK size limit, so no pack/online split).
 
 The Android repo is READ-ONLY: every source is opened with ?mode=ro.
 
-Desktop-only data kept: Nave's Topical Bible (parsed from electron/navesData.ts).
+Desktop-only data kept: Nave's Topical Bible (parsed from data/navesData.ts).
 
 Usage:  python data/import-android.py [--android C:/Projects/BibleAndroidApp/Patristica]
 Writes data/bible.db.new, self-checks it, then swaps it over data/bible.db
@@ -114,7 +114,7 @@ def main():
     db.execute(view.format(v='aquinas_catena', e='aquinas_entries', t='aquinas_texts'))
 
     # ── Nave's Topical Bible (desktop-only) ─────────────────────────────────
-    naves_ts = open(os.path.join(APP, 'electron', 'navesData.ts'), encoding='utf-8').read()
+    naves_ts = open(os.path.join(HERE, 'navesData.ts'), encoding='utf-8').read()
     unq = lambda s: s.replace("\\'", "'").replace('\\\\', '\\')
     topics = [(int(i), unq(n)) for i, n in re.findall(r"^\s*\[(\d+), '((?:[^'\\]|\\.)*)'\],?\s*$", naves_ts, re.M)]
     refs = [(int(t), unq(b), int(ch), int(v)) for t, b, ch, v in

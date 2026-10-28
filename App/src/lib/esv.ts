@@ -48,26 +48,8 @@ export const ESV_COPYRIGHT =
   'Scripture quotations are from the ESV® Bible (The Holy Bible, English Standard Version®), ' +
   '© 2001 by Crossway, a publishing ministry of Good News Publishers. Used by permission. All rights reserved.'
 
-/**
- * Short form for quotations *leaving* the app (copy, share, export). Crossway allows
- * this abbreviated notice in non-saleable media. Not interchangeable with
- * ESV_COPYRIGHT — displayed chapters get the full notice, copied text gets this.
- */
-export const ESV_SHORT_ATTRIBUTION = ' (ESV)'
 
 export const ESV_SIGNUP_URL = 'https://api.esv.org/account/create-application/'
-
-/**
- * Translations served by an API instead of bible.db. Anything that queries SQLite —
- * search, concordance, cross-reference joins — must substitute a real translation,
- * or it silently returns nothing.
- */
-export const API_TRANSLATIONS = new Set(['ESV'])
-
-/** The translation to actually run a SQL query against. */
-export function sqlTranslation(translation: string): string {
-  return API_TRANSLATIONS.has(translation) ? 'KJV' : translation
-}
 
 export interface EsvVerse { book: string; chapter: number; verse: number; text: string }
 
