@@ -37,7 +37,7 @@ and everything else is bundled — no Node, Git, or other tools required.
 
 ### Windows
 
-Run **`Bible Study Setup x.y.z.exe`**. Because the installer isn't code-signed yet, Windows
+Run **`bible-app-x.y.z-setup.exe`**. Because the installer isn't code-signed yet, Windows
 SmartScreen may warn — click **More info → Run anyway**. During install you'll get an optional
 checkbox to install the AI Scholar (Ollama); it's **off by default** — leave it unchecked to
 skip (you can install it later from inside the app).
