@@ -1,7 +1,7 @@
 // One verse in the reader — DOM port of the Android VerseRow (ReaderScreen.tsx), plus the
 // desktop extras: bookmark star, note marker, Words-tab word highlight, right-click menu.
 import React, { memo, useEffect, useMemo, useRef } from 'react'
-import { isRedLetter, splitByWMarkers, splitRedLetterVerse, stripUsfm } from '../data/redLetter'
+import { isRedLetter, splitByWj, splitByWMarkers, splitRedLetterVerse, stripUsfm } from '../data/redLetter'
 import type { Segment } from '../data/redLetter'
 import type { OtQuoteSpan } from '../db/queries'
 import {
@@ -87,8 +87,8 @@ export const VerseRow = memo(function VerseRow(p: VerseRowProps) {
 
   const segments = useMemo<Segment[]>(() => {
     if (isAnnotated || isDss || p.kind === 'early') return []
-    const markerSegs = p.redLetter ? splitByWMarkers(p.text) : null
-    const heuristic = p.translation !== 'KJV' && p.translation !== 'WEB'
+    const markerSegs = p.redLetter ? (splitByWj(p.text) ?? splitByWMarkers(p.text)) : null
+    const heuristic = p.translation !== 'KJV' && p.translation !== 'WEB' && p.translation !== 'WEBC'  // WEBC marks Jesus' words exactly
     const isRL = p.redLetter && !p.kind && isRedLetter(p.book, p.chapter, p.verse)
     const base = markerSegs ?? (isRL && heuristic ? splitRedLetterVerse(cleanText) : [{ t: cleanText, red: false }])
     let segs = cleanText.includes('{') ? base.flatMap(applyItalics) : base

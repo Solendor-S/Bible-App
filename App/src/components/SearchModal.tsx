@@ -11,7 +11,8 @@ import {
 import type { CommentaryEntryWithRef, StrongsWordMatch } from '../db/queries'
 import { matchBookRefs } from '../lib/matchBookRefs'
 import type { BookRef } from '../lib/matchBookRefs'
-import { BOOKS, BOOK_ORDER } from '../data/books'
+import { BOOKS, BOOK_ORDER, CANON_OT_ORDER, canonBookNames } from '../data/books'
+import type { CanonKey } from '../data/books'
 import { stripUsfm } from '../data/redLetter'
 import { TRANSLATIONS } from '../data/translations'
 import { escapeRegex } from '../utils/regex'
@@ -24,7 +25,6 @@ import type { SearchResult } from '../types'
 type Nav = (book: string, chapter: number, verse: number) => void
 type Testament = 'all' | 'OT' | 'NT'
 const WORD_TOKEN_RE = /[hg]\d+|[a-z']+/gi
-const OT_BOOKS = BOOKS.filter(b => b.testament === 'OT').map(b => b.name)
 const NT_BOOKS = BOOKS.filter(b => b.testament === 'NT').map(b => b.name)
 
 function matchesQueryWords(text: string, qWords: string[]): boolean {
@@ -36,7 +36,9 @@ function matchesQueryWords(text: string, qWords: string[]): boolean {
   })
 }
 const sigWords = (q: string[]) => { const s = q.filter(w => !SEARCH_STOP_WORDS.has(w)); return s.length ? s : q }
-const booksFor = (t: Testament, sel: Set<string>) => sel.size ? [...sel] : t === 'OT' ? OT_BOOKS : t === 'NT' ? NT_BOOKS : []
+// The WEBC holds the deuterocanon in the same table, so Protestant 'All' needs an explicit list
+const booksFor = (t: Testament, sel: Set<string>, canon: CanonKey) => sel.size ? [...sel]
+  : t === 'OT' ? CANON_OT_ORDER[canon] : t === 'NT' ? NT_BOOKS : canon === 'protestant' ? canonBookNames(canon) : []
 const formatRef = (r: BookRef) => !r.chapterSpecified ? r.book : !r.verse ? `${r.book} ${r.chapter}` : `${r.book} ${r.chapter}:${r.verse}${r.verseEnd ? `–${r.verseEnd}` : ''}`
 
 function Highlighted({ text, re, onStrongs, searchedTags }: { text: string; re: RegExp | null; onStrongs?: (s: string) => void; searchedTags: Set<string> }) {
@@ -77,6 +79,7 @@ export function SearchModal({ open, onClose, onNavigate, onOpenWordStudy, onShow
   const [script, setScript] = useState<'latin' | 'greek' | 'hebrew'>('latin')
   const [corrected, setCorrected] = useState<string[]>([])
   const [testament, setTestament] = useState<Testament>('all')
+  const [canon] = usePref('canon')
   const [books, setBooks] = useState<Set<string>>(new Set())
   const [scopeOpen, setScopeOpen] = useState(false)
   const [history, setHistory] = useState<string[]>([])
@@ -132,7 +135,7 @@ export function SearchModal({ open, onClose, onNavigate, onOpenWordStudy, onShow
       const rows = await searchCommentary(bibleDb, t)
       setCommentary(rows); setLoading(false); return
     }
-    const bks = booksFor(test, sel)
+    const bks = booksFor(test, sel, canon)
     const sc = detectQueryScript(t)
     setScript(sc)
     if (sc !== 'latin') { setResults(await searchOriginalLanguage(bibleDb, t, sc, bks, trans)); setLoading(false); return }
@@ -152,11 +155,11 @@ export function SearchModal({ open, onClose, onNavigate, onOpenWordStudy, onShow
       } else setResults(rows)
     } else setResults(rows)
     setLoading(false)
-  }, [translation, testament, books, tab, wordBoundary, mode, filterRows])
+  }, [translation, testament, books, tab, wordBoundary, mode, filterRows, canon])
 
   async function openBreakdown() {
     setBreakdown([])
-    const all = filterRows(await searchVersesAll(bibleDb, lastQuery.current, translation, booksFor(testament, books), wordBoundary), lastQuery.current)
+    const all = filterRows(await searchVersesAll(bibleDb, lastQuery.current, translation, booksFor(testament, books, canon), wordBoundary), lastQuery.current)
     const qw = lastQuery.current.toLowerCase().split(/\s+/).filter(Boolean)
     const m = new Map<string, { verses: number; matches: number; rows: SearchResult[] }>()
     for (const r of all) {
@@ -208,7 +211,7 @@ export function SearchModal({ open, onClose, onNavigate, onOpenWordStudy, onShow
       {scopeOpen && tab === 'scripture' && (
         <div className="conc-filter">
           <Chips value={testament} onChange={t => { setTestament(t); setBooks(new Set()) }} options={[{ value: 'all', label: 'All' }, { value: 'OT', label: 'Old Testament' }, { value: 'NT', label: 'New Testament' }]} />
-          {testament !== 'all' && <div className="chip-wrap">{(testament === 'OT' ? OT_BOOKS : NT_BOOKS).map(b => (
+          {testament !== 'all' && <div className="chip-wrap">{(testament === 'OT' ? CANON_OT_ORDER[canon] : NT_BOOKS).map(b => (
             <button key={b} className={`chip chip--small${books.has(b) ? ' chip--active' : ''}`} onClick={() => setBooks(s => { const n = new Set(s); n.has(b) ? n.delete(b) : n.add(b); return n })}>{b}</button>
           ))}</div>}
           <div className="dlg-actions">

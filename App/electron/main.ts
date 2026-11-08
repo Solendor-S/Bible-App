@@ -407,10 +407,20 @@ app.whenReady().then(() => {
   const splash = createSplash()
   openDbs()
   const win = createWindow()
-  win.once('ready-to-show', () => {
-    splash.close()
+  // ready-to-show waits for a first paint, which Windows can withhold from a hidden window when the
+  // app starts in the background (unfocused console, or the hidden shortcut launcher), leaving the
+  // splash up forever. Show on whichever comes first: paint, page load, or a timeout.
+  let shown = false
+  const reveal = () => {
+    if (shown || win.isDestroyed()) return
+    shown = true
+    if (!splash.isDestroyed()) splash.close()
     win.show()
-  })
+    win.focus()
+  }
+  win.once('ready-to-show', reveal)
+  win.webContents.once('did-finish-load', () => setTimeout(reveal, 300))
+  setTimeout(reveal, 15000)
   win.webContents.once('did-finish-load', () => {
     initAutoUpdater(win)
   })

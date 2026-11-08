@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { parsePassage, passagesToString } from '../lib/parsePassage'
-import { APOCRYPHA_BOOKS, BOOK_MAP, EARLY_TEXTS } from '../data/books'
+import { APOCRYPHA_BOOKS, BOOK_MAP, CANON_OT_ORDER, EARLY_TEXTS, chapterCount, inCanon } from '../data/books'
+import type { CanonKey } from '../data/books'
+import { usePref } from '../context/Prefs'
 import { useOutsideClick } from './Modal'
 import type { PassageRef } from '../types'
 
@@ -35,6 +37,17 @@ const BOOK_GROUPS: Record<'OT' | 'NT', { label: string; books: string[] }[]> = {
   ],
 }
 
+// OT groups for a canon: each deuterocanonical book follows the book it comes after in CANON_OT_ORDER.
+function otGroups(canon: CanonKey) {
+  const after = new Map<string, string[]>()
+  let last = ''
+  for (const name of CANON_OT_ORDER[canon]) {
+    if (BOOK_MAP[name]) last = name
+    else after.set(last, [...(after.get(last) ?? []), name])
+  }
+  return BOOK_GROUPS.OT.map(g => ({ ...g, books: g.books.flatMap(b => [b, ...(after.get(b) ?? [])]) }))
+}
+
 function groupBy<T extends { group?: string }>(list: T[]) {
   const m = new Map<string, T[]>()
   for (const b of list) (m.get(b.group ?? '') ?? m.set(b.group ?? '', []).get(b.group ?? '')!).push(b)
@@ -52,6 +65,7 @@ function BookDropdown({ onSelect }: { onSelect: (passage: string) => void }) {
   const [tab, setTab] = useState<Tab>('OT')
   const [filter, setFilter] = useState('')
   const [book, setBook] = useState<{ name: string; chapters: number; early?: boolean } | null>(null)
+  const [canon] = usePref('canon')
   const ref = useRef<HTMLDivElement>(null)
   useOutsideClick(ref, open, () => { setOpen(false); setBook(null) })
 
@@ -88,16 +102,16 @@ function BookDropdown({ onSelect }: { onSelect: (passage: string) => void }) {
                 {TABS.map(t => <button key={t.key} className={`chip${tab === t.key ? ' chip--active' : ''}`} onClick={() => setTab(t.key)}>{t.label}</button>)}
               </div>
               <input className="book-filter" placeholder="Search books…" value={filter} onChange={e => setFilter(e.target.value)} autoFocus spellCheck={false} />
-              {(tab === 'OT' || tab === 'NT') && BOOK_GROUPS[tab].map(g => {
+              {(tab === 'OT' || tab === 'NT') && (tab === 'OT' ? otGroups(canon) : BOOK_GROUPS.NT).map(g => {
                 const books = g.books.filter(match)
                 return books.length ? (
                   <div key={g.label} className="book-group">
                     <div className="book-group-label">{g.label}</div>
-                    <div className="book-group-items">{books.map(b => bookBtn(b, BOOK_MAP[b].chapters))}</div>
+                    <div className="book-group-items">{books.map(b => bookBtn(b, chapterCount(b, '', canon)))}</div>
                   </div>
                 ) : null
               })}
-              {tab === 'APOC' && groupBy(APOCRYPHA_BOOKS.filter(b => match(b.name))).map(([g, books]) => (
+              {tab === 'APOC' && groupBy(APOCRYPHA_BOOKS.filter(b => !inCanon(canon, b.name) && match(b.name))).map(([g, books]) => (
                 <div key={g} className="book-group">
                   <div className="book-group-label">{g}</div>
                   <div className="book-group-items">{books.map(b => bookBtn(b.name, b.chapters))}</div>

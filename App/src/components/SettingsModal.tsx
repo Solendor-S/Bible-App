@@ -10,6 +10,8 @@ const CREDITS: { title: string; body: string; url?: string }[] = [
   { title: 'Hebrew Old Testament', body: 'TAHOT (Translators Amalgamated Hebrew Old Testament) and the Westminster Leningrad Codex (WLC), via the STEPBible Tyndale datasets (CC BY 4.0).', url: 'https://github.com/STEPBible/STEPBible-Data' },
   { title: 'Greek New Testament', body: 'SBL Greek New Testament (SBLGNT), Translators Amalgamated GNT (TAGNT), and the Textus Receptus (Scrivener 1894).' },
   { title: 'Greek Old Testament (LXX)', body: 'Septuagint text based on Rahlfs with CCAT morphology, and the Apostolic Bible (Poole), both tagged and provided by STEPBible (CC BY 4.0). Thanks to David Instone-Brewer for sharing the dataset.', url: 'https://stepbible.org' },
+  { title: 'Greek Deuterocanon', body: "Swete's Septuagint text via STEPBible, with Morpheus lemmas and grammar from QuantForgeSoftware/lxx (CC BY-SA 4.0). Baruch 6 and Bel from Brenton's Greek Septuagint (public domain, eBible.org).", url: 'https://github.com/QuantForgeSoftware/lxx' },
+  { title: 'World English Bible Catholic', body: 'WEBC — the World English Bible with the 73-book Catholic canon (public domain, eBible.org).', url: 'https://ebible.org' },
   { title: "Lexicons & Strong's", body: "Thayer's Greek Lexicon and the Brown-Driver-Briggs Hebrew Lexicon (public domain), with Strong's Concordance numbering." },
   { title: 'Church Fathers', body: 'Commentary from the New Advent Fathers collection, the Historical Christian Faith commentaries and e-Catena; Catena Aurea (Parker/Newman 1841), Summa Theologica (1920 Dominican translation) and Summa Contra Gentiles (Rickaby 1905).' },
   { title: "Nave's Topical Bible", body: "Orville J. Nave's Topical Bible (public domain)." },
@@ -27,6 +29,8 @@ export function SettingsModal({ open, onClose, onOpenChangelog }: { open: boolea
   const [otCaps, setOtCaps] = usePref('ot_quote_caps')
   const [redLetter, setRedLetter] = usePref('red_letter_on')
   const [crossOrder, setCrossOrder] = usePref('crossref_biblical_order')
+  const [canon, setCanon] = usePref('canon')
+  const [deutero, setDeutero] = usePref('deutero_text')
   const [fontSize, setFontSize] = usePref('font_size')
   const [lineSpacing, setLineSpacing] = usePref('line_spacing')
   const [fontFamily, setFontFamily] = usePref('font_family')
@@ -73,6 +77,16 @@ export function SettingsModal({ open, onClose, onOpenChangelog }: { open: boolea
         </Row>
         <Row label="Font applies to">
           <Chips small value={fontScope} onChange={setFontScope} options={[{ value: 'verse', label: 'Verse text only' }, { value: 'all', label: 'All text' }]} />
+        </Row>
+        <Row label="Canon">
+          <Chips small value={canon} onChange={setCanon} options={[
+            { value: 'catholic', label: 'Catholic — 73 books, deuterocanon in the OT' },
+            { value: 'protestant', label: 'Protestant — 66 books, deuterocanon under Apocrypha' }]} />
+        </Row>
+        <Row label="Deuterocanon text">
+          <Chips small value={deutero} onChange={setDeutero} options={[
+            { value: 'WEBC', label: 'WEBC — World English Bible Catholic' },
+            { value: 'KJVA', label: 'KJVA — King James Apocrypha (1611)' }]} />
         </Row>
         <Row label="Startup translation">
           <select className="map-select" value={startupTrans} onChange={e => setStartupTrans(e.target.value)}>

@@ -276,6 +276,23 @@ const wordCount = (s: string) => s.trim().split(/\s+/).filter(Boolean).length
 const W_DENSITY_THRESHOLD = 0.7
 
 /**
+ * Parses \jw...\jw* into red/black segments: exact, so nothing has to be inferred about
+ * who is speaking. Returns null if the verse has no such marks. It's USFM's "words of Jesus"
+ * marker \wj, renamed at import because released apps strip \w as a prefix and would show
+ * a stray "j". The generic rules in stripUsfm remove \jw on every version.
+ */
+export function splitByWj(text: string): Segment[] | null {
+  if (!text.includes('\\jw')) return null
+  const segs: Segment[] = []
+  text.split(/\\jw\*/).forEach((piece, i, all) => {
+    const [before, inside] = piece.split(/\\jw\s*/)
+    if (before) segs.push({ t: stripUsfm(before), red: false })
+    if (i < all.length - 1 && inside) segs.push({ t: stripUsfm(inside), red: true })
+  })
+  return segs
+}
+
+/**
  * Parses \+w...\+w* markers into red/black segments, stripping USFM tags from
  * each segment. Returns null if no markers found.
  * Dense tagging (>W_DENSITY_THRESHOLD words tagged) means the entire verse is

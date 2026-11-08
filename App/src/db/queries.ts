@@ -3,6 +3,7 @@
 import type { SQLiteDatabase } from './sqlite'
 import type { BibleVerse, Bookmark, CommentaryEntry, CrossRef, Note, SearchResult, TextualVariant } from '../types'
 import { distributeChapters, PLAN_TEMPLATES } from '../data/planTemplates'
+import type { CanonKey } from '../data/books'
 export type { PlanTemplate } from '../data/planTemplates'
 export { PLAN_TEMPLATES } from '../data/planTemplates'
 
@@ -108,6 +109,7 @@ export const TRANSLATION_PACK_SLUG: Record<string, string> = {
   // Translation packs (rows in bible_translations)
   ASV:   'asv',
   WEB:   'web',
+  WEBC:  'webc',
   BSB:   'bsb',
   E_LXX: 'elxx',
   A_LXX: 'elxx',
@@ -1342,9 +1344,10 @@ export async function getPsalmHeading(
   return row?.heading ?? null
 }
 
-export type LxxSource = 'lxx' | 'lxx_a'
+export type LxxSource = 'lxx' | 'lxx_a' | 'swete'
 
 const LXX_WORD_TABLE: Record<LxxSource, string> = {
+  swete: 'lxx_deutero_words',
   lxx:   'lxx_words',
   lxx_a: 'lxx_apostolic_words',
 }
@@ -1824,11 +1827,12 @@ function isoDate(date: Date): string {
 export async function createPlanFromTemplate(
   db: SQLiteDatabase,
   templateKey: string,
+  canon: CanonKey,
   startDate: Date = new Date(),
 ): Promise<number> {
   const tpl = PLAN_TEMPLATES.find(t => t.key === templateKey)
   if (!tpl) throw new Error(`Unknown template: ${templateKey}`)
-  return createCustomPlan(db, tpl.label, tpl.getChapters(), tpl.days, startDate)
+  return createCustomPlan(db, tpl.label, tpl.getChapters(canon), tpl.days, startDate)
 }
 
 export async function createCustomPlan(

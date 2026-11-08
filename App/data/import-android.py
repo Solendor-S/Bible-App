@@ -82,6 +82,8 @@ def main():
     p = lambda name: os.path.join(packs, name)
     copy(p('asv.db'), ['bible_translations'])
     copy(p('web.db'), ['bible_translations'])
+    copy(p('webc.db'), ['bible_translations'])
+    copy(p('lxx-deutero.db'), ['lxx_deutero_words'])
     copy(p('bsb.db'), ['bible_translations', 'bsb_footnotes'])  # bsb_strongs_map already in core
     copy(p('elxx.db'), ['bible_translations', 'elxx_notes', 'lxx_words', 'lxx_apostolic_words'])
     copy(p('dss.db'), ['dss_words', 'textual_variants'], drop_id=True)
@@ -172,7 +174,7 @@ def main():
             bad.append(v)
     trans = dict(db.execute('SELECT translation, COUNT(*) FROM bible_translations GROUP BY 1'))
     print('  translations:', trans)
-    for code in ['KJV+', 'I_KJV+', 'ASV', 'WEB', 'BSB', 'E_LXX', 'A_LXX']:
+    for code in ['KJV+', 'I_KJV+', 'ASV', 'WEB', 'WEBC', 'BSB', 'E_LXX', 'A_LXX']:
         if not trans.get(code):
             bad.append('translation ' + code)
     works = db.execute('SELECT COUNT(DISTINCT book) FROM early_texts').fetchone()[0]

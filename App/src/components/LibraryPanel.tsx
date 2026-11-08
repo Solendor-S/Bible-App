@@ -14,7 +14,8 @@ import {
 } from '../db/queries'
 import type { HistoryEntry, NoteWithVerse, PlanEntry, PlanWithProgress } from '../db/queries'
 import { chaptersForBooks } from '../data/planTemplates'
-import { BOOKS } from '../data/books'
+import { BOOKS, canonOtBooks } from '../data/books'
+import { usePref } from '../context/Prefs'
 import { stripUsfm } from '../data/redLetter'
 import { HIGHLIGHT_COLORS, getHighlightBg } from '../theme/highlightColors'
 import { formatDate } from '../utils/formatDate'
@@ -41,7 +42,9 @@ function CreatePlan({ onDone, onCancel }: { onDone: () => void; onCancel: () => 
   const [books, setBooks] = useState<Set<string>>(new Set())
   const [name, setName] = useState('')
   const [days, setDays] = useState(30)
-  const chapters = useMemo(() => chaptersForBooks(BOOKS.filter(b => books.has(b.name)).map(b => b.name)), [books])
+  const [canon] = usePref('canon')
+  const planBooks = useMemo(() => [...canonOtBooks(canon), ...BOOKS.filter(b => b.testament === 'NT')], [canon])
+  const chapters = useMemo(() => chaptersForBooks(planBooks.filter(b => books.has(b.name)).map(b => b.name), canon), [books, planBooks, canon])
   const toggle = (b: string) => setBooks(s => { const n = new Set(s); n.has(b) ? n.delete(b) : n.add(b); return n })
 
   if (!custom) {
@@ -50,7 +53,7 @@ function CreatePlan({ onDone, onCancel }: { onDone: () => void; onCancel: () => 
         <div className="crumb"><button className="link-btn" onClick={onCancel}>‹</button> New Reading Plan</div>
         <div className="section-label">Quick Start</div>
         {PLAN_TEMPLATES.map(t => (
-          <button key={t.key} className="list-row" onClick={async () => { await createPlanFromTemplate(userDb, t.key); onDone() }}>
+          <button key={t.key} className="list-row" onClick={async () => { await createPlanFromTemplate(userDb, t.key, canon); onDone() }}>
             <span className="list-row-main"><span className="list-row-title">{t.label}</span><span className="list-row-sub">{t.description}</span></span><span className="chev">›</span>
           </button>
         ))}
@@ -66,8 +69,8 @@ function CreatePlan({ onDone, onCancel }: { onDone: () => void; onCancel: () => 
       <div className="section-label">Select Books</div>
       {(['OT', 'NT'] as const).map(t => (
         <div key={t} className="chip-wrap">
-          <button className="chip chip--small" onClick={() => setBooks(s => { const n = new Set(s); BOOKS.filter(b => b.testament === t).forEach(b => n.add(b.name)); return n })}>All {t}</button>
-          {BOOKS.filter(b => b.testament === t).map(b => (
+          <button className="chip chip--small" onClick={() => setBooks(s => { const n = new Set(s); (t === 'OT' ? planBooks.filter(b => b.testament !== 'NT') : planBooks.filter(b => b.testament === 'NT')).forEach(b => n.add(b.name)); return n })}>All {t}</button>
+          {(t === 'OT' ? planBooks.filter(b => b.testament !== 'NT') : planBooks.filter(b => b.testament === 'NT')).map(b => (
             <button key={b.name} className={`chip chip--small${books.has(b.name) ? ' chip--active' : ''}`} onClick={() => toggle(b.name)}>{b.name}</button>
           ))}
         </div>

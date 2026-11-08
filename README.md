@@ -11,15 +11,16 @@ Grab the installer for your platform from the **[latest release](https://github.
 ## Features
 
 **Reading**
-- **19 translations + ESV** — KJV, KJV+ / I_KJV+ (Strong's), ASV, WEB, BSB, ESV (free Crossway key), SBLGNT, TAGNT, TR / TR+, TAHOT, WLC / WLC+, Dead Sea Scrolls, LXX / LXX+, Brenton and Apostolic Bible English LXX
+- **20 translations + ESV** — KJV, KJV+ / I_KJV+ (Strong's), ASV, WEB, WEBC (World English Bible Catholic, 73 books), BSB, ESV (free Crossway key), SBLGNT, TAGNT, TR / TR+, TAHOT, WLC / WLC+, Dead Sea Scrolls, LXX / LXX+, Brenton and Apostolic Bible English LXX
 - **Parallel column and split view** — a second translation beside the text, or a second passage side by side
+- **Catholic or Protestant canon** — set in Settings; the Catholic canon places the deuterocanon in the Old Testament (Daniel 13–14 inside Daniel), and deuterocanonical books read in WEBC or the KJV Apocrypha
 - **Apocrypha and 22 early church texts** — Deuterocanon, broader and Ethiopian canons; Didache, 1–2 Clement, Ignatius, Polycarp, Barnabas, Diognetus, Justin, Tertullian, Irenaeus' *Against Heresies* — with their scripture references
 - **Reading aids** — red letter, reading mode (prose), focus mode, OT quotations in capitals, psalm headings, KJV / BSB / Brenton footnotes, OT cross-reference markers, book introductions
 - **Strong's everywhere** — click a tag for the entry, every occurrence, its English renderings, or a full word study
 
 **Study panel** (drag tabs to reorder)
 - **Church Fathers** — 60,000+ hand-picked New Advent citations (55 fathers) plus an 80,000-entry legacy archive; consensus by tradition, corpus search, browse by father with an influence network
-- **Words** — interlinear Greek/Hebrew/LXX from six sources, Strong's, Thayer's/BDB, morphology, scripture index
+- **Words** — interlinear Greek/Hebrew/LXX from six sources, plus Swete's Septuagint Greek for the deuterocanon, Strong's, Thayer's/BDB, morphology, scripture index
 - **Aquinas** — Catena Aurea on the Gospels, the Summa Theologica and Contra Gentiles, a Thomistic metaphysics primer
 - **Doctrine** — how 13 doctrines developed, the fathers grouped by era
 - **Cross-Refs, Overview, Historical** (Josephus, extra-biblical sources, textual variants), **Topics** (Nave's)
@@ -97,7 +98,8 @@ If Ollama isn't running, the rest of the app works fine without it.
 |--------|---------|-------|
 | KJV text | 31,100 verses | Public domain |
 | Cross-references | ~340,000 | Public domain dataset |
-| Parallel translations | ASV, WEB | Public domain |
+| Parallel translations | ASV, WEB, WEBC | Public domain (eBible.org) |
+| Greek deuterocanon | 77,500 words | Swete via STEPBible, Morpheus grammar (CC BY-SA 4.0) |
 
 ### Church Fathers Commentary
 

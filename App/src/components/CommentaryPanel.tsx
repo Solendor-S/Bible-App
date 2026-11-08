@@ -9,6 +9,7 @@ import { getMaxVerse, getVerseText } from '../db/queries'
 import type { CommentaryEntryWithRef } from '../db/queries'
 import { stripUsfm } from '../data/redLetter'
 import { usePref } from '../context/Prefs'
+import { kjvVerse } from '../data/books'
 import { OverviewPanel } from './OverviewPanel'
 import { FathersPanel } from './FathersPanel'
 import { CrossRefsPanel } from './CrossRefsPanel'
@@ -147,6 +148,11 @@ interface Props {
 
 export function CommentaryPanel(p: Props) {
   const [returnTab, setReturnTab] = useState<RightTab | null>(null)
+  const [translation] = usePref('last_used_translation')
+  // Commentary and cross-refs are keyed on KJV numbering (WEBC Daniel 3 differs). A verse with no
+  // KJV equivalent maps to -1, not 0: verse 0 holds chapter-level commentary. Words maps its own verse.
+  const sel = p.selected
+  const studySel = { ...sel, verse: kjvVerse(translation, sel.book, sel.chapter, sel.verse) ?? -1 }
   const openFather = (name: string) => {
     if (p.rightTab !== 'fathers') setReturnTab(p.rightTab)
     p.onBrowseFather(name)
@@ -165,15 +171,15 @@ export function CommentaryPanel(p: Props) {
     }
     switch (p.rightTab) {
       case 'overview': return <OverviewPanel selected={p.selected} />
-      case 'fathers': return <FathersPanel selected={p.selected} onNavigate={p.onNavigate} browseFather={p.browseFather} onBrowseFather={p.onBrowseFather}
+      case 'fathers': return <FathersPanel selected={studySel} onNavigate={p.onNavigate} browseFather={p.browseFather} onBrowseFather={p.onBrowseFather}
         returnLabel={returnTab ? DEFAULT_TABS.find(t => t.id === returnTab)?.label : null} onReturn={() => { if (returnTab) p.onTabChange(returnTab); setReturnTab(null) }} />
-      case 'crossrefs': return <CrossRefsPanel selected={p.selected} onNavigate={p.onNavigate} />
+      case 'crossrefs': return <CrossRefsPanel selected={studySel} onNavigate={p.onNavigate} />
       case 'words': return <WordStudyPanel selected={p.selected} onNavigate={p.onNavigate} onWordSelect={p.onWordSelect} jumpToStrongs={p.jumpToStrongs} onJumpHandled={p.onJumpHandled} />
-      case 'aquinas': return <AquinasPanel selected={p.selected} onNavigate={p.onNavigate} onPreview={p.onPreview} />
+      case 'aquinas': return <AquinasPanel selected={studySel} onNavigate={p.onNavigate} onPreview={p.onPreview} />
       case 'doctrine': return <DoctrinePanel onNavigate={p.onNavigate} onPreview={p.onPreview} onOpenFather={openFather} />
       case 'historical': return <HistoricalPanel selected={p.selected} />
       case 'church': return <ChurchHistoryPanel onPreview={p.onPreview} onOpenFather={openFather} />
-      case 'topics': return <TopicsPanel selected={p.selected} onNavigate={p.onNavigate} />
+      case 'topics': return <TopicsPanel selected={studySel} onNavigate={p.onNavigate} />
       case 'map': return <MapPanel selected={p.selected} onOpenFather={openFather} />
       case 'library': return <LibraryPanel tab={p.libraryTab} onTabChange={p.onLibraryTab} onNavigate={p.onNavigate}
         onEditNote={p.onEditNote} version={p.userVersion} onChanged={p.onUserChange} />

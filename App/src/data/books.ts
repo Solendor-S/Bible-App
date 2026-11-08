@@ -72,7 +72,6 @@ export const BOOKS: Book[] = [
 ]
 
 export const BOOK_MAP   = Object.fromEntries(BOOKS.map(b => [b.name, b]))
-export const BOOK_ORDER = new Map(BOOKS.map((b, i) => [b.name, i]))
 
 export const APOCRYPHA_BOOKS: Book[] = [
   // Deuterocanon (accepted by Catholic & Orthodox churches)
@@ -83,14 +82,14 @@ export const APOCRYPHA_BOOKS: Book[] = [
   { name: 'Baruch',              chapters: 6,   testament: 'APOC', group: 'Deuterocanon' },
   { name: '1 Maccabees',         chapters: 16,  testament: 'APOC', group: 'Deuterocanon' },
   { name: '2 Maccabees',         chapters: 15,  testament: 'APOC', group: 'Deuterocanon' },
-  { name: '1 Esdras',            chapters: 9,   testament: 'APOC', group: 'Deuterocanon' },
-  { name: '2 Esdras',            chapters: 16,  testament: 'APOC', group: 'Deuterocanon' },
-  { name: 'Prayer of Manasseh',  chapters: 1,   testament: 'APOC', group: 'Deuterocanon' },
-  { name: 'Psalm 151',           chapters: 1,   testament: 'APOC', group: 'Deuterocanon' },
   { name: 'Prayer of Azariah',   chapters: 1,   testament: 'APOC', group: 'Deuterocanon' },
   { name: 'Susanna',             chapters: 1,   testament: 'APOC', group: 'Deuterocanon' },
   { name: 'Bel and the Dragon',  chapters: 1,   testament: 'APOC', group: 'Deuterocanon' },
   // Broader Canon (accepted by some Orthodox traditions)
+  { name: '1 Esdras',            chapters: 9,   testament: 'APOC', group: 'Broader Canon' },
+  { name: '2 Esdras',            chapters: 16,  testament: 'APOC', group: 'Broader Canon' },
+  { name: 'Prayer of Manasseh',  chapters: 1,   testament: 'APOC', group: 'Broader Canon' },
+  { name: 'Psalm 151',           chapters: 1,   testament: 'APOC', group: 'Broader Canon' },
   { name: '3 Maccabees',         chapters: 7,   testament: 'APOC', group: 'Broader Canon' },
   { name: '4 Maccabees',         chapters: 18,  testament: 'APOC', group: 'Broader Canon' },
   // Ethiopian Canon
@@ -103,6 +102,135 @@ export const APOCRYPHA_BOOKS: Book[] = [
 
 export const APOCRYPHA_BOOK_NAMES = new Set(APOCRYPHA_BOOKS.map(b => b.name))
 export const APOCRYPHA_BOOK_MAP   = Object.fromEntries(APOCRYPHA_BOOKS.map(b => [b.name, b]))
+
+// ── Canons ──────────────────────────────────────────────────────────────────
+// Each canon is an Old Testament reading order (the NT is the same everywhere).
+// Deuterocanonical books keep testament 'APOC' and are still read from the
+// apocrypha packs — the canon only decides where they're listed.
+export type CanonKey = 'protestant' | 'catholic'
+
+const OT_NAMES = BOOKS.filter(b => b.testament === 'OT').map(b => b.name)
+const NT_NAMES = BOOKS.filter(b => b.testament === 'NT').map(b => b.name)
+
+const CATHOLIC_INSERTS: Record<string, string[]> = {
+  'Nehemiah':        ['Tobit', 'Judith'],
+  'Esther':          ['1 Maccabees', '2 Maccabees'],
+  'Song of Solomon': ['Wisdom of Solomon', 'Sirach'],
+  'Lamentations':    ['Baruch'],
+}
+const CATHOLIC_OT = OT_NAMES.flatMap(name => [name, ...(CATHOLIC_INSERTS[name] ?? [])])
+
+export const CANON_OT_ORDER: Record<CanonKey, string[]> = {
+  protestant: OT_NAMES,
+  catholic:   CATHOLIC_OT,
+}
+
+// The WEBC carries the deuterocanon itself, so while it's the active translation these
+// reader books come from it instead of the apocrypha packs. Daniel's Greek portions sit
+// inside Daniel there, and the Prayer of Azariah is only a verse range of chapter 3.
+export const WEBC_DEUTERO: Record<string, { book: string; chapter?: number; verses?: [number, number] }> = {
+  'Tobit':              { book: 'Tobit' },
+  'Judith':             { book: 'Judith' },
+  'Wisdom of Solomon':  { book: 'Wisdom of Solomon' },
+  'Sirach':             { book: 'Sirach' },
+  'Baruch':             { book: 'Baruch' },
+  '1 Maccabees':        { book: '1 Maccabees' },
+  '2 Maccabees':        { book: '2 Maccabees' },
+  'Prayer of Azariah':  { book: 'Daniel', chapter: 3, verses: [24, 90] },
+  'Susanna':            { book: 'Daniel', chapter: 13 },
+  'Bel and the Dragon': { book: 'Daniel', chapter: 14 },
+}
+
+const DANIEL_PORTIONS = Object.entries(WEBC_DEUTERO).filter(([, source]) => source.book === 'Daniel')
+
+// In the Catholic canon these are part of Daniel, not books of their own: the picker lists
+// only Daniel, and these labels show where they went when one turns up in a book search.
+export const CANON_BADGE: Record<string, string> = Object.fromEntries(
+  DANIEL_PORTIONS.map(([name, source]) => [name, `Daniel ${source.chapter}`]),
+)
+
+// Chapters of Daniel that other translations don't have; they read from the apocrypha text.
+export const DANIEL_GREEK_CHAPTERS: Record<number, string> = Object.fromEntries(
+  DANIEL_PORTIONS.filter(([, source]) => !source.verses).map(([name, source]) => [source.chapter, name]),
+)
+
+export function chapterCount(book: string, translation: string, canon: CanonKey): number {
+  if (book === 'Daniel' && (translation === 'WEBC' || canon === 'catholic')) return 14
+  return (BOOK_MAP[book] ?? APOCRYPHA_BOOK_MAP[book] ?? EARLY_TEXT_MAP[book])?.chapters ?? 1
+}
+
+// The verse number cross-refs, commentary and other translations use for this verse, or
+// null if it has no equivalent. The WEBC puts the Prayer of Azariah at Daniel 3:24-90,
+// which pushes the Hebrew text's 3:24-30 along to 3:91-97.
+export function kjvVerse(translation: string, book: string, chapter: number, verse: number): number | null {
+  if (translation === 'WEBC' && book === 'Daniel' && chapter === 3) {
+    if (verse >= 91) return verse - 67
+    if (verse >= 24) return null
+  }
+  return verse
+}
+
+export type DeuteroText = 'WEBC' | 'KJVA'
+
+// The translation a chapter's text actually comes from. The deuterocanon (with Daniel 13-14)
+// exists only in the WEBC and the KJV Apocrypha, so in any other translation those books show
+// whichever of the two the reader picked in Settings.
+export function textSource(translation: string, book: string, chapter: number, deutero: DeuteroText): string {
+  const isDeutero = !!WEBC_DEUTERO[book] || (book === 'Daniel' && chapter > 12)
+  return isDeutero && translation !== 'WEBC' ? deutero : translation
+}
+
+// Where a verse's Greek word data lives, for books with no Hebrew in the panel: the
+// deuterocanon, and the Greek portions of Daniel. Null means use the normal OT sources.
+export function greekWordRef(
+  translation: string, book: string, chapter: number, verse: number,
+): { book: string; chapter: number; verse: number } | null {
+  if (book === 'Daniel') {
+    if (DANIEL_GREEK_CHAPTERS[chapter]) return { book: DANIEL_GREEK_CHAPTERS[chapter], chapter: 1, verse }
+    return translation === 'WEBC' && chapter === 3 && verse >= 24 && verse <= 90
+      ? { book: 'Prayer of Azariah', chapter: 1, verse: verse - 23 }
+      : null
+  }
+  if (book === 'Prayer of Azariah' && translation === 'WEBC') return { book, chapter, verse: verse - 23 }
+  return WEBC_DEUTERO[book] ? { book, chapter, verse } : null
+}
+
+// [book, from chapter, from verse, to chapter, to verse]. Daniel's Aramaic starts partway
+// through 2:4; verse-level is close enough for a label.
+const ARAMAIC_RANGES: [string, number, number, number, number][] = [
+  ['Daniel', 2, 4, 7, 28],
+  ['Ezra', 4, 8, 6, 18],
+  ['Ezra', 7, 12, 7, 26],
+  ['Jeremiah', 10, 11, 10, 11],
+]
+
+export function isAramaic(book: string, chapter: number, verse: number): boolean {
+  const at = chapter * 1000 + verse
+  return ARAMAIC_RANGES.some(([b, c1, v1, c2, v2]) => b === book && at >= c1 * 1000 + v1 && at <= c2 * 1000 + v2)
+}
+
+const resolveBook = (name: string): Book => BOOK_MAP[name] ?? APOCRYPHA_BOOK_MAP[name]
+
+export function canonOtBooks(canon: CanonKey): Book[] {
+  return CANON_OT_ORDER[canon].map(name => ({ ...resolveBook(name), chapters: chapterCount(name, '', canon) }))
+}
+
+// Daniel's Greek portions count as in the canon even though they aren't listed separately.
+export function inCanon(canon: CanonKey, name: string): boolean {
+  return CANON_NAME_SETS[canon].has(name) || (canon === 'catholic' && name in CANON_BADGE)
+}
+
+export function canonBookNames(canon: CanonKey): string[] {
+  return [...CANON_OT_ORDER[canon], ...NT_NAMES]
+}
+
+const CANON_NAME_SETS: Record<CanonKey, Set<string>> = {
+  protestant: new Set(canonBookNames('protestant')),
+  catholic:   new Set(canonBookNames('catholic')),
+}
+
+// One sort order serves both canons: Protestant is a subsequence of Catholic.
+export const BOOK_ORDER = new Map(canonBookNames('catholic').map((n, i) => [n, i]))
 
 export const EARLY_TEXTS: Array<{ name: string; chapters: number; testament: 'EARLY'; group: string; date: string }> = [
   { name: 'Didache',   chapters: 16, testament: 'EARLY', group: 'Early Church Writings', date: 'c. 50–120 AD' },

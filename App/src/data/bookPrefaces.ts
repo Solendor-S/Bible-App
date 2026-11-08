@@ -622,6 +622,148 @@ const PREFACES: Record<string, BookPreface> = {
       "The seven churches of Asia Minor (chs. 2–3) were real, historical congregations — confirmed by archaeological evidence at Ephesus, Sardis, Laodicea, and Pergamum."
     ],
     sources: ["Irenaeus, Against Heresies 5.30.3", "Justin Martyr, Dialogue with Trypho 81", "Eusebius, EH 3.18, 3.23", "Archaeology of the Seven Churches"]
+  },
+
+  // ── Deuterocanon ──────────────────────────────────────────
+  // Received as Scripture by the Catholic and Orthodox Churches (Hippo 393, Carthage 397,
+  // Florence 1442, Trent 1546); placed among the Apocrypha in Protestant Bibles.
+
+  Tobit: {
+    summary: "Tobit tells of a devout Israelite exiled to Nineveh who is struck blind while doing works of mercy, and of his son Tobias, who travels to Media guided by the angel Raphael in disguise. On the journey Tobias marries Sarah, freeing her from a demon that had killed seven husbands, and returns to heal his father's sight. It is a story of hidden providence in the lives of faithful families in exile.",
+    themes: ["Almsgiving, prayer, and fasting (12:8–9)", "Burying the dead and other works of mercy", "Marriage as a holy covenant blessed by God (8:4–8)", "The ministry of angels — Raphael, 'God heals'", "Providence working quietly through ordinary faithfulness"],
+    author: "Anonymous. Chapters 1–3 are narrated by Tobit in the first person; the closing chapters say Tobit and Tobias were told to write down what had happened (12:20).",
+    dating: "Composed c. 225–175 BC, before the Maccabean crisis, which the book never mentions. The story is set in the Assyrian exile of the 8th–7th centuries BC.",
+    evidence: [
+      "Fragments of four Aramaic manuscripts and one Hebrew manuscript of Tobit were found at Qumran (4Q196–200), confirming a Semitic original.",
+      "The Greek survives in a shorter form (Codex Vaticanus, Alexandrinus) and a longer one (Codex Sinaiticus); the Qumran fragments side with the longer.",
+      "Polycarp (Philippians 10) echoes Tobit 4:10 and 12:9: 'almsgiving delivers from death.'",
+      "Ambrose wrote a whole treatise on it (On Tobit), and Cyprian cites it repeatedly in On Works and Alms.",
+      "Jerome translated it for the Vulgate from an Aramaic copy, working in a single day (Preface to Tobit)."
+    ],
+    sources: ["Qumran Cave 4 (4Q196–200)", "Polycarp, Philippians 10", "Cyprian, On Works and Alms", "Ambrose, On Tobit", "Jerome, Preface to Tobit"]
+  },
+
+  Judith: {
+    summary: "Judith tells how the Assyrian general Holofernes besieges the Israelite town of Bethulia, and how a devout widow, Judith, goes into the enemy camp, wins his trust, and beheads him while he lies drunk. The leaderless army flees. The story shows God delivering his people through the hand of a woman when every human defense has failed.",
+    themes: ["God saves through the weak and unlikely (9:11)", "Prayer, fasting, and trust in a time of siege", "Faithfulness to the Law, even in the enemy camp", "Courage and holy cunning in God's service", "Judith as a figure of Mary: 'You are the glory of Jerusalem' (15:9)"],
+    author: "Anonymous, written by a pious Jew in the land of Israel.",
+    dating: "Composed c. 150–100 BC, in the Hasmonean period. Its mixed history (Nebuchadnezzar ruling the Assyrians from Nineveh) leads many to read it as a deliberately symbolic story rather than a chronicle.",
+    evidence: [
+      "Clement of Rome (1 Clement 55, c. 96 AD) holds up 'the blessed Judith' as an example of courage for the sake of her people.",
+      "The Hebrew or Aramaic original is lost; the book survives in the Septuagint. Jerome made the Vulgate from an Aramaic copy.",
+      "Jerome's Preface to Judith reports that the Council of Nicaea counted the book among the Holy Scriptures.",
+      "Tertullian, Clement of Alexandria, Origen, and Ambrose all cite or praise Judith."
+    ],
+    sources: ["1 Clement 55", "Jerome, Preface to Judith", "Ambrose, On Widows 7", "Septuagint"]
+  },
+
+  'Wisdom of Solomon': {
+    summary: "The Book of Wisdom, written in the voice of Solomon, calls the rulers of the earth to seek wisdom. It teaches the immortality of the righteous, praises Wisdom as the radiance of God, and retells the Exodus as the story of Wisdom guiding Israel. Its portrait of the persecuted righteous man (2:12–20) was read by the Fathers as a prophecy of Christ's Passion.",
+    themes: ["The immortality of the righteous: 'the souls of the righteous are in the hand of God' (3:1)", "Wisdom personified: 'a reflection of eternal light' (7:26)", "The righteous one mocked and condemned (2:12–20)", "The folly and origins of idolatry (chs. 13–15)", "God's providence in the Exodus (chs. 10–19)"],
+    author: "A Greek-speaking Jew, almost certainly of Alexandria, writing in the person of Solomon (chs. 7–9) as a literary convention. The Muratorian Fragment says it was written 'by friends of Solomon in his honour.'",
+    dating: "c. 50 BC – AD 40. It was written in Greek, not translated from Hebrew.",
+    evidence: [
+      "Hebrews 1:3 ('the radiance of God's glory and the exact imprint of his nature') closely echoes Wisdom 7:25–26.",
+      "Paul's argument against idolatry in Romans 1:18–32 follows the reasoning of Wisdom 13–14 closely.",
+      "The Muratorian Fragment (late 2nd century) lists Wisdom among the books received by the Church.",
+      "Irenaeus, Clement of Alexandria, Tertullian, Cyprian, and Augustine all quote it as Scripture."
+    ],
+    sources: ["Muratorian Fragment", "Irenaeus (in Eusebius, EH 5.26)", "Augustine, City of God 17.20", "Romans 1:18–32", "Hebrews 1:3"]
+  },
+
+  Sirach: {
+    summary: "Sirach (also called Ecclesiasticus, 'the church book') is the longest wisdom book in the Bible: the teaching of a Jerusalem scribe on the fear of the Lord, family life, friendship, speech, wealth, and worship. It identifies Wisdom with the Law of Moses (ch. 24) and ends with a hymn in praise of Israel's famous men, from Enoch to the high priest Simon (chs. 44–50).",
+    themes: ["The fear of the Lord as the beginning of wisdom (1:14)", "Wisdom dwelling in Israel as the Law (ch. 24)", "Practical virtue: speech, friendship, almsgiving, humility", "Honouring parents and the duties of family life (ch. 3)", "Praise of the fathers of Israel (chs. 44–50)"],
+    author: "Jesus (Yeshua) son of Eleazar son of Sira, a scribe and teacher in Jerusalem (50:27). His grandson translated the book into Greek in Egypt and wrote the Prologue.",
+    dating: "Written in Hebrew c. 190–180 BC. The grandson arrived in Egypt 'in the thirty-eighth year of King Euergetes' (132 BC) and translated it soon after.",
+    evidence: [
+      "About two-thirds of the Hebrew text has been recovered: medieval copies from the Cairo Genizah (1896), a scroll from Masada (chs. 39–44), and Qumran fragments.",
+      "The Prologue is the earliest witness to a three-part Jewish scripture: 'the Law, the Prophets, and the other books.'",
+      "Didache 4:5 and the Epistle of Barnabas 19:9 echo Sirach 4:31.",
+      "Cyprian, Clement of Alexandria, and Augustine quote it constantly; it was so widely used to teach new Christians that the Latin Church named it Ecclesiasticus."
+    ],
+    sources: ["Prologue to Sirach", "Cairo Genizah manuscripts", "Masada Scroll", "Didache 4:5", "Augustine, City of God 17.20"]
+  },
+
+  Baruch: {
+    summary: "Baruch is presented as a letter sent from Babylon by Jeremiah's scribe to the people left in Jerusalem. It holds a prayer of confession for the sins that led to exile, a poem in praise of Wisdom given to Israel in the Law, and a message of comfort to Zion promising the return of her children. Chapter 6 is the Letter of Jeremiah, a warning against the idols of Babylon.",
+    themes: ["Confession of national sin and God's justice (1:15–3:8)", "Wisdom found in the Law of God (3:9–4:4)", "'She appeared upon earth and lived among men' (3:37), read by the Fathers of the Incarnation", "Consolation of Jerusalem and the return from exile (4:5–5:9)", "The emptiness of idols (ch. 6, Letter of Jeremiah)"],
+    author: "Attributed to Baruch son of Neriah, Jeremiah's scribe and companion (1:1; Jeremiah 36:4). Many scholars see a compilation by later hands drawing on Jeremiah and Daniel.",
+    dating: "Set in the Babylonian exile (6th century BC). Scholars commonly date the present book to the 2nd–1st centuries BC.",
+    evidence: [
+      "Athanasius (39th Festal Letter, 367 AD) and Cyril of Jerusalem (Catechetical Lectures 4.35) list Baruch and the Letter as part of Jeremiah in the canon.",
+      "Irenaeus (Against Heresies 5.35) quotes Baruch 4:36–5:9 under the name of Jeremiah.",
+      "A Greek fragment of the Letter of Jeremiah was found at Qumran (7Q2).",
+      "The prayer in 1:15–2:19 closely parallels Daniel's prayer in Daniel 9:4–19."
+    ],
+    sources: ["Athanasius, 39th Festal Letter", "Cyril of Jerusalem, Catechetical Lectures 4.35", "Irenaeus, Against Heresies 5.35", "Qumran Cave 7 (7Q2)"]
+  },
+
+  '1 Maccabees': {
+    summary: "1 Maccabees is a sober history of the Jewish struggle for freedom under the Seleucid kings, from Antiochus IV Epiphanes' desecration of the Temple (167 BC) to the death of Simon (134 BC). It follows the priest Mattathias and his sons Judas Maccabeus, Jonathan, and Simon as they resist forced paganism, cleanse and rededicate the Temple, and win independence for Judea.",
+    themes: ["Zeal for God's Law against forced assimilation", "Faithfulness unto death under persecution", "The rededication of the Temple, the origin of Hanukkah (4:36–59)", "God's deliverance through human courage and leadership", "Waiting for 'a trustworthy prophet' to arise (14:41)"],
+    author: "An anonymous Jew of Judea, a supporter of the Hasmonean dynasty, writing in Hebrew. Only the Greek translation survives.",
+    dating: "c. 100 BC. The book closes by mentioning the deeds of John Hyrcanus (16:23–24), Simon's son, who ruled 134–104 BC.",
+    evidence: [
+      "The 'Feast of the Dedication' that Jesus attended in John 10:22 is the festival instituted in 1 Maccabees 4:59.",
+      "Origen (in Eusebius, EH 6.25) gives the book's Hebrew title, and Jerome says he saw it in Hebrew (Prologue to Kings).",
+      "Josephus (Antiquities 12–13) uses 1 Maccabees as his main source for the period.",
+      "Its dates, rulers, and events agree closely with Greek historians and the surviving coins of the Seleucid and Hasmonean rulers."
+    ],
+    sources: ["Josephus, Antiquities 12–13", "Origen (in Eusebius, EH 6.25)", "Jerome, Prologue to Kings", "John 10:22"]
+  },
+
+  '2 Maccabees': {
+    summary: "2 Maccabees is a theological retelling of the events from c. 180 to 161 BC, condensed from a five-volume history by Jason of Cyrene (2:23). It is not a sequel to 1 Maccabees. Its heart is the martyrdom of the elderly scribe Eleazar and of a mother and her seven sons (chs. 6–7). It also holds the clearest Old Testament teaching on the resurrection of the body and on prayer for the dead.",
+    themes: ["Martyrdom and faithful witness (chs. 6–7)", "The resurrection of the body (7:9, 14, 23)", "Prayer and sacrifice for the dead (12:38–46)", "Creation out of nothing (7:28)", "The intercession of the saints: Jeremiah 'prays much for the people' (15:12–16)"],
+    author: "An anonymous epitomist (2:23–32), abridging the lost history of Jason of Cyrene, writing in Greek.",
+    dating: "c. 124–100 BC. The opening letters to the Jews of Egypt (1:1–2:18) are dated to 124 BC.",
+    evidence: [
+      "Hebrews 11:35 ('Others were tortured, refusing to accept release, so that they might rise again to a better life') is widely seen as an allusion to the martyrs of 2 Maccabees 6–7.",
+      "Augustine (City of God 18.36) records that the Church received the books of Maccabees as canonical, though the Jews did not, because of the martyrs they honour.",
+      "The Church's practice of praying for the dead, and the Catholic doctrine of purgatory, appeal to 12:42–46.",
+      "Cyprian, Gregory of Nazianzus, and Ambrose held up the Maccabean martyrs as models; their feast (1 August) was kept from the 4th century."
+    ],
+    sources: ["Augustine, City of God 18.36", "Gregory of Nazianzus, Oration 15 (On the Maccabees)", "Hebrews 11:35", "Jason of Cyrene (lost)"]
+  },
+
+  'Prayer of Azariah': {
+    summary: "The Prayer of Azariah and the Song of the Three Young Men is the Greek portion of Daniel 3 (Catholic numbering 3:24–90). In the fiery furnace Azariah (Abednego) confesses Israel's sins and pleads for mercy; an angel drives out the flames; and the three young men sing a great hymn calling all creation to bless the Lord. That hymn, the Benedicite, has been sung in Christian worship for centuries.",
+    themes: ["Confession and trust in God's mercy in suffering", "Deliverance in the furnace by the angel of the Lord", "All creation summoned to praise its Creator (the Benedicite)", "A contrite heart as acceptable sacrifice (vv. 16–17)"],
+    author: "Unknown. An addition to Daniel preserved in the Greek translations (the Old Greek and Theodotion).",
+    dating: "Probably 2nd century BC, likely from a Hebrew or Aramaic original.",
+    evidence: [
+      "It stands in both Greek versions of Daniel, which the early Church used.",
+      "Jerome kept it in the Vulgate, noting in his Preface to Daniel that it is not in the Hebrew text.",
+      "The Benedicite is a canticle at Sunday Lauds in the Roman Breviary and at Morning Prayer in the Book of Common Prayer."
+    ],
+    sources: ["Theodotion's Greek Daniel", "Jerome, Preface to Daniel", "Book of Common Prayer (Benedicite)"]
+  },
+
+  Susanna: {
+    summary: "Susanna (Daniel 13 in Catholic Bibles) tells of a faithful wife in Babylon who refuses two corrupt elders and is falsely accused of adultery by them. She is condemned to death, but the young Daniel steps forward, questions the elders separately, and exposes their lie when their stories contradict. Susanna is vindicated, and the false witnesses suffer the penalty they sought for her.",
+    themes: ["Chastity and fidelity even at the cost of one's life", "God hears the prayer of the innocent (vv. 42–44)", "Justice and the danger of false witness", "Wisdom given to the young (Daniel)", "Susanna as a figure of the persecuted Church (Hippolytus)"],
+    author: "Unknown. An addition to Daniel preserved in Greek (the Old Greek and Theodotion).",
+    dating: "2nd–1st century BC.",
+    evidence: [
+      "Hippolytus of Rome (c. 204 AD) commented on Susanna in his Commentary on Daniel, reading her as a figure of the Church.",
+      "Around 240 AD Julius Africanus argued that Susanna was not genuine because of Greek wordplay in Daniel's questioning; Origen's Letter to Africanus defended its place in the Church's Scriptures.",
+      "Scenes of Susanna appear in the Roman catacomb paintings as an image of deliverance."
+    ],
+    sources: ["Hippolytus, Commentary on Daniel", "Origen, Letter to Africanus", "Julius Africanus, Letter to Origen", "Jerome, Preface to Daniel"]
+  },
+
+  'Bel and the Dragon': {
+    summary: "Bel and the Dragon (Daniel 14 in Catholic Bibles) holds two stories against idolatry. Daniel proves to the king that the idol Bel eats nothing by scattering ashes that reveal the priests' footprints. He then destroys a living dragon worshipped in Babylon, is thrown to the lions a second time, and is fed in the den by the prophet Habakkuk, carried there by an angel.",
+    themes: ["The living God against lifeless idols", "Exposing religious deception", "God's care for his servant among the lions", "Faithfulness under a pagan king"],
+    author: "Unknown. An addition to Daniel preserved in Greek (the Old Greek and Theodotion).",
+    dating: "2nd–1st century BC.",
+    evidence: [
+      "Like Susanna, it was discussed by Julius Africanus and defended by Origen in their correspondence (c. 240 AD).",
+      "Jerome kept it in the Vulgate, noting that it is not in the Hebrew text (Preface to Daniel).",
+      "Irenaeus (Against Heresies 4.5.2) cites Daniel's words to the king from 14:5 as a confession of the living God."
+    ],
+    sources: ["Origen, Letter to Africanus", "Jerome, Preface to Daniel", "Irenaeus, Against Heresies 4.5.2", "Theodotion's Greek Daniel"]
   }
 }
 

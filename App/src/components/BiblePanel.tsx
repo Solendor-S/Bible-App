@@ -15,7 +15,8 @@ import { ESV_COPYRIGHT } from '../lib/esv'
 import { stripUsfm } from '../data/redLetter'
 import { abbrevBook, ELXX_REF_RE, parseBsbRef, parseElxxRef, parseItalicSegments } from '../lib/verseText'
 import type { WordHighlight } from '../lib/wordHighlight'
-import { APOCRYPHA_BOOK_MAP, BOOK_MAP, BOOKS, EARLY_TEXT_MAP } from '../data/books'
+import { BOOK_MAP, WEBC_DEUTERO, canonBookNames, chapterCount, inCanon, kjvVerse, textSource } from '../data/books'
+import type { CanonKey } from '../data/books'
 import { HIGHLIGHT_COLORS } from '../theme/highlightColors'
 import {
   GREEK_TRANSLATIONS, INCOMPLETE_DATASET_NOTE, OT_TRANSLATIONS, TRANSLATION_GROUPS, TRANSLATION_MAP,
@@ -218,17 +219,19 @@ function passageLabel(p: PassageRef): string {
   return `${p.book} ${p.chapter}:${p.verseStart}${end}`
 }
 
-function adjacentChapter(p: PassageRef, delta: number): { book: string; chapter: number } | null {
-  if (p.kind === 'apocrypha' || p.kind === 'early') {
-    const total = (p.kind === 'early' ? EARLY_TEXT_MAP : APOCRYPHA_BOOK_MAP)[p.book]?.chapters ?? 1
+// Canonical books (and the deuterocanon, in the Catholic canon) step through the canon's
+// reading order; anything outside it steps within the book only.
+function adjacentChapter(p: PassageRef, delta: number, translation: string, canon: CanonKey): { book: string; chapter: number } | null {
+  const order = canonBookNames(canon)
+  const idx = p.kind === 'early' ? -1 : order.indexOf(p.book)
+  const total = chapterCount(p.book, translation, canon)
+  if (idx < 0) {
     const next = p.chapter + delta
     const min = p.kind === 'early' ? 0 : 1  // early chapter 0 = preface
     return next < min || next > total ? null : { book: p.book, chapter: next }
   }
-  const idx = BOOKS.findIndex(b => b.name === p.book)
-  const total = BOOK_MAP[p.book]?.chapters ?? 1
-  if (delta > 0 && p.chapter >= total) return BOOKS[idx + 1] ? { book: BOOKS[idx + 1].name, chapter: 1 } : null
-  if (delta < 0 && p.chapter <= 1) return BOOKS[idx - 1] ? { book: BOOKS[idx - 1].name, chapter: BOOKS[idx - 1].chapters } : null
+  if (delta > 0 && p.chapter >= total) return order[idx + 1] ? { book: order[idx + 1], chapter: 1 } : null
+  if (delta < 0 && p.chapter <= 1) return order[idx - 1] ? { book: order[idx - 1], chapter: chapterCount(order[idx - 1], translation, canon) } : null
   return { book: p.book, chapter: p.chapter + delta }
 }
 
@@ -262,11 +265,26 @@ function PassageSection(props: PassageProps) {
   const [otCaps] = usePref('ot_quote_caps')
   const [bsbFolded] = usePref('bsb_folded')
   const [dssAll] = usePref('dss_all_readings')
+  const [canon] = usePref('canon')
+  const [deutero] = usePref('deutero_text')
   const kind = passage.kind
-  const isPreface = passage.bookOnly || (kind === 'early' && passage.chapter === 0)
-  const effTrans = kind ? 'KJV' : translation
-  const data: ChapterData = useChapter(passage.book, isPreface ? 0 : passage.chapter, effTrans, kind, otCaps, props.userVersion)
-  const compareMap = useCompareText(passage.book, isPreface ? 0 : passage.chapter, kind ? null : compareTrans)
+  const { book, chapter } = passage
+  const isPreface = passage.bookOnly || (kind === 'early' && chapter === 0)
+  // What this chapter's text is really in: the deuterocanon (and Daniel 13-14) follows Settings
+  const source = kind === 'early' ? 'KJV' : textSource(translation, book, chapter, deutero)
+  // Rendering translation: anything read from the apocrypha table renders as plain KJV-style text
+  const effTrans = kind === 'early' || source === 'KJVA' || (kind === 'apocrypha' && source !== 'WEBC') ? 'KJV' : source
+  const data: ChapterData = useChapter(book, isPreface ? 0 : chapter, source, kind, otCaps, props.userVersion)
+  // Outside the 66 books a column only makes sense if the two sides are different texts.
+  // The Prayer of Azariah is out because its two sources number their verses differently.
+  const isGreekDaniel = book === 'Daniel' && chapter > 12
+  const compareSource = compareTrans ? textSource(compareTrans, book, chapter, deutero) : null
+  const differentApocText = (!!WEBC_DEUTERO[book] || isGreekDaniel) && source !== compareSource
+  const skipCompare = kind === 'early' || book === 'Prayer of Azariah' || ((kind === 'apocrypha' || isGreekDaniel) && !differentApocText)
+  const compareMap = useCompareText(book, isPreface ? 0 : chapter, skipCompare ? null : compareTrans, compareSource)
+  const showCompare = !!compareTrans && !skipCompare
+  // The Prayer of Azariah belongs after Daniel 3:23; WEBC has it inline, others link to it.
+  const azariahLink = canon === 'catholic' && book === 'Daniel' && chapter === 3 && source !== 'WEBC'
   const [menu, setMenu] = useState<{ verse: number; rect: DOMRect } | null>(null)
   const [copyAt, setCopyAt] = useState<{ verse: number; rect: DOMRect } | null>(null)
   const [note, setNote] = useState<NoteTarget | null>(null)
@@ -308,15 +326,18 @@ function PassageSection(props: PassageProps) {
     props.onUserChange()
   }
 
-  const prev = props.showChapterNav ? adjacentChapter(passage, -1) : null
-  const next = props.showChapterNav ? adjacentChapter(passage, 1) : null
+  const prev = props.showChapterNav ? adjacentChapter(passage, -1, translation, canon) : null
+  const next = props.showChapterNav ? adjacentChapter(passage, 1, translation, canon) : null
+  const badge = kind === 'early' ? 'Early Text'
+    : WEBC_DEUTERO[book] || isGreekDaniel ? `${inCanon(canon, book) || isGreekDaniel ? 'Deuterocanon' : 'Apocrypha'} · ${source}`
+    : kind === 'apocrypha' ? 'Apocrypha' : null
   const notice = kind ? null : rangeNotice(passage.book, translation)
 
   return (
     <div className="passage-section">
       <div className="passage-section-header">
         <span>{passage.bookOnly ? passage.book : kind === 'early' && passage.chapter === 0 ? `${passage.book} — Introduction` : passageLabel(passage)}</span>
-        {kind && <span className="passage-badge">{kind === 'early' ? 'Early Text' : 'Apocrypha'}</span>}
+        {badge && <span className="passage-badge">{badge}</span>}
       </div>
 
       {isPreface ? (
@@ -344,7 +365,8 @@ function PassageSection(props: PassageProps) {
           )}
           {!data.loading && !data.esvError && !notice && shown.length === 0 && <div className="panel-empty">No verses found.</div>}
 
-          {readingMode && !compareTrans ? <ProseChapter verses={shown} /> : shown.map(v => (
+          {readingMode && !showCompare ? <ProseChapter verses={shown} /> : shown.map(v => (
+            <React.Fragment key={v.verse}>
             <VerseRow
               key={v.verse}
               book={passage.book} chapter={passage.chapter} verse={v.verse} text={v.text}
@@ -353,7 +375,7 @@ function PassageSection(props: PassageProps) {
               hlColor={data.highlights.get(v.verse)}
               bookmarked={props.bookmarkedKeys.has(`${passage.book}|${passage.chapter}|${v.verse}`)}
               hasNote={data.noteVerses.has(v.verse)}
-              compareText={compareTrans && !kind ? compareMap.get(v.verse) ?? '' : undefined}
+              compareText={showCompare ? compareMap.get(kjvVerse(translation, book, chapter, v.verse) ?? -1) ?? '' : undefined}
               compareTrans={compareTrans}
               footnotes={data.footnotes.get(v.verse)}
               bsbFootnotes={data.bsbFootnotes.get(v.verse)}
@@ -372,10 +394,14 @@ function PassageSection(props: PassageProps) {
               onInlineRef={onInlineRef}
               onBookmarkToggle={onBookmarkToggle}
             />
+            {azariahLink && v.verse === 23 && (
+              <button className="psalm-heading link-btn" onClick={() => props.onNavigate('Prayer of Azariah', 1, 1)}>Prayer of Azariah and Song of the Three ›</button>
+            )}
+            </React.Fragment>
           ))}
 
           {kind === 'early' && <EarlyRefs refs={data.earlyRefs} onPress={(b, c, v) => props.onPreview({ book: b, chapter: c, verse: v })} />}
-          {shown.length > 0 && (translation === 'ESV' || compareTrans === 'ESV') && !kind && <div className="esv-copyright">{ESV_COPYRIGHT}</div>}
+          {shown.length > 0 && source === 'ESV' && <div className="esv-copyright">{ESV_COPYRIGHT}</div>}
         </>
       )}
 
@@ -455,7 +481,8 @@ export function BiblePanel(props: Props) {
   // Android: split view replaces the parallel column while it is open
   const compare = parallelOn && !splitOn && compareTrans !== translation ? compareTrans : null
   const splitPassages = useMemo(() => parsePassage(splitPassage), [splitPassage])
-  const outsideCanon = props.passages.length > 0 && props.passages.every(p => p.kind)
+  // The translation picker only matters if some passage's text depends on it (WEBC carries the deuterocanon)
+  const outsideCanon = props.passages.length > 0 && props.passages.every(p => p.kind && !WEBC_DEUTERO[p.book])
 
   // Ctrl+wheel / Ctrl+= / Ctrl+- resize verse text (desktop stand-in for pinch-zoom)
   useEffect(() => {

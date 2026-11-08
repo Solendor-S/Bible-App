@@ -1,6 +1,6 @@
 {
   "name": "bible-app",
-  "version": "2.4.0",
+  "version": "2.5.0",
   "description": "Catena-style Bible study app with Church Fathers commentary",
   "author": "Sargon Shlimon",
   "copyright": "Copyright © 2026 Sargon Shlimon. All rights reserved.",
@@ -14,6 +14,7 @@
     "build:mac": "electron-vite build && electron-builder --mac",
     "package": "electron-vite build && electron-builder --dir",
     "check-esv": "node src/lib/esv.selfcheck.ts",
+    "check-canon": "node --experimental-strip-types --no-warnings src/data/canons.selfcheck.ts && node --experimental-strip-types --no-warnings src/data/redLetter.selfcheck.ts",
     "check-text": "node -r ts-node/register/transpile-only src/lib/verseText.selfcheck.ts",
     "setup-data": "node -r ts-node/register scripts/download-data.ts",
     "import-android": "node scripts/py.js -I data/import-android.py",

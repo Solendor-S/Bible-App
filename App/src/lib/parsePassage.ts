@@ -1,5 +1,6 @@
 import type { PassageRef } from '../types'
 import { APOCRYPHA_BOOKS, EARLY_TEXTS } from '../data/books'
+import { getRawBookPreface } from '../data/bookPrefaces'
 
 // Apocrypha and early-text titles are matched literally before the canonical parser runs:
 // several contain digits or dashes ("Psalm 151", "Against Heresies Book 3") the regexes can't take.
@@ -8,12 +9,41 @@ const EXTRA_BOOKS = [
   ...EARLY_TEXTS.map(b => ({ name: b.name, kind: 'early' as const })),
 ].sort((a, b) => b.name.length - a.name.length)
 
-function parseExtraBook(token: string): PassageRef | null {
+// Abbreviations that aren't a prefix of the full name ("wis", "sir", "1 macc" already are).
+const EXTRA_ALIASES: Record<string, string> = {
+  ws: 'Wisdom of Solomon', ecclus: 'Sirach', ecclesiasticus: 'Sirach', ben: 'Sirach', tb: 'Tobit',
+  jdt: 'Judith', jdth: 'Judith', manasseh: 'Prayer of Manasseh', prman: 'Prayer of Manasseh',
+  azariah: 'Prayer of Azariah', songofthree: 'Prayer of Azariah', bel: 'Bel and the Dragon',
+}
+const norm = (s: string) => s.toLowerCase().replace(/\s+/g, '')
+
+// "wisdom 1" / "1 macc 2:3" / "sir" → the full apocrypha / early-text name. A canonical name or
+// alias always wins ("jud" stays Jude), and prefixes need 3+ letters to avoid stealing guesses.
+function expandExtraAbbrev(token: string): string | null {
+  const m = token.match(/^([1-4]?\s*[a-z][a-z\s]*?)\s*(\d+(?::\d+(?:-\d+)?)?)?$/i)
+  if (!m) return null
+  const key = norm(m[1])
+  if (ALIASES[key] || NORM_BOOKS[key]) return null
+  const name = EXTRA_ALIASES[key] ?? (key.replace(/^\d/, '').length >= 3 ? EXTRA_BOOKS.find(b => norm(b.name).startsWith(key))?.name : undefined)
+  return name ? `${name} ${m[2] ?? ''}`.trim() : null
+}
+
+function findExtra(token: string) {
   const lower = token.toLowerCase()
-  const hit = EXTRA_BOOKS.find(b => lower === b.name.toLowerCase() || lower.startsWith(b.name.toLowerCase() + ' '))
+  return EXTRA_BOOKS.find(b => lower === b.name.toLowerCase() || lower.startsWith(b.name.toLowerCase() + ' '))
+}
+
+function parseExtraBook(token: string): PassageRef | null {
+  // Full names first: some contain digits ("Against Heresies Book 3") the abbreviation regex would split
+  let hit = findExtra(token)
+  if (!hit) {
+    const expanded = expandExtraAbbrev(token)
+    if (expanded) { token = expanded; hit = findExtra(token) }
+  }
   if (!hit) return null
   const rest = token.slice(hit.name.length).trim()
-  if (!rest) return { book: hit.name, chapter: 1, raw: token, kind: hit.kind }
+  // A bare name opens the book's introduction when it has one (as canonical books do)
+  if (!rest) return { book: hit.name, chapter: 1, raw: token, kind: hit.kind, ...(getRawBookPreface(hit.name) ? { bookOnly: true } : {}) }
   const m = rest.match(/^(\d+)(?::(\d+)(?:-(\d+))?)?$/)
   if (!m) return null
   return {

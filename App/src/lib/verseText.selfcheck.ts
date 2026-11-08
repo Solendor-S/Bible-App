@@ -40,5 +40,22 @@ assert.deepEqual(parsePassage('Psalm 151 1')[0], { book: 'Psalm 151', chapter: 1
 assert.equal(parsePassage('Against Heresies Book 3 11:8')[0].verseStart, 8)
 assert.equal(parsePassage('Didache 0')[0].chapter, 0)
 assert.equal(parsePassage('jn 3:16')[0].book, 'John')
+// Apocrypha abbreviations; canonical names/aliases still win
+const pp = (s: string) => { const r = parsePassage(s)[0]; return r && [r.book, r.chapter, r.verseStart, r.kind] }
+assert.deepEqual(pp('wisdom 1'), ['Wisdom of Solomon', 1, undefined, 'apocrypha'])
+assert.deepEqual(pp('wis 2:3'), ['Wisdom of Solomon', 2, 3, 'apocrypha'])
+assert.deepEqual(pp('sir 1'), ['Sirach', 1, undefined, 'apocrypha'])
+assert.deepEqual(pp('ecclus 3'), ['Sirach', 3, undefined, 'apocrypha'])
+assert.deepEqual(pp('1 macc 2:4'), ['1 Maccabees', 2, 4, 'apocrypha'])
+assert.deepEqual(pp('2mac 7'), ['2 Maccabees', 7, undefined, 'apocrypha'])
+assert.deepEqual(pp('tob 1'), ['Tobit', 1, undefined, 'apocrypha'])
+assert.deepEqual(pp('jdt 8'), ['Judith', 8, undefined, 'apocrypha'])
+assert.deepEqual(pp('bar 3'), ['Baruch', 3, undefined, 'apocrypha'])
+assert.equal(parsePassage('jud 1')[0].book, 'Jude')
+assert.equal(parsePassage('ps 151')[0].book, 'Psalms')
+assert.equal(parsePassage('ecc 1')[0].book, 'Ecclesiastes')
+assert.equal(parsePassage('wisdom 1')[0].raw, 'Wisdom of Solomon 1')
+assert.equal(parsePassage('tobit')[0].bookOnly, true, 'bare deuterocanon name opens its introduction')
+assert.equal(parsePassage('1 Enoch')[0].bookOnly, undefined, 'no introduction → chapter 1')
 
 console.log('text pipeline: all checks passed')

@@ -37,6 +37,8 @@ export const PREF_DEFAULTS = {
   whats_new_seen: '',
   panel_tab_order: '',
   commentary_source: 'fathers' as 'fathers' | 'legacy',
+  canon: 'catholic' as import('../data/books').CanonKey,
+  deutero_text: 'WEBC' as import('../data/books').DeuteroText,
 }
 export type PrefKey = keyof typeof PREF_DEFAULTS
 type Prefs = { -readonly [K in PrefKey]: (typeof PREF_DEFAULTS)[K] }

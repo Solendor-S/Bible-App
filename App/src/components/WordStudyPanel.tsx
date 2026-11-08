@@ -9,7 +9,7 @@ import {
 import type { GreekSource, GreekWord, HebrewSource, HebrewWord, LexiconEntry, LxxSource, StrongsEntry } from '../db/queries'
 import { compactMorph, decodeMorphology, GREEK_TAG_EXAMPLES, HEBREW_TAG_EXAMPLES, TAG_DEFINITIONS } from '../utils/morphology'
 import { stripUsfm } from '../data/redLetter'
-import { BOOKS } from '../data/books'
+import { APOCRYPHA_BOOK_NAMES, BOOKS, greekWordRef, isAramaic, kjvVerse, textSource } from '../data/books'
 import { TRANSLATIONS } from '../data/translations'
 import { escapeRegex } from '../utils/regex'
 import { usePref } from '../context/Prefs'
@@ -28,6 +28,16 @@ const OT_SOURCES: { key: OtSource; label: string; desc: string }[] = [
   { key: 'lxx',   label: 'LXX',   desc: 'Septuagint (Rahlfs/CCAT via STEPBible)' },
   { key: 'lxx_a', label: 'LXX-A', desc: 'Apostolic Bible LXX (Poole)' },
 ]
+// Shown above the words. Sirach 35-36 are the only chapters the Greek can't be lined up
+// with: Greek and English order this part of the book differently.
+function greekNote(book: string, chapter: number): string | null {
+  if (book === 'Sirach' && (chapter === 35 || chapter === 36)) {
+    return 'Greek and English number this chapter differently, so these words may not match the verse you selected.'
+  }
+  if (book === 'Sirach') return 'About two-thirds of Sirach survives in Hebrew, but the Greek is the only complete text.'
+  if (book === 'Tobit') return 'Fragments of Tobit survive in Hebrew and Aramaic, but the Greek is the only complete text.'
+  return null
+}
 // Inflected-form numbers some sources use for a root lemma
 const STRONGS_REDIRECTS: Record<string, string> = { G2258: 'G1510', G5607: 'G1510', G5600: 'G1510' }
 
@@ -94,28 +104,42 @@ export function WordStudyPanel({ selected, onNavigate, onWordSelect, jumpToStron
   const [clicked, setClicked] = useState<{ book: string; chapter: number; verse: number; text?: string } | null>(null)
   const [concOpen, setConcOpen] = useState(false)
   const firstMention = useRef<HTMLElement | null>(null)
+  const [translation] = usePref('last_used_translation')
+  const [deutero] = usePref('deutero_text')
 
-  const isLxx = !isNT && (otSource === 'lxx' || otSource === 'lxx_a')
+  // The deuterocanon and Daniel's Greek portions have no Hebrew: Swete's Greek, no source picker.
+  const greekRef = greekWordRef(textSource(translation, selected.book, selected.chapter, deutero), selected.book, selected.chapter, selected.verse)
+  const isDeutero = !!greekRef
+  const noSource = !greekRef && APOCRYPHA_BOOK_NAMES.has(selected.book)
+  const wordSource: OtSource = isDeutero ? 'swete' : otSource
+  const isLxx = !isNT && (wordSource === 'swete' || wordSource === 'lxx' || wordSource === 'lxx_a')
   const greekLike = isNT || isLxx
-  const concLang = isNT ? 'greek' : isLxx ? (otSource as LxxSource) : 'hebrew'
+  const concLang = isNT || isDeutero ? 'greek' : isLxx ? (otSource as 'lxx' | 'lxx_a') : 'hebrew'
+  const note = isDeutero ? greekNote(selected.book, selected.chapter) : null
   const { conc, concLoading } = useStrongsData(concOpen && active ? active.strongs : null, concLang, source)
 
   useEffect(() => {
     let live = true
     setWords([]); setActive(null); setDef(null); setLexicon(null); setLoading(true); onWordSelect?.(null)
-    const { book, chapter, verse } = selected
-    const q: Promise<Word[]> = isNT ? getGreekWords(bibleDb, book, chapter, verse, source)
-      : isLxx ? getLxxWords(bibleDb, book, chapter, verse, otSource as LxxSource)
-      : getHebrewWords(bibleDb, book, chapter, verse, otSource as HebrewSource)
+    const { book, chapter, verse } = greekRef ?? {
+      book: selected.book, chapter: selected.chapter,
+      verse: kjvVerse(translation, selected.book, selected.chapter, selected.verse) ?? -1,  // -1: no KJV equivalent (0 is the Psalm superscription)
+    }
+    const q: Promise<Word[]> = noSource ? Promise.resolve([])
+      : isNT ? getGreekWords(bibleDb, book, chapter, verse, source)
+      : isLxx ? getLxxWords(bibleDb, book, chapter, verse, wordSource as LxxSource)
+      : getHebrewWords(bibleDb, book, chapter, verse, wordSource as HebrewSource)
     q.then(w => { if (live) { setWords(w); setLoading(false) } }).catch(() => live && setLoading(false))
     return () => { live = false }
-  }, [selected.book, selected.chapter, selected.verse, source, otSource, isNT, isLxx])
+  }, [selected.book, selected.chapter, selected.verse, source, wordSource, translation, deutero, isNT, isLxx, noSource])
 
   function pick(strongs: string, position: number) {
     if (active?.strongs === strongs && active.position === position) {
       setActive(null); setDef(null); setLexicon(null); setActiveTag(null); setClicked(null); onWordSelect?.(null); return
     }
-    setActive({ strongs, position }); setActiveTag(null); setClicked(null); setDefLoading(true)
+    setActive({ strongs, position }); setActiveTag(null); setClicked(null)
+    if (!strongs) { setDef(null); setLexicon(null); onWordSelect?.(null); return }   // grammar only, no lexicon entry
+    setDefLoading(true)
     Promise.all([
       getStrongsEntry(bibleDb, greekLike ? 'greek' : 'hebrew', strongs),
       greekLike ? getThayersEntry(bibleDb, strongs) : getBdbEntry(bibleDb, strongs),
@@ -148,7 +172,7 @@ export function WordStudyPanel({ selected, onNavigate, onWordSelect, jumpToStron
   const lexBody = useMemo(() => highlightVerse(mainText, selected.book, selected.chapter, selected.verse, firstMention), [mainText, selected])
   const activeWord = active ? words.find(w => w.strongs === active.strongs && w.position === active.position) : undefined
   const morph = decodeMorphology(activeWord?.morph ?? '', greekLike ? 'greek' : 'hebrew')
-  const examples = isNT ? GREEK_TAG_EXAMPLES : HEBREW_TAG_EXAMPLES
+  const examples = greekLike ? GREEK_TAG_EXAMPLES : HEBREW_TAG_EXAMPLES
 
   const sources = isNT ? GREEK_SOURCES : OT_SOURCES
   const cur = isNT ? source : otSource
@@ -156,8 +180,12 @@ export function WordStudyPanel({ selected, onNavigate, onWordSelect, jumpToStron
 
   return (
     <div className="panel-body word-study">
-      <div className="ws-lang">{isNT ? 'Interlinear · Greek NT' : isLxx ? 'Interlinear · LXX' : 'Interlinear · Hebrew OT'}</div>
-      <div className="ws-sources">
+      <div className="ws-lang">{isNT ? 'Interlinear · Greek NT'
+        : isDeutero ? 'Interlinear · Septuagint (Swete)'
+        : isLxx ? 'Interlinear · LXX'
+        : isAramaic(selected.book, selected.chapter, selected.verse) ? 'Interlinear · Aramaic OT'
+        : 'Interlinear · Hebrew OT'}</div>
+      {!isDeutero && !noSource && <div className="ws-sources">
         {sources.map(o => (
           <div key={o.key} className={`ws-source${o.key === cur ? ' ws-source--active' : ''}`}>
             <button className="ws-source-main" onClick={() => isNT ? setSource(o.key as GreekSource) : setOtSource(o.key as OtSource)}>
@@ -167,12 +195,15 @@ export function WordStudyPanel({ selected, onNavigate, onWordSelect, jumpToStron
               onClick={() => isNT ? setFavGreek(o.key) : setFavOt(o.key)}>{o.key === fav ? '★' : '☆'}</button>
           </div>
         ))}
-      </div>
+      </div>}
+      {note && <p className="source-note">{note}</p>}
       {!isNT && !isLxx && selected.book === 'Psalms' && (
         <p className="source-note">Note: Strongs tagging and English glosses for Hebrew Psalms may be approximate due to morphological splitting in the source data.</p>
       )}
       {loading ? <div className="panel-loading">Loading…</div> : !words.length ? (
-        <div className="panel-empty">No {isNT ? 'Greek' : isLxx ? 'LXX Greek' : 'Hebrew'} data for this verse</div>
+        <div className="panel-empty">{noSource ? 'No original-language text for this book yet'
+          : isDeutero ? 'This verse is missing from the Greek edition used here'
+          : `No ${isNT ? 'Greek' : isLxx ? 'LXX Greek' : 'Hebrew'} data for this verse`}</div>
       ) : (
         <>
           {selected.verse === 0 && <div className="section-label">Superscription</div>}
@@ -194,7 +225,10 @@ export function WordStudyPanel({ selected, onNavigate, onWordSelect, jumpToStron
 
           {active && (
             <div className="ws-def">
-              {defLoading ? <div className="panel-loading">Loading…</div> : !def ? <div className="panel-empty">No definition found for {active.strongs}</div> : (
+              {defLoading ? <div className="panel-loading">Loading…</div> : !def ? (
+                <div className="panel-empty">{active.strongs ? `No definition found for ${active.strongs}`
+                  : [morph?.partOfSpeech, ...(morph?.tags ?? [])].filter(Boolean).concat('No lexicon entry for this word').join(' · ')}</div>
+              ) : (
                 <>
                   <div className="ws-def-head">
                     <div>
